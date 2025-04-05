@@ -1,0 +1,9 @@
+# Admin files & folders that may accidentally escape
+.vscode/
+.archive/
+assets/plots/
+
+# Python 
+.venv/
+**/__pycache__/
+steane_animation.gif
