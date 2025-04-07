@@ -4,6 +4,7 @@ from utils.constraints import get_valid_next_kinds
 from typing import List, Tuple, Union
 
 
+
 def bfs_extended_3d(
     source_node: List[Union[Tuple[int, int, int], str]],
     target_node: List[Union[Tuple[int, int, int], str]],
@@ -24,8 +25,8 @@ def bfs_extended_3d(
     path_length = {tuple(source_node): 0}
     path = {tuple(source_node): [source_node]}
 
-    start_x, start_y, start_z = start_coords
-    end_x, end_y, end_z = end_coords
+    start_x, start_y, start_z = [int(x) for x in start_coords]
+    end_x, end_y, end_z = [int(x) for x in end_coords]
     initial_manhattan_distance = (
         abs(start_x - end_x) + abs(start_y - end_y) + abs(start_z - end_z)
     )
@@ -34,7 +35,7 @@ def bfs_extended_3d(
     while queue:
         current_node_info = queue.popleft()
         current_coords, current_type = current_node_info
-        x, y, z = current_coords
+        x, y, z = [int(x) for x in current_coords]
 
         current_manhattan_distance = abs(x - end_x) + abs(y - end_y) + abs(z - end_z)
         if current_manhattan_distance > termination_distance:
@@ -139,9 +140,9 @@ def generate_tentative_target_position(
     min_z: int,
     max_z: int,
     obstacle_coords: list = [],
-    overwrite_target_coords: Tuple[int, int, int] = None,
+    overwrite_target_coords: Tuple[int, int, int] | None = None,
     preexistent_structure: list = [],  # Add preexistent_structure as an argument
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int] | None:
     """
     Generates a tentative target coordinate based on difficulty, checking validity with is_move_allowed.
     Uses a layered approach to prioritize closer targets.
@@ -201,7 +202,7 @@ def generate_tentative_target_position(
     for tx, ty, tz in potential_targets_level2:
         if min_x <= tx <= max_x and min_y <= ty <= max_y and min_z <= tz <= max_z:
             if (tx, ty, tz) not in preexistent_coords and is_move_allowed(
-                source_coords, (tx, ty, tz), obstacle_coords
+                source_coords, (tx, ty, tz)
             ):
                 print(f"=>> Returning potential target at Level 2: {(tx, ty, tz)}")
                 return (tx, ty, tz)
@@ -217,7 +218,7 @@ def generate_tentative_target_position(
     for tx, ty, tz in potential_targets_level3:
         if min_x <= tx <= max_x and min_y <= ty <= max_y and min_z <= tz <= max_z:
             if (tx, ty, tz) not in preexistent_coords and is_move_allowed(
-                source_coords, (tx, ty, tz), obstacle_coords
+                source_coords, (tx, ty, tz)
             ):
                 print(f"=>> Returning potential target at Level 3: {(tx, ty, tz)}")
                 return (tx, ty, tz)
@@ -342,8 +343,8 @@ def run_bfs_for_all_potential_target_nodes(
             preexistent_structure
         )
 
+    obstacle_coords = []
     if occupied_coords:
-        preexistent_structure = True
         occupied_coords_copy = occupied_coords[:]
         if start_coords in occupied_coords_copy:
             obstacle_coords = occupied_coords_copy.remove(start_coords)
@@ -353,7 +354,7 @@ def run_bfs_for_all_potential_target_nodes(
     min_x_bb, max_x_bb, min_y_bb, max_y_bb, min_z_bb, max_z_bb = determine_grid_size(
         start_coords,
         overwrite_target_coords if overwrite_target_coords else (0, 0, 0),
-        obstacle_coords=obstacle_coords if preexistent_structure else [],
+        obstacle_coords=obstacle_coords,
     )
 
     # PATH FINDING LOOP W. MULTIPLE BFS ROUNDS WITH INCREASING DISTANCE FROM SOURCE NODE
@@ -372,7 +373,7 @@ def run_bfs_for_all_potential_target_nodes(
             max_y_bb,
             min_z_bb,
             max_z_bb,
-            obstacle_coords=obstacle_coords if preexistent_structure else [],
+            obstacle_coords=obstacle_coords,
             overwrite_target_coords=overwrite_target_node[0],
             preexistent_structure=preexistent_structure,
         )
@@ -395,7 +396,7 @@ def run_bfs_for_all_potential_target_nodes(
                 source_node,
                 target_node,
                 obstacle_coords_from_preexistent_structure=(
-                    obstacle_coords if preexistent_structure else []
+                    obstacle_coords
                 ),
             )
 

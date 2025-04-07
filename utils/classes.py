@@ -2,25 +2,22 @@ from dataclasses import dataclass
 from typing import Tuple, List
 from two_stage_greedy_bfs_config import VALUE_HYPERPARAMS
 
-# QUICK NAMED TYPE TO SAVE SPACE
-Position3D = Tuple[int, int, int]
-
 # NO LONGER IN USE, I THINK...
 @dataclass(order=True)
 class Node:
-    position: Position3D
+    position: Tuple[int, int, int]
     kind: str
     n_unobstructed_exits: int
-    beams: List[Position3D]
+    beams: List[Tuple[int, int, int]]
 
 # MAIN DATA CLASS TO STORE PATHS AND ENABLE COMPARISONS
 @dataclass(order=True)
 class Path:
-    target_pos: Position3D
+    target_pos: Tuple[int, int, int]
     target_kind: str
-    target_beams: List[Position3D]
-    coords_in_path: List[Position3D]
-    all_nodes_in_path: List[Tuple[Position3D, str]]
+    target_beams: List[Tuple[int, int, int]]
+    coords_in_path: List[Tuple[int, int, int]]
+    all_nodes_in_path: List[Tuple[Tuple[int, int, int], str]]
     beams_broken_by_path: int
     len_of_path: int
     target_unobstructed_exits_n: int

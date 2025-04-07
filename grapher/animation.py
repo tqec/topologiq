@@ -6,7 +6,7 @@ def create_animation(
     image_folder,
     filename_prefix="animation",
     duration=2,
-    restart_delay=10,
+    restart_delay=1000,
 ):
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
@@ -25,7 +25,7 @@ def create_animation(
 
     # BUILD THE GIF
     if images:
-        duration = [duration] * (len(images) - 1) + [restart_delay * 1000]
+        duration = [duration] * (len(images) - 1) + [restart_delay]
         iio.mimsave(
             f"./assets/plots/{filename_prefix}.gif", images, duration=duration, loop=0
         )

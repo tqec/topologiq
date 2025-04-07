@@ -9,11 +9,20 @@ from utils.utils import (
     check_for_exits,
     generate_tentative_target_positions,
 )
-from utils.classes import Position3D, Path
+from utils.classes import Path
 from utils.pathfinder import run_bfs_for_all_potential_target_nodes, obstacle_coords_from_preexistent_structure
 from grapher.grapher import visualise_3d_graph, make_graph_from_edge_paths
 from grapher.animation import create_animation
 
+def _get_node_degree(graph: nx.Graph, node: int) -> int | float:
+    degree = graph.degree(node)
+    if isinstance(degree, int):
+        return degree
+    elif hasattr(degree, '__getitem__'):
+        return degree[node]
+    else:
+        print(f"Warning: Unexpected degree type: {type(degree)}")
+        return 0
 
 def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
     
@@ -39,7 +48,8 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
         nx_graph.add_edge(u, v, type=edge_type)
 
     # IDENTIFY THE NODES WITH MORE THAN 4 CONNECTIONS
-    high_degree_nodes = [node for node, degree in nx_graph.degree() if degree > 4]
+    all_nodes = list(nx_graph.nodes())
+    high_degree_nodes = [node for node in all_nodes if _get_node_degree(nx_graph, node) > 4]
 
     # BREAK ANY NODES WITH MORE THAN 4 CONNECTIONS
     if high_degree_nodes:
@@ -52,10 +62,8 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
         while i < 100:
             
             # List of high degree nodes
-            i += 1
-            high_degree_nodes = [
-                node for node, degree in nx_graph.degree() if degree > 4
-            ]
+            all_nodes_loop = list(nx_graph.nodes())
+            high_degree_nodes = [node for node in all_nodes_loop if _get_node_degree(nx_graph, node) > 4]
             
             # Exit loop when no nodes with more than 4 edges
             if not high_degree_nodes:
@@ -81,7 +89,7 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
             neighbors = list(nx_graph.neighbors(node_to_sanitise))
             neighbors = [n for n in neighbors if n != twin_node_id]
 
-            degree_to_move = nx_graph.degree(node_to_sanitise) // 2
+            degree_to_move = _get_node_degree(nx_graph, node_to_sanitise) // 2
 
             moved_count = 0
             random.shuffle(neighbors)
@@ -89,7 +97,7 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
             for neighbor in neighbors:
                 if (
                     moved_count >= degree_to_move
-                    or nx_graph.degree(node_to_sanitise) <= 4
+                    or _get_node_degree(nx_graph, node_to_sanitise) <= 4
                 ):
                     break
                 if nx_graph.has_edge(
@@ -106,17 +114,17 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
 
 
 def choose_kind(
-    tentative_position: Position3D,
+    tentative_position: Tuple[int, int, int],
     possible_kinds: Optional[List[str]],
-    occupied_coords: List[Position3D],
-    all_beams: List[List[Position3D]],
-) -> Tuple[Optional[str], int, List[Position3D]]:
+    occupied_coords: List[Tuple[int, int, int]],
+    all_beams: List[List[Tuple[int, int, int]]],
+) -> Tuple[Optional[str], int, List[Tuple[int, int, int]]]:
 
     # HELPER VARIABLES
     most_exits = 0
     winner_kind: Optional[str] = None
     winner_idx: Optional[int] = None
-    beams: List[List[Position3D]] = []
+    beams: List[List[Tuple[int, int, int]]] = []
 
     # LOOP OVER POSSIBLE KINDS FOR CUBE, IF ANY
     if possible_kinds:
@@ -150,16 +158,32 @@ def find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
     if not nx_graph.nodes:
         return None
     
-    # LOOP OVER NODES FINDING ONE WITH HIGHEST DEGREE
+    # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
     max_degree = -1
     central_nodes: List[int] = []
-    for node, degree in nx_graph.degree():
-        if degree > max_degree:
-            max_degree = degree
-            central_nodes = [node]
-        elif degree == max_degree:
-            central_nodes.append(node)
-    start_node: Optional[int] = random.choice(central_nodes) if central_nodes else None
+    
+    node_degrees = nx_graph.degree()
+    print("Node degrees is: ", node_degrees)
+    if isinstance(node_degrees, int):
+        print("Warning: nx_graph.degree() returned an integer. Cannot determine start node.")
+        return None  # Cannot iterate, return None
+    else:
+        for node, degree in node_degrees:
+            if degree > max_degree:
+                max_degree = degree
+                central_nodes = [node]
+            elif degree == max_degree:
+                central_nodes.append(node)
+    
+    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING LOWER NODES
+    if central_nodes:
+        # Assign weights based on node ID (lower ID gets higher weight)
+        weights = [1 / (node + 1) for node in central_nodes]
+        # Use random.choices to select a node based on weights
+        start_node_list = random.choices(central_nodes, weights=weights, k=1)
+        start_node: Optional[int] = start_node_list[0]
+    else:
+        start_node: Optional[int] = None
 
     # RETURN START NODE
     return start_node
@@ -174,6 +198,7 @@ def run_pathfinder(
 ):
 
     # ARRAYS TO HOLD TEMPORARY PATHS
+    path = []
     valid_paths = []
     clean_paths = []
 
@@ -182,6 +207,7 @@ def run_pathfinder(
     start_coords, _ = previous_node_info
 
     target_coords = None
+    target_type = None
     if target_node_info:
         target_coords, target_type = target_node_info
 
@@ -218,7 +244,7 @@ def run_pathfinder(
                     occupied_coords=occupied_coords_copy,  # Copy occupied coords: function uses source_coords differently
                     overwrite_target_node=[
                         position,
-                        target_type if target_node_info else None,
+                        target_type,
                     ],
                 )
             )
@@ -269,19 +295,19 @@ def run_pathfinder(
 
 
 def place_next_block(
-    source_node_id: Optional[int],
+    source_node_id: int,
     neigh_node_id: int,
     nx_graph: nx.Graph,
-    occupied_coords: List[Position3D],
-    all_beams: List[List[Position3D]],
+    occupied_coords: List[Tuple[int, int, int]],
+    all_beams: List[List[Tuple[int, int, int]]],
     edge_paths: dict,
     step: int = 3,
     stage: float = 0.5,
-) -> Tuple[List[Position3D], List[List[Position3D]], dict, bool]:
+) -> Tuple[List[Tuple[int, int, int]], List[List[Tuple[int, int, int]]], dict, bool]:
 
     # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
     # Previous node data
-    source_pos: Optional[Position3D] = nx_graph.nodes[source_node_id].get("pos")
+    source_pos: Optional[Tuple[int, int, int]] = nx_graph.nodes[source_node_id].get("pos")
     source_kind: Optional[str] = nx_graph.nodes[source_node_id].get("kind")
 
     if source_pos is None or source_kind is None:
@@ -291,8 +317,8 @@ def place_next_block(
     # Current node data
     next_neigh_node_data = nx_graph.nodes[neigh_node_id]
     next_neigh_zx_type: Optional[List[str]] = next_neigh_node_data.get("type")
-    next_neigh_edge_n: int = nx_graph.degree(neigh_node_id)
-    next_neigh_pos: Optional[Position3D] = nx_graph.nodes[neigh_node_id].get("pos")
+    next_neigh_edge_n = int(_get_node_degree(nx_graph, neigh_node_id))
+    next_neigh_pos: Optional[Tuple[int, int, int]] = nx_graph.nodes[neigh_node_id].get("pos")
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if next_neigh_pos is None:
@@ -344,6 +370,7 @@ def place_next_block(
                 }
 
                 viable_paths.append(Path(**path_data))
+        
         print(f"- A total of {len(viable_paths)} paths survived health checks. Choosing a winner path.")
         
         winner_path: Optional[Path] = None
@@ -373,7 +400,7 @@ def place_next_block(
             occupied_coords.extend(full_coords_to_add)
 
             # Add beams of winner's target node to list of graphs' all_beams
-            all_beams.extend(winner_path.target_beams)
+            all_beams.append(winner_path.target_beams)
 
             # Return updated occupied_coords and all_beams, with success code
             return occupied_coords, all_beams, edge_paths, True
@@ -464,12 +491,15 @@ def place_next_block(
 
             # Return unchanged occupied_coords and all_beams, with failure boolean
             return occupied_coords, all_beams, edge_paths, False
+    
+    # FAIL SAFE RETURN TO AVOID TYPE ERRORS
+    return occupied_coords, all_beams, edge_paths, False
 
 
 def second_pass(
     nx_graph: nx.Graph,
-    occupied_coords: List[Position3D],
-    all_beams: List[List[Position3D]],
+    occupied_coords: List[Tuple[int, int, int]],
+    all_beams: List[List[Tuple[int, int, int]]],
     edge_paths: dict,
 ) -> dict:
   
@@ -538,21 +568,21 @@ def second_pass(
     return edge_paths
 
 
-def main(graph: Dict[str, List[Any]]) -> nx.Graph:
-
-    # VALIDITY CHECKS
-    if not zx_types_validity_checks(graph):
-        print("Graph validity checks failed. Aborting.")
-        return nx.Graph()  # Return an empty graph or handle as needed
+def main(graph: Dict[str, List[Any]]) -> Tuple[nx.Graph, dict, nx.Graph]:
 
     # KEY VARIABLES
     # Take a ZX graph and prepare a fresh 3D graph with positions set to None
     nx_graph = prepare_graph(graph)
 
     # Arrays/dicts to track coordinates
-    occupied_coords: List[Position3D] = []
-    all_beams: List[List[Position3D]] = []
+    occupied_coords: List[Tuple[int, int, int]] = []
+    all_beams: List[List[Tuple[int, int, int]]] = []
     edge_paths: dict = {}
+    
+    # VALIDITY CHECKS
+    if not zx_types_validity_checks(graph):
+        print("Graph validity checks failed. Aborting.")
+        return nx_graph, edge_paths, nx.Graph()  # Return an empty graph or handle as needed
 
     # BFS management
     start_node: Optional[int] = find_start_node_id(nx_graph)
@@ -563,7 +593,7 @@ def main(graph: Dict[str, List[Any]]) -> nx.Graph:
     # Terminate if there is no start node
     if start_node is None:
         print("Graph has no nodes.")
-        return nx_graph, edge_paths
+        return nx_graph, edge_paths, nx.Graph()
 
     # Place start node at origin
     else:
@@ -584,7 +614,7 @@ def main(graph: Dict[str, List[Any]]) -> nx.Graph:
         _, start_node_beams = check_for_exits(
             (0, 0, 0), randomly_chosen_kind, occupied_coords, all_beams
         )
-        all_beams.extend(start_node_beams)
+        all_beams.append(start_node_beams)
 
     # LOOP FOR ALL OTHER NODES
     c = 0 # Visualiser counter (needed to save snapshots to file)
@@ -659,7 +689,7 @@ def main(graph: Dict[str, List[Any]]) -> nx.Graph:
     create_animation(
         "./assets/plots/",
         filename_prefix="steane_animation",
-        restart_delay=10.0,
+        restart_delay=5000,
         duration=2500,
     )
 
@@ -722,4 +752,4 @@ if __name__ == "__main__":
 
     print("\nEdge paths:")
     for key, edge_path in edge_paths.items():
-        print(f"  {key}: {edge_path["path_nodes"]}")
+        print(f"  {key}: {edge_path['path_nodes']}")
