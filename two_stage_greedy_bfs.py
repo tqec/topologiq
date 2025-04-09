@@ -163,7 +163,6 @@ def find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
     central_nodes: List[int] = []
     
     node_degrees = nx_graph.degree()
-    print("Node degrees is: ", node_degrees)
     if isinstance(node_degrees, int):
         print("Warning: nx_graph.degree() returned an integer. Cannot determine start node.")
         return None  # Cannot iterate, return None
@@ -177,11 +176,7 @@ def find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
     
     # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING LOWER NODES
     if central_nodes:
-        # Assign weights based on node ID (lower ID gets higher weight)
-        weights = [1 / (node + 1) for node in central_nodes]
-        # Use random.choices to select a node based on weights
-        start_node_list = random.choices(central_nodes, weights=weights, k=1)
-        start_node: Optional[int] = start_node_list[0]
+        start_node: Optional[int] = random.choice(central_nodes)
     else:
         start_node: Optional[int] = None
 
@@ -501,7 +496,8 @@ def second_pass(
     occupied_coords: List[Tuple[int, int, int]],
     all_beams: List[List[Tuple[int, int, int]]],
     edge_paths: dict,
-) -> dict:
+    c: int
+) -> Tuple[dict, int]:
   
     # Update user
     print("\nStarting second pass to connect already placed nodes.")
@@ -518,6 +514,9 @@ def second_pass(
 
         # Process only if both nodes have been placed on grid already
         if u_pos is not None and v_pos is not None:
+            
+            # Update visualiser counter
+            c += 1
             
             # Format adjustments to match existing operations
             u_kind = nx_graph.nodes[u].get("kind")
@@ -552,6 +551,13 @@ def second_pass(
                         "path_nodes": clean_paths[0],
                         "edge_type": edge_type,
                     }
+                    
+                    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ABOVE
+                    new_nx_graph = make_graph_from_edge_paths(edge_paths)
+                    
+                    # VISUALISE NEW EDGE
+                    visualise_3d_graph(new_nx_graph)
+                    visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c:03d}")
                 
                 # Write an error to edge_paths if edge not found
                 else:
@@ -565,7 +571,7 @@ def second_pass(
                     }
                     
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
-    return edge_paths
+    return edge_paths, c
 
 
 def main(graph: Dict[str, List[Any]]) -> Tuple[nx.Graph, dict, nx.Graph]:
@@ -676,7 +682,7 @@ def main(graph: Dict[str, List[Any]]) -> Tuple[nx.Graph, dict, nx.Graph]:
     occupied_coords = list(set(occupied_coords))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    edge_paths = second_pass(nx_graph, occupied_coords, all_beams, edge_paths)
+    edge_paths, c = second_pass(nx_graph, occupied_coords, all_beams, edge_paths, c)
 
     # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
     new_nx_graph = make_graph_from_edge_paths(edge_paths)
