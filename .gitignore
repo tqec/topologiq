@@ -7,3 +7,4 @@ assets/plots/
 .venv/
 **/__pycache__/
 steane_animation.gif
+examples/test_variables.py

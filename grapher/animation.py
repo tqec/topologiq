@@ -3,10 +3,10 @@ import imageio.v2 as iio
 
 
 def create_animation(
-    image_folder,
-    filename_prefix="animation",
-    duration=2,
-    restart_delay=1000,
+    image_folder: str,
+    filename_prefix: str = "animation",
+    duration: int = 2,
+    restart_delay: int = 1000,
 ):
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
@@ -25,9 +25,9 @@ def create_animation(
 
     # BUILD THE GIF
     if images:
-        duration = [duration] * (len(images) - 1) + [restart_delay]
+        iter_duration = [duration] * (len(images) - 1) + [restart_delay]
         iio.mimsave(
-            f"./assets/plots/{filename_prefix}.gif", images, duration=duration, loop=0
+            f"./assets/plots/{filename_prefix}.gif", images, duration=iter_duration, loop=0
         )
         print(f"Animation saved to ./assets/plots/{filename_prefix}.gif")
 

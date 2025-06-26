@@ -1,11 +1,15 @@
 """NetworkX / Matplotlib functions to create quick 3D visualisations of algorithmic progress into a blockgraph.
-This file is an absolute mess at the moment. It works though. 
+This file is an absolute mess at the moment. It works though.
 """
 
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from typing import Annotated, Literal, Any, Tuple
+from numpy.typing import NDArray
 
 # CONSTANTS
 node_hex_map = {
@@ -32,15 +36,18 @@ node_hex_map = {
     "zzz": ["blue", "blue", "blue"],
 }
 
+
 # MISC FUNCTIONS
-def get_vertices(x, y, z, size_x, size_y, size_z):
+def get_vertices(
+    x: int, y: int, z: int, size_x: float, size_y: float, size_z: float
+) -> Annotated[NDArray[np.float64], Literal[..., 3]]:
     """
     Calculates the coordinates of the eight vertices of a cuboid.
 
     Args:
-        - x: x-coordinate of the center of the cuboid.
-        - y: y-coordinate of the center of the cuboid.
-        - z: z-coordinate of the center of the cuboid.
+        - x: x-coordinate of the centre of the cuboid.
+        - y: y-coordinate of the centre of the cuboid.
+        - z: z-coordinate of the centre of the cuboid.
         - size_x: length of the cuboid along the x-axis.
         - size_y: length of the cuboid along the y-axis.
         - size_z: length of the cuboid along the z-axis.
@@ -51,6 +58,7 @@ def get_vertices(x, y, z, size_x, size_y, size_z):
                        of the vertices is consistent with how Matplotlib's
                        Poly3DCollection expects them for defining faces.
     """
+
     half_size_x = size_x / 2
     half_size_y = size_y / 2
     half_size_z = size_z / 2
@@ -68,7 +76,7 @@ def get_vertices(x, y, z, size_x, size_y, size_z):
     )
 
 
-def get_faces(vertices):
+def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
     """
     Defines the faces of a cuboid based on its vertices.
 
@@ -96,7 +104,12 @@ def get_faces(vertices):
     ]
 
 
-def render_hadamard(ax, node_info, node_hex_map, edge_col):
+def render_hadamard(
+    ax: Any,
+    node_info: dict[str, Any],
+    node_hex_map: dict[str, list[str]],
+    edge_col: str,
+):
     """
     Renders a split and color-rotated 'h' node along its long axis.
 
@@ -119,74 +132,78 @@ def render_hadamard(ax, node_info, node_hex_map, edge_col):
     if size_z == 2.0:
         z -= 0.5
 
-    # --- Calculate dimensions and centers of the three blocks ---
+    # Calculate dimensions and centres of the three blocks
+    centre_lower, centre_middle, centre_upper = (None, None, None)
+    size_outer, size_centre = (None, None)
+    upper_faces = None
     if long_axis_index == 0:  # Split along x
         len_x_outer = 0.4 * size_x
-        len_x_center = 0.2 * size_x
+        len_x_centre = 0.2 * size_x
         size_outer = [len_x_outer, size_y, size_z]
-        size_center = [len_x_center, size_y, size_z]
-        center_lower = [x - 0.3 * size_x, y, z]
-        center_upper = [x + 0.3 * size_x, y, z]
-        center_middle = [x, y, z]
+        size_centre = [len_x_centre, size_y, size_z]
+        centre_lower = [x - 0.3 * size_x, y, z]
+        centre_upper = [x + 0.3 * size_x, y, z]
+        centre_middle = [x, y, z]
     elif long_axis_index == 1:  # Split along y
         len_y_outer = 0.4 * size_y
-        len_y_center = 0.2 * size_y
+        len_y_centre = 0.2 * size_y
         size_outer = [size_x, len_y_outer, size_z]
-        size_center = [size_x, len_y_center, size_z]
-        center_lower = [x, y - 0.3 * size_y, z]
-        center_upper = [x, y + 0.3 * size_y, z]
-        center_middle = [x, y, z]
+        size_centre = [size_x, len_y_centre, size_z]
+        centre_lower = [x, y - 0.3 * size_y, z]
+        centre_upper = [x, y + 0.3 * size_y, z]
+        centre_middle = [x, y, z]
     elif long_axis_index == 2:  # Split along z
         len_z_outer = 0.4 * size_z
-        len_z_center = 0.2 * size_z
+        len_z_centre = 0.2 * size_z
         size_outer = [size_x, size_y, len_z_outer]
-        size_center = [size_x, size_y, len_z_center]
-        center_lower = [x, y, z - 0.3 * size_z]
-        center_upper = [x, y, z + 0.3 * size_z]
-        center_middle = [x, y, z]
+        size_centre = [size_x, size_y, len_z_centre]
+        centre_lower = [x, y, z - 0.3 * size_z]
+        centre_upper = [x, y, z + 0.3 * size_z]
+        centre_middle = [x, y, z]
         if size_z == 2.0:
-            center_lower[2] = z + 0.4
-            center_middle[2] = z + 1.0
-            center_upper[2] = z + 1.6
+            centre_lower[2] = z + 0.4
+            centre_middle[2] = z + 1.0
+            centre_upper[2] = z + 1.6
 
     # LOWER BLOCK RENDERING
-    lx, ly, lz = center_lower
-    lsx, lsy, lsz = size_outer
-    lower_vertices = get_vertices(lx, ly, lz, lsx, lsy, lsz)
-    lower_faces = get_faces(lower_vertices)
-    lower_colors = node_hex_map.get(base_type, ["gray"] * 3)
-    lower_face_colors = (
-        [lower_colors[2]] * 2 + [lower_colors[1]] * 2 + [lower_colors[0]] * 2
-    )
-    lower_poly_collection = Poly3DCollection(
-        lower_faces,
-        facecolors=lower_face_colors,
-        linewidths=1,
-        edgecolors=black_edge_color,
-        alpha=1,
-    )
-    ax.add_collection3d(lower_poly_collection)
+    if centre_lower and centre_middle and centre_upper and size_outer and size_centre:
+        lx, ly, lz = centre_lower
+        lsx, lsy, lsz = size_outer
+        lower_vertices = get_vertices(lx, ly, lz, lsx, lsy, lsz)
+        lower_faces = get_faces(lower_vertices)
+        lower_colors = node_hex_map.get(base_type, ["gray"] * 3)
+        lower_face_colors = (
+            [lower_colors[2]] * 2 + [lower_colors[1]] * 2 + [lower_colors[0]] * 2
+        )
+        lower_poly_collection = Poly3DCollection(
+            lower_faces,
+            facecolors=lower_face_colors,
+            linewidths=1,
+            edgecolors=black_edge_color,
+            alpha=1,
+        )
+        ax.add_collection3d(lower_poly_collection)
 
-    # CENTRAL (YELLOW) RING RENDERING
-    mx, my, mz = center_middle
-    msx, msy, msz = size_center
-    middle_vertices = get_vertices(mx, my, mz, msx, msy, msz)
-    middle_faces = get_faces(middle_vertices)
-    middle_face_colors = [central_yellow_color] * 6
-    middle_poly_collection = Poly3DCollection(
-        middle_faces,
-        facecolors=middle_face_colors,
-        linewidths=1,
-        edgecolors=black_edge_color,
-        alpha=1,
-    )
-    ax.add_collection3d(middle_poly_collection)
+        # CENTRAL (YELLOW) RING RENDERING
+        mx, my, mz = centre_middle
+        msx, msy, msz = size_centre
+        middle_vertices = get_vertices(mx, my, mz, msx, msy, msz)
+        middle_faces = get_faces(middle_vertices)
+        middle_face_colors = [central_yellow_color] * 6
+        middle_poly_collection = Poly3DCollection(
+            middle_faces,
+            facecolors=middle_face_colors,
+            linewidths=1,
+            edgecolors=black_edge_color,
+            alpha=1,
+        )
+        ax.add_collection3d(middle_poly_collection)
 
-    # UPPER BLOCK RENDERING
-    ux, uy, uz = center_upper
-    usx, usy, usz = size_outer
-    upper_vertices = get_vertices(ux, uy, uz, usx, usy, usz)
-    upper_faces = get_faces(upper_vertices)
+        # UPPER BLOCK RENDERING
+        ux, uy, uz = centre_upper
+        usx, usy, usz = size_outer
+        upper_vertices = get_vertices(ux, uy, uz, usx, usy, usz)
+        upper_faces = get_faces(upper_vertices)
 
     rotated_type = ""
     for char in base_type:
@@ -197,22 +214,30 @@ def render_hadamard(ax, node_info, node_hex_map, edge_col):
         else:
             rotated_type += char
 
-    upper_colors = node_hex_map.get(rotated_type, ["gray"] * 3)
-    upper_face_colors = (
-        [upper_colors[2]] * 2 + [upper_colors[1]] * 2 + [upper_colors[0]] * 2
-    )
-    upper_poly_collection = Poly3DCollection(
-        upper_faces,
-        facecolors=upper_face_colors,
-        linewidths=1,
-        edgecolors=black_edge_color,
-        alpha=1,
-    )
-    ax.add_collection3d(upper_poly_collection)
+    if upper_faces:
+        upper_colors = node_hex_map.get(rotated_type, ["gray"] * 3)
+        upper_face_colors = (
+            [upper_colors[2]] * 2 + [upper_colors[1]] * 2 + [upper_colors[0]] * 2
+        )
+        upper_poly_collection = Poly3DCollection(
+            upper_faces,
+            facecolors=upper_face_colors,
+            linewidths=1,
+            edgecolors=black_edge_color,
+            alpha=1,
+        )
+        ax.add_collection3d(upper_poly_collection)
 
 
 def render_non_hadamard(
-    ax, position, size, node_type, node_hex_map, alpha=1, edge_color=None, line_width=1
+    ax: Any,
+    position: Tuple[int, int, int],
+    size: list[float],
+    node_type: str,
+    node_hex_map: dict[str, list[str]],
+    alpha: float = 1.0,
+    edge_color: None | str = None,
+    line_width: float = 1.0,
 ):
     """
     Renders a regular (non-'h') node.
@@ -249,12 +274,19 @@ def render_non_hadamard(
     ax.add_collection3d(poly_collection)
 
 
-def render_colored_cuboid(ax, center, size, face_colors, edge_color, alpha):
-    
+def render_colored_cuboid(
+    ax: Any,
+    centre: NDArray[np.float64],
+    size: list[float],
+    face_colors: list[str],
+    edge_color: str,
+    alpha: float | int,
+):
+
     # ESTABLISH CUBOID'S CENTRE & SIZE
-    x, y, z = center
+    x, y, z = centre
     sx, sy, sz = size
-    
+
     # DETERMINE VERTICES
     vertices = np.array(
         [
@@ -268,7 +300,7 @@ def render_colored_cuboid(ax, center, size, face_colors, edge_color, alpha):
             [x - sx / 2, y + sy / 2, z + sz / 2],
         ]
     )
-    
+
     # ADD FACES
     faces = [
         [0, 1, 2, 3],
@@ -279,7 +311,7 @@ def render_colored_cuboid(ax, center, size, face_colors, edge_color, alpha):
         [1, 2, 6, 5],
     ]
     face_list = [vertices[face] for face in faces]
-    
+
     # MAKE COLLECTION
     poly = Poly3DCollection(
         face_list,
@@ -288,13 +320,16 @@ def render_colored_cuboid(ax, center, size, face_colors, edge_color, alpha):
         linewidths=1,
         alpha=alpha,
     )
-    
+
     # ADD TO PLOT
     ax.add_collection3d(poly)
 
 
 def visualise_3d_graph(
-    graph, node_hex_map=node_hex_map, save_to_file=False, filename=None
+    graph: nx.Graph,
+    node_hex_map: dict[str, list[str]] = node_hex_map,
+    save_to_file: bool = False,
+    filename: str | None = None,
 ):
 
     # HELPER VARIABLES
@@ -357,7 +392,7 @@ def visualise_3d_graph(
                         node_hex_map,
                         alpha=alpha,
                         edge_color=edge_color,
-                        line_width=0.5 if "_visited" in node_type else 1,
+                        line_width=0.5 if "_visited" in node_type else 1.0,
                     )
 
     # RENDER PIPES (EDGES)
@@ -374,7 +409,7 @@ def visualise_3d_graph(
             if adjusted_length > 0:
                 orientation = np.argmax(np.abs(delta))
                 size = [1.0, 1.0, 1.0]
-                size[orientation] = adjusted_length
+                size[orientation] = float(adjusted_length)
 
                 # Initialize all colours to gray
                 pipe_type = edge_types.get((u, v), "gray")
@@ -398,20 +433,20 @@ def visualise_3d_graph(
                     face_colors[1] = color_z  # top (+z)
 
                     if "h" in pipe_type:
-                        
+
                         # Hadamards split into three: two coloured ends and a yellow ring at the middle
                         if adjusted_length > 0:
                             yellow_length = 0.1 * adjusted_length
                             colored_length = 0.45 * adjusted_length
-                            
+
                             # Skip if lengths are invalid
                             if colored_length < 0 or yellow_length < 0:
-                                continue  
+                                continue
 
                             size_colored = [1.0, 1.0, 1.0]
                             size_yellow = [1.0, 1.0, 1.0]
-                            size_colored[orientation] = colored_length
-                            size_yellow[orientation] = yellow_length
+                            size_colored[orientation] = float(colored_length)
+                            size_yellow[orientation] = float(yellow_length)
 
                             offset1 = np.zeros(3)
                             offset2 = np.zeros(3)
@@ -424,16 +459,16 @@ def visualise_3d_graph(
                                 yellow_length / 2 + colored_length / 2
                             )
 
-                            center1 = midpoint + offset1
-                            center2 = midpoint
-                            center3 = midpoint + offset3
+                            centre1 = midpoint + offset1
+                            centre2 = midpoint
+                            centre3 = midpoint + offset3
 
                             face_colors_colored = list(face_colors)
                             face_colors_yellow = [yellow_hex] * 6  # Yellow color
 
                             render_colored_cuboid(
                                 ax,
-                                center1,
+                                centre1,
                                 size_colored,
                                 face_colors_colored,
                                 edge_color,
@@ -441,7 +476,7 @@ def visualise_3d_graph(
                             )
                             render_colored_cuboid(
                                 ax,
-                                center2,
+                                centre2,
                                 size_yellow,
                                 face_colors_yellow,
                                 edge_color,
@@ -449,7 +484,7 @@ def visualise_3d_graph(
                             )
                             render_colored_cuboid(
                                 ax,
-                                center3,
+                                centre3,
                                 size_colored,
                                 face_colors_colored,
                                 edge_color,
@@ -459,7 +494,7 @@ def visualise_3d_graph(
                         render_colored_cuboid(
                             ax, midpoint, size, face_colors, edge_color, alpha
                         )
-                
+
                 # Don't render if pipe_type is None
                 else:
                     pass
@@ -490,7 +525,7 @@ def visualise_3d_graph(
         plt.show()
 
 
-def make_graph_from_edge_paths(edge_paths: dict) -> nx.Graph:
+def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
     final_graph = nx.Graph()
     node_counter = 0
     for edge, path_data in edge_paths.items():
@@ -506,10 +541,9 @@ def make_graph_from_edge_paths(edge_paths: dict) -> nx.Graph:
                 primary_node_and_edges.append([node_counter, pos, kind])
                 node_counter += 1
             else:
-                
+
                 index_to_use = node_index_map[(pos, kind)]
-                
-                
+
                 found = False
                 for entry in primary_node_and_edges:
                     if entry[0] == index_to_use:
@@ -518,7 +552,6 @@ def make_graph_from_edge_paths(edge_paths: dict) -> nx.Graph:
                         break
                 if not found:
                     primary_node_and_edges.append([index_to_use, pos, kind])
-
 
         # Add nodes
         for index, pos, node_type in primary_node_and_edges:
@@ -531,43 +564,51 @@ def make_graph_from_edge_paths(edge_paths: dict) -> nx.Graph:
             if "o" in node_type:
                 prev_index_path = i - 1
                 next_index_path = i + 1
-                if 0 <= prev_index_path < len(primary_node_and_edges) and 0 <= next_index_path < len(primary_node_and_edges):
+                if 0 <= prev_index_path < len(
+                    primary_node_and_edges
+                ) and 0 <= next_index_path < len(primary_node_and_edges):
                     prev_node_index = primary_node_and_edges[prev_index_path][0]
                     next_node_index = primary_node_and_edges[next_index_path][0]
-                    if prev_node_index in final_graph and next_node_index in final_graph:
-                        final_graph.add_edge(prev_node_index, next_node_index, pipe_type=node_type)
+                    if (
+                        prev_node_index in final_graph
+                        and next_node_index in final_graph
+                    ):
+                        final_graph.add_edge(
+                            prev_node_index, next_node_index, pipe_type=node_type
+                        )
 
     return final_graph
 
-def make_graph_from_pathfinding(primary_node_and_edges, secondary_nodes=[]):
 
-    graph = nx.Graph()
-
-    for index, pos, node_type in primary_node_and_edges:
-        graph.add_node(index, pos=pos, type=node_type)
-
-    for i in range(len(primary_node_and_edges)):
-        _, pos, node_type = primary_node_and_edges[i]
-        if "o" in node_type:
-            prev_index = i - 1
-            next_index = i + 1
-            if 0 <= prev_index < len(primary_node_and_edges) and 0 <= next_index < len(
-                primary_node_and_edges
-            ):
-                graph.add_edge(prev_index, next_index, pipe_type=node_type)
-
-    if secondary_nodes:
-        start_index = len(primary_node_and_edges)
-        for i, (pos, node_type) in enumerate(secondary_nodes):
-            index = start_index + i
-            graph.add_node(index, pos=pos, type=node_type)
-            
-            if "o" in node_type:
-                prev_index = index - 1
-                next_index = index + 1
-                if 0 <= prev_index < start_index + len(secondary_nodes) and 0 <= next_index < start_index + len(
-                    secondary_nodes
-                ):
-                    graph.add_edge(prev_index, next_index, pipe_type=node_type)
-
-    return graph
+# def make_graph_from_pathfinding(primary_node_and_edges, secondary_nodes: list[Any] =[]) -> nx.Graph:
+#
+#    graph = nx.Graph()
+#
+#    for index, pos, node_type in primary_node_and_edges:
+#        graph.add_node(index, pos=pos, type=node_type)
+#
+#    for i in range(len(primary_node_and_edges)):
+#        _, pos, node_type = primary_node_and_edges[i]
+#        if "o" in node_type:
+#            prev_index = i - 1
+#            next_index = i + 1
+#            if 0 <= prev_index < len(primary_node_and_edges) and 0 <= next_index < len(
+#                primary_node_and_edges
+#            ):
+#                graph.add_edge(prev_index, next_index, pipe_type=node_type)
+#
+#    if secondary_nodes:
+#        start_index = len(primary_node_and_edges)
+#        for i, (pos, node_type) in enumerate(secondary_nodes):
+#            index = start_index + i
+#            graph.add_node(index, pos=pos, type=node_type)
+#
+#            if "o" in node_type:
+#                prev_index = index - 1
+#                next_index = index + 1
+#                if 0 <= prev_index < start_index + len(secondary_nodes) and 0 <= next_index < start_index + len(
+#                    secondary_nodes
+#                ):
+#                    graph.add_edge(prev_index, next_index, pipe_type=node_type)
+#
+#    return graph

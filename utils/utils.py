@@ -1,10 +1,17 @@
+import sys
 import random
-from typing import Tuple, List, Dict, Optional, Any
+from pathlib import Path
+from typing import Tuple, List, Dict, Optional
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.classes import SimpleDictGraph, StandardCoord, StandardBeam, NodeBeams
+from two_stage_greedy_bfs_config import LENGTH_OF_BEAM
 
 
-def zx_types_validity_checks(graph: Dict[str, List[Any]]) -> bool:
-    valid_types: List[str] = ["X", "Y", "Z", "B", "SIMPLE", "HADAMARD"]
-    valid_types_lower = [key.lower() for key in valid_types]
+def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
+
+    valid_types: List[str] = ["X", "Y", "Z", "O", "SIMPLE", "HADAMARD"]
+    valid_types_lower = [key.lower() for key in [t.lower() for t in valid_types]]
     nodes_data: List[Tuple[int, str]] = graph.get("nodes", [])
     for _, node_type in nodes_data:
         if node_type.lower() not in valid_types_lower:
@@ -19,21 +26,23 @@ def get_type_family(node_type: str) -> Optional[List[str]]:
         "X": ["xxz", "xzx", "zxx"],
         "Y": ["yyy"],
         "Z": ["xzz", "zzx", "zxz"],
-        "B": ["bbb"],
+        "O": ["ooo"],
         "SIMPLE": ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"],
         "HADAMARD": ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"],
     }
 
     if node_type not in families:
-        print(
-            f"Warning: Node type '{node_type}' not found in kind families."
-        )  # Potential Issue: Handle missing node type
+        print(f"Warning: type '{node_type}' not found.")
         return None
+
     return families[node_type]
 
 
-def check_is_exit(source_coord: tuple, source_kind: str, target_coord: tuple):
-    source_kind = source_kind.lower()[:3]
+def check_is_exit(
+    source_coord: StandardCoord, source_kind: Optional[str], target_coord: StandardCoord
+) -> bool:
+
+    source_kind = source_kind.lower()[:3] if isinstance(source_kind, str) else ""
     kind_3D = [source_kind[0], source_kind[1], source_kind[2]]
 
     if "o" in kind_3D:
@@ -59,38 +68,43 @@ def check_is_exit(source_coord: tuple, source_kind: str, target_coord: tuple):
 
 
 def check_unobstructed(
-    source_coord: tuple,
-    target_coord: tuple,
-    occupied: list[tuple],
-    beams: list[tuple],
-    beam_length=3,
-):
+    source_coord: StandardCoord,
+    target_coord: StandardCoord,
+    occupied: List[StandardCoord],
+    all_beams: List[NodeBeams],
+    beam_length: int = LENGTH_OF_BEAM,
+) -> Tuple[bool, StandardBeam]:
 
-    add_beams = []
+    single_beam_for_exit: StandardBeam = []
 
     directions = [target - source for source, target in zip(source_coord, target_coord)]
     directions = [1 if d > 0 else -1 if d < 0 else 0 for d in directions]
 
     for i in range(1, beam_length):
         dx, dy, dz = (directions[0] * i, directions[1] * i, directions[2] * i)
-        add_beams.append(
+        single_beam_for_exit.append(
             (source_coord[0] + dx, source_coord[1] + dy, source_coord[2] + dz)
         )
 
     if not occupied:
-        return True, add_beams
+        return True, single_beam_for_exit
 
-    for coord in add_beams:
-        if coord in occupied or coord in beams:
-            return False, add_beams
+    for coord in single_beam_for_exit:
+        if coord in occupied or coord in all_beams:
+            return False, single_beam_for_exit
 
-    return True, add_beams
+    return True, single_beam_for_exit
 
 
-def check_for_exits(node_coords, node_kind, occupied, all_beams):
+def check_for_exits(
+    node_coords: StandardCoord,
+    node_kind: str | None,
+    occupied: List[StandardCoord],
+    all_beams: List[NodeBeams],
+) -> Tuple[int, NodeBeams]:
 
     unobstructed_exits_n = 0
-    node_beams = []
+    node_beams: NodeBeams = []
 
     directional_array = [
         (1, 0, 0),
@@ -119,10 +133,8 @@ def check_for_exits(node_coords, node_kind, occupied, all_beams):
     return unobstructed_exits_n, node_beams
 
 
-def is_move_allowed(
-    source_coords: Tuple[int, int, int], next_coords: Tuple[int, int, int]
-) -> bool:
-    
+def is_move_allowed(source_coords: StandardCoord, next_coords: StandardCoord) -> bool:
+
     sx, sy, sz = source_coords
     nx, ny, nz = next_coords
     manhattan_distance = abs(nx - sx) + abs(ny - sy) + abs(nz - sz)
@@ -130,14 +142,14 @@ def is_move_allowed(
 
 
 def generate_tentative_target_positions(
-    source_coords: Tuple[int, int, int],
+    source_coords: StandardCoord,
     step: int = 3,
-    occupied_coords: List[Tuple[int, int, int]] = [],
-) -> List[Tuple[int, int, int]]:
+    occupied_coords: List[StandardCoord] = [],
+) -> List[StandardCoord]:
 
     # EXTRACT SOURCE COORDS
     sx, sy, sz = source_coords
-    potential_targets = []
+    potential_targets: List[StandardCoord] = []
 
     # SINGLE MOVES
     if step == 3:
@@ -212,7 +224,7 @@ def generate_tentative_target_positions(
             ):
                 valid_targets.add((current_x, current_y, current_z))
 
-            # Try other permutations of moves
+            # Try other permutations
             permutations = [
                 (move_x, move_y, move_z),
                 (move_x, move_z, move_y),
@@ -237,24 +249,20 @@ def generate_tentative_target_positions(
     return potential_targets
 
 
-### THIS ONE NEEDS TO BE DELETED... I THINK... BEST TO CHECK AGAIN
-def get_next_type(current_type, displacement):
-    if "o" in current_type:
-        possible_types = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
-        return possible_types
-    else:
-        possible_types = [
-            "zxo",
-            "xzo",
-            "oxz",
-            "ozx",
-            "xoz",
-            "zox",
-            "zxoh",
-            "xzoh",
-            "oxzh",
-            "ozxh",
-            "xozh",
-            "zoxh",
-        ]
-        return possible_types
+def prune_all_beams(
+    all_beams: List[NodeBeams], occupied_coords: List[StandardCoord]
+) -> List[NodeBeams]:
+
+    try:
+        new_all_beams = []
+        for node_beams in all_beams:
+            new_node_beams = []
+            for single_beam in node_beams:
+                if all([coord not in occupied_coords for coord in single_beam]):
+                    new_node_beams.append(single_beam)
+            if new_node_beams:
+                new_all_beams.append(new_node_beams)
+    except:
+        new_all_beams = all_beams
+
+    return new_all_beams

@@ -1,34 +1,264 @@
 import random
 import networkx as nx
 from collections import deque
-from typing import Tuple, List, Optional, Dict, Any
+from typing import Tuple, List, Optional, Any, cast
 
 from utils.utils import (
     zx_types_validity_checks,
     get_type_family,
     check_for_exits,
     generate_tentative_target_positions,
+    prune_all_beams
 )
-from utils.classes import Path
-from utils.pathfinder import run_bfs_for_all_potential_target_nodes, obstacle_coords_from_preexistent_structure
+from utils.classes import (
+    PathBetweenNodes,
+    StandardBlock,
+    NodeBeams,
+    SimpleDictGraph,
+    StandardCoord,
+)
+from utils.pathfinder import (
+    run_bfs_for_all_potential_target_nodes,
+    get_coords_occupied_by_blocks,
+)
 from grapher.grapher import visualise_3d_graph, make_graph_from_edge_paths
 from grapher.animation import create_animation
 
-def _get_node_degree(graph: nx.Graph, node: int) -> int | float:
-    degree = graph.degree(node)
-    if isinstance(degree, int):
-        return degree
-    elif hasattr(degree, '__getitem__'):
-        return degree[node]
-    else:
-        print(f"Warning: Unexpected degree type: {type(degree)}")
-        return 0
 
-def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
-    
+#########################
+# MAIN WORKFLOW MANAGER #
+#########################
+def main(graph: SimpleDictGraph) -> Tuple[nx.Graph, dict, nx.Graph]:
+
+    # KEY VARIABLES
+    # Take a ZX graph and prepare a fresh 3D graph with positions set to None
+    nx_graph = prepare_graph(graph)
+
+    # Arrays/dicts to track coordinates
+    occupied_coords: List[StandardCoord] = []
+    all_beams: List[NodeBeams] = []
+    edge_paths: dict = {}
+
+    # VALIDITY CHECKS
+    if not zx_types_validity_checks(graph):
+        print("Graph validity checks failed. Aborting.")
+        return (
+            nx_graph,
+            edge_paths,
+            nx.Graph(),
+        )  # Return an empty graph or handle as needed
+
+    # BFS management
+    start_node: Optional[int] = _find_start_node_id(nx_graph)
+    queue: deque = deque([start_node])
+    visited: set = {start_node}
+
+    # SPECIAL PROCESS FOR CENTRAL NODE
+    # Terminate if there is no start node
+    if start_node is None:
+        print("Graph has no nodes.")
+        return nx_graph, edge_paths, nx.Graph()
+
+    # Place start node at origin
+    else:
+
+        # Get kind from type family
+        possible_kinds: Optional[List[str]] = nx_graph.nodes[start_node].get(
+            "type_family"
+        )
+        randomly_chosen_kind = random.choice(possible_kinds) if possible_kinds else None
+
+        # Write info of node
+        nx_graph.nodes[start_node]["pos"] = (0, 0, 0)
+        nx_graph.nodes[start_node]["kind"] = randomly_chosen_kind
+
+        # Update occupied_coords and all_beams with node's position & beams
+        occupied_coords.append((0, 0, 0))
+        _, start_node_beams = check_for_exits(
+            (0, 0, 0), randomly_chosen_kind, occupied_coords, all_beams
+        )
+        all_beams.append(start_node_beams)
+
+    # LOOP FOR ALL OTHER NODES
+    c = 0  # Visualiser counter (needed to save snapshots to file)
+    while queue:
+
+        # Get current parent node
+        current_parent_node: int = queue.popleft()
+
+        # Iterate over neighbours of current parent node
+        for neigh_node_id in cast(List[int], nx_graph.neighbors(current_parent_node)):
+
+            # Queue and add to visited set if BFS just arrived at node
+            if neigh_node_id not in visited:
+                visited.add(neigh_node_id)
+                queue.append(neigh_node_id)
+
+                # Ensure occupied_coords has unique entries each run
+                occupied_coords = list(set(occupied_coords))
+
+                # Try to place blocks as close to one another as as possible
+                step: int = 3
+                while step <= 18:
+                    occupied_coords, all_beams, edge_paths, successful_placement = (
+                        place_next_block(
+                            current_parent_node,
+                            neigh_node_id,
+                            nx_graph,
+                            occupied_coords,
+                            all_beams,
+                            edge_paths,
+                            step=step,
+                        )
+                    )
+
+                    # For visualisation purposes, on each step,
+                    # create a new graph from edge_paths
+                    if edge_paths:
+                        if c < int(len(edge_paths)):
+                            if list(edge_paths.values())[-1]["path_nodes"] != "error":
+
+                                # Create graph from existing edges
+                                new_nx_graph = make_graph_from_edge_paths(edge_paths)
+
+                                # Create visualisation
+                                #visualise_3d_graph(new_nx_graph)
+                                visualise_3d_graph(
+                                    new_nx_graph,
+                                    save_to_file=True,
+                                    filename=f"steane{c:03d}",
+                                )
+
+                                c = len(edge_paths)
+
+                    # Move to next is there is a succesful placement
+                    if successful_placement:
+                        break
+
+                    # Increase distance between nodes if placement not possible
+                    step += 3
+
+    # SINCE IT WAS USED EXTENSIVELY DURING LOOP
+    # ENSURE OCCUPIED COORDS ARE UNIQUE
+    occupied_coords = list(set(occupied_coords))
+
+    # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
+    edge_paths, c = second_pass(nx_graph, occupied_coords, edge_paths, c)
+
+    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
+    new_nx_graph = make_graph_from_edge_paths(edge_paths)
+
+    # VISUALISE FINAL LATTICE SURGERY
+    visualise_3d_graph(new_nx_graph)
+    visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c}")
+
+    # CREATE A GIF FROM THE VISUALISATIONS
+    create_animation(
+       "./assets/plots/",
+       filename_prefix="steane_animation",
+       restart_delay=5000,
+       duration=2500,
+    )
+
+    # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
+    return nx_graph, edge_paths, new_nx_graph
+
+
+def second_pass(
+    nx_graph: nx.Graph, occupied_coords: List[StandardCoord], edge_paths: dict, c: int
+) -> Tuple[dict, int]:
+
+    # Update user
+    print("\nStarting second pass to connect already placed nodes.")
+
+    # BASE ALL OPERATIONS ON EDGES FROM GRAPH
+    for u, v, data in nx_graph.edges(data=True):
+
+        # Ensure occupied coords do not have duplicates
+        occupied_coords = list(set(occupied_coords))
+
+        # Get source and target node for specific edge
+        u_pos = nx_graph.nodes[u].get("pos")
+        v_pos = nx_graph.nodes[v].get("pos")
+
+        # Process only if both nodes have been placed on grid already
+        if u_pos is not None and v_pos is not None:
+
+            # Update visualiser counter
+            c += 1
+
+            # Format adjustments to match existing operations
+            u_kind = nx_graph.nodes[u].get("kind")
+            v_zx_type = nx_graph.nodes[v].get("type")
+            u_node = (u_pos, u_kind)
+            edge = tuple(sorted((u, v)))
+
+            # Call pathfinder on any graph edge that does not have an entry in edge_paths
+            if edge not in edge_paths:
+
+                print(
+                    f"\nFinding path between existing nodes: {u}@{u_pos} - {v}@{v_pos}"
+                )
+
+                # Call pathfinder using optional parameters to tell the pathfinding algorithm
+                # to work in pure pathfinding (rather than path creation) mode
+                clean_paths = run_pathfinder(
+                    u_node,
+                    v_zx_type,
+                    3,
+                    occupied_coords[:],
+                    target_node_info=(v_pos, nx_graph.nodes[v].get("kind")),
+                )
+
+                # Write to edge_paths if an edge is found
+                if clean_paths:
+                    print(f"Found {len(clean_paths)} paths for edge ({u}, {v}).")
+                    coords_in_path = [
+                        entry[0] for entry in clean_paths[0]
+                    ]  # Take the first path
+                    edge_type = data.get("type", "SIMPLE")
+                    edge_paths[edge] = {
+                        "path_coordinates": coords_in_path,
+                        "path_nodes": clean_paths[0],
+                        "edge_type": edge_type,
+                    }
+
+                    # Add path to position to list of graphs' occupied positions
+                    full_coords_to_add = get_coords_occupied_by_blocks(clean_paths[0])
+                    occupied_coords.extend(full_coords_to_add)
+
+                    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ABOVE
+                    new_nx_graph = make_graph_from_edge_paths(edge_paths)
+
+                    # VISUALISE NEW EDGE
+                    #visualise_3d_graph(new_nx_graph)
+                    visualise_3d_graph(
+                        new_nx_graph, save_to_file=True, filename=f"steane{c:03d}"
+                    )
+
+                # Write an error to edge_paths if edge not found
+                else:
+                    print(
+                        f"Could not find path for edge ({u}, {v}) between placed nodes."
+                    )
+                    edge_paths[edge] = {
+                        "path_coordinates": "error",
+                        "path_nodes": "error",
+                        "edge_type": "error",
+                    }
+
+    # RETURN EDGE PATHS FOR FINAL CONSUMPTION
+    return edge_paths, c
+
+
+#######################
+# CORE BFS OPERATIONS #
+#######################
+def prepare_graph(graph: SimpleDictGraph) -> nx.Graph:
+
     # PREPARE EMPTY NETWORKX GRAPH
     nx_graph = nx.Graph()
-    
+
     # GET NODES AND EDGES FROM INCOMING ZX GRAPH
     nodes_data: List[Tuple[int, str]] = graph.get("nodes", [])
     edges_data: List[Tuple[Tuple[int, int], str]] = graph.get("edges", [])
@@ -42,29 +272,33 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
             kind=None,
             pos=None,
         )
-        
+
     # ADD EDGES TO NETWORKX GRAPH
     for (u, v), edge_type in edges_data:
         nx_graph.add_edge(u, v, type=edge_type)
 
     # IDENTIFY THE NODES WITH MORE THAN 4 CONNECTIONS
     all_nodes = list(nx_graph.nodes())
-    high_degree_nodes = [node for node in all_nodes if _get_node_degree(nx_graph, node) > 4]
+    high_degree_nodes = [
+        node for node in all_nodes if _get_node_degree(nx_graph, node) > 4
+    ]
 
     # BREAK ANY NODES WITH MORE THAN 4 CONNECTIONS
     if high_degree_nodes:
-        
+
         # Determine max degree
         max_node_id = max(nx_graph.nodes) if nx_graph.nodes else 0
 
         # Loop over max nodes and break as appropriate
         i = 0
         while i < 100:
-            
+
             # List of high degree nodes
             all_nodes_loop = list(nx_graph.nodes())
-            high_degree_nodes = [node for node in all_nodes_loop if _get_node_degree(nx_graph, node) > 4]
-            
+            high_degree_nodes = [
+                node for node in all_nodes_loop if _get_node_degree(nx_graph, node) > 4
+            ]
+
             # Exit loop when no nodes with more than 4 edges
             if not high_degree_nodes:
                 break
@@ -113,84 +347,152 @@ def prepare_graph(graph: Dict[str, List[Any]]) -> nx.Graph:
     return nx_graph
 
 
-def choose_kind(
-    tentative_position: Tuple[int, int, int],
-    possible_kinds: Optional[List[str]],
-    occupied_coords: List[Tuple[int, int, int]],
-    all_beams: List[List[Tuple[int, int, int]]],
-) -> Tuple[Optional[str], int, List[Tuple[int, int, int]]]:
+def place_next_block(
+    source_node_id: int,
+    neigh_node_id: int,
+    nx_graph: nx.Graph,
+    occupied_coords: List[StandardCoord],
+    all_beams: List[NodeBeams],
+    edge_paths: dict,
+    step: int = 3,
+    stage: float = 0.5,
+) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
+    
+    # PRUNE BEAMS TO CONSIDER RECENT NODE PLACEMENTS
+    all_beams = prune_all_beams(all_beams, occupied_coords)
+    
+    # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
+    # Previous node data
+    source_pos: Optional[StandardCoord] = nx_graph.nodes[source_node_id].get("pos")
+    source_kind: Optional[str] = nx_graph.nodes[source_node_id].get("kind")
 
-    # HELPER VARIABLES
-    most_exits = 0
-    winner_kind: Optional[str] = None
-    winner_idx: Optional[int] = None
-    beams: List[List[Tuple[int, int, int]]] = []
+    if source_pos is None or source_kind is None:
+        return occupied_coords, all_beams, edge_paths, False
+    source_node: StandardBlock = (source_pos, source_kind)
 
-    # LOOP OVER POSSIBLE KINDS FOR CUBE, IF ANY
-    if possible_kinds:
+    # Current node data
+    next_neigh_node_data = nx_graph.nodes[neigh_node_id]
+    next_neigh_zx_type: str = next_neigh_node_data.get("type")
+    next_neigh_edge_n = int(_get_node_degree(nx_graph, neigh_node_id))
+    next_neigh_pos: Optional[StandardCoord] = nx_graph.nodes[neigh_node_id].get("pos")
 
-        # Check if cube's exits are unobstructed
-        for i, kind in enumerate(possible_kinds):
-            unobstructed_exits_n, node_beams = check_for_exits(
-                tentative_position, kind, occupied_coords, all_beams
+    # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
+    if next_neigh_pos is None:
+        print(
+            f"\nFinding path: node {source_node_id} @ {source_node} <-> node {neigh_node_id} @ {next_neigh_pos} (ZX type: {next_neigh_zx_type})"
+        )
+        print(f"Several attempts will be made. Algorithm keeps best.")
+
+        # Remove source coordinate from occupied coords
+        occupied_coords_redux = occupied_coords[:]
+        if source_pos in occupied_coords_redux:
+            occupied_coords_redux.remove(source_pos)
+
+        # Get clean candidate paths
+        clean_paths = run_pathfinder(
+            source_node,
+            next_neigh_zx_type,
+            step,
+            occupied_coords_redux if occupied_coords else [],
+        )
+        print(f"- {len(clean_paths)} paths found. Performing health-checks on all.")
+
+        # Assemble a preliminary dictionary of viable paths
+        viable_paths = []
+        for clean_path in clean_paths:
+
+            target_coords, target_kind = clean_path[-1]
+            target_unobstructed_exits_n, target_node_beams = check_for_exits(
+                target_coords, target_kind, occupied_coords_redux, all_beams
             )
-            
-            # Append cube's beams to global beams objec
-            beams.append(node_beams)
-            
-            # Choose kind with most unobstructed exits
-            if unobstructed_exits_n > most_exits:
-                most_exits = unobstructed_exits_n
-                winner_kind = kind
-                winner_idx = i
 
-        # Return selected kind
-        if winner_idx is not None:
-            return winner_kind, most_exits, beams[winner_idx]
-    
-    # NONE/EMPTY RETURN IN THE EVENT OF A FAILURE
-    return None, 0, []
+            if target_unobstructed_exits_n >= next_neigh_edge_n:
+                coords_in_path = [entry[0] for entry in clean_path]
+                beams_broken_by_path = 0
+                for beam in all_beams:
+                    for coord in beam:
+                        if coord in coords_in_path:
+                            beams_broken_by_path += 1
 
+                path_data = {
+                    "target_pos": target_coords,
+                    "target_kind": target_kind,
+                    "target_beams": target_node_beams,
+                    "coords_in_path": coords_in_path,
+                    "all_nodes_in_path": [entry for entry in clean_path],
+                    "beams_broken_by_path": beams_broken_by_path,
+                    "len_of_path": len(clean_path),
+                    "target_unobstructed_exits_n": target_unobstructed_exits_n,
+                }
 
-def find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
+                viable_paths.append(PathBetweenNodes(**path_data))
 
-    # TERMINATE IF THERE ARE NO NODES
-    if not nx_graph.nodes:
-        return None
-    
-    # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
-    max_degree = -1
-    central_nodes: List[int] = []
-    
-    node_degrees = nx_graph.degree()
-    if isinstance(node_degrees, int):
-        print("Warning: nx_graph.degree() returned an integer. Cannot determine start node.")
-        return None  # Cannot iterate, return None
-    else:
-        for node, degree in node_degrees:
-            if degree > max_degree:
-                max_degree = degree
-                central_nodes = [node]
-            elif degree == max_degree:
-                central_nodes.append(node)
-    
-    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING LOWER NODES
-    if central_nodes:
-        start_node: Optional[int] = random.choice(central_nodes)
-    else:
-        start_node: Optional[int] = None
+        print(
+            f"- A total of {len(viable_paths)} paths survived health checks. Choosing a winner path."
+        )
 
-    # RETURN START NODE
-    return start_node
+        winner_path: Optional[PathBetweenNodes] = None
+        if viable_paths:
+            winner_path = max(viable_paths, key=lambda path: path.weighed_value(stage))
+
+        # Rewrite current node with data of winner candidate
+        if winner_path:
+
+            # Update node information
+            nx_graph.nodes[neigh_node_id]["pos"] = winner_path.target_pos
+            nx_graph.nodes[neigh_node_id]["kind"] = winner_path.target_kind
+
+            # Update edge_path dictionary
+            edge = tuple(sorted((source_node_id, neigh_node_id)))
+            edge_type = nx_graph.get_edge_data(source_node_id, neigh_node_id).get(
+                "type", "SIMPLE"
+            )  # Default to "SIMPLE" if type is not found
+            edge_paths[edge] = {
+                "path_coordinates": winner_path.coords_in_path,
+                "path_nodes": winner_path.all_nodes_in_path,
+                "edge_type": edge_type,
+            }
+
+            # Add path to position to list of graphs' occupied positions
+            full_coords_to_add = get_coords_occupied_by_blocks(
+                winner_path.all_nodes_in_path
+            )
+            occupied_coords.extend(full_coords_to_add)
+
+            # Add beams of winner's target node to list of graphs' all_beams
+            all_beams.append(winner_path.target_beams)
+
+            # Return updated occupied_coords and all_beams, with success code
+            return occupied_coords, all_beams, edge_paths, True
+
+        # Handle cases where no winner is found
+        if not winner_path:
+
+            # Explicit warning
+            print(f"Could not find path to node {neigh_node_id} within step {step}.")
+
+            # Fill edge_path with error (allows process to move on but error is easy to spot)
+            edge = tuple(sorted((source_node_id, neigh_node_id)))
+            edge_paths[edge] = {
+                "path_coordinates": "error",
+                "path_nodes": "error",
+                "edge_type": "error",
+            }
+
+            # Return unchanged occupied_coords and all_beams, with failure boolean
+            return occupied_coords, all_beams, edge_paths, False
+
+    # FAIL SAFE RETURN TO AVOID TYPE ERRORS
+    return occupied_coords, all_beams, edge_paths, False
 
 
 def run_pathfinder(
-    previous_node_info,
-    next_neigh_zx_type,
-    initial_step,
-    occupied_coords,
-    target_node_info=[],
-):
+    previous_node_info: StandardBlock,
+    next_neigh_zx_type: str,
+    initial_step: int,
+    occupied_coords: List[StandardCoord],
+    target_node_info: Optional[StandardBlock] = None,
+) -> List[Any]:
 
     # ARRAYS TO HOLD TEMPORARY PATHS
     path = []
@@ -229,18 +531,14 @@ def run_pathfinder(
 
         # Try finding path to each tentative positions
         for position in tentative_positions:
-
-            path_found, best_path_length, best_path, all_paths_from_round = (
+            path_found, _, _, all_paths_from_round = (
                 run_bfs_for_all_potential_target_nodes(
                     previous_node_info,
                     next_neigh_zx_type,
                     step,
                     attempts_per_distance=1,
                     occupied_coords=occupied_coords_copy,  # Copy occupied coords: function uses source_coords differently
-                    overwrite_target_node=[
-                        position,
-                        target_type,
-                    ],
+                    overwrite_target_node=(position, target_type),
                 )
             )
 
@@ -250,7 +548,7 @@ def run_pathfinder(
 
         # Break if valid paths generated at step
 
-        if valid_paths:
+        if valid_paths and step >= 12:
             break
 
         # Increase distance if no valid paths found at current step
@@ -270,7 +568,7 @@ def run_pathfinder(
             return [clean_path]
         else:
             return []
-    
+
     else:
         if valid_paths:
             for all_paths in valid_paths:
@@ -289,473 +587,51 @@ def run_pathfinder(
     return clean_paths
 
 
-def place_next_block(
-    source_node_id: int,
-    neigh_node_id: int,
-    nx_graph: nx.Graph,
-    occupied_coords: List[Tuple[int, int, int]],
-    all_beams: List[List[Tuple[int, int, int]]],
-    edge_paths: dict,
-    step: int = 3,
-    stage: float = 0.5,
-) -> Tuple[List[Tuple[int, int, int]], List[List[Tuple[int, int, int]]], dict, bool]:
+##################
+# AUX OPERATIONS #
+##################
+def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
 
-    # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
-    # Previous node data
-    source_pos: Optional[Tuple[int, int, int]] = nx_graph.nodes[source_node_id].get("pos")
-    source_kind: Optional[str] = nx_graph.nodes[source_node_id].get("kind")
+    # TERMINATE IF THERE ARE NO NODES
+    if not nx_graph.nodes:
+        return None
 
-    if source_pos is None or source_kind is None:
-        return occupied_coords, all_beams, edge_paths, False
-    source_node = (source_pos, source_kind)
+    # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
+    max_degree = -1
+    central_nodes: List[int] = []
 
-    # Current node data
-    next_neigh_node_data = nx_graph.nodes[neigh_node_id]
-    next_neigh_zx_type: Optional[List[str]] = next_neigh_node_data.get("type")
-    next_neigh_edge_n = int(_get_node_degree(nx_graph, neigh_node_id))
-    next_neigh_pos: Optional[Tuple[int, int, int]] = nx_graph.nodes[neigh_node_id].get("pos")
-
-    # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
-    if next_neigh_pos is None:
+    node_degrees = nx_graph.degree
+    if isinstance(node_degrees, int):
         print(
-            f"\nFinding path: node {source_node_id} @ {source_node} <-> node {neigh_node_id} @ {next_neigh_pos} (ZX type: {next_neigh_zx_type})"
+            "Warning: nx_graph.degree() returned an integer. Cannot determine start node."
         )
-        print(f"Several attempts will be made. Algorithm keeps best.")
-
-        # Remove source coordinate from occupied coords
-        occupied_coords_redux = occupied_coords[:]
-        if source_pos in occupied_coords_redux:
-            occupied_coords_redux.remove(source_pos)
-
-        # Get clean candidate paths
-        clean_paths = run_pathfinder(
-            source_node,
-            next_neigh_zx_type,
-            step,
-            occupied_coords_redux if occupied_coords else [],
-        )
-        print(f"- {len(clean_paths)} paths found. Performing health-checks on all.")
-        
-        # Assemble a preliminary dictionary of viable paths
-        viable_paths = []
-        for clean_path in clean_paths:
-
-            target_coords, target_kind = clean_path[-1]
-            target_unobstructed_exits_n, target_node_beams = check_for_exits(
-                target_coords, target_kind, occupied_coords_redux, all_beams
-            )
-
-            if target_unobstructed_exits_n >= next_neigh_edge_n:
-                coords_in_path = [entry[0] for entry in clean_path]
-                beams_broken_by_path = 0
-                for beam in all_beams:
-                    for coord in beam:
-                        if coord in coords_in_path:
-                            beams_broken_by_path += 1
-
-                path_data = {
-                    "target_pos": target_coords,
-                    "target_kind": target_kind,
-                    "target_beams": target_node_beams,
-                    "coords_in_path": coords_in_path,
-                    "all_nodes_in_path": [entry for entry in clean_path],
-                    "beams_broken_by_path": beams_broken_by_path,
-                    "len_of_path": len(clean_path),
-                    "target_unobstructed_exits_n": target_unobstructed_exits_n,
-                }
-
-                viable_paths.append(Path(**path_data))
-        
-        print(f"- A total of {len(viable_paths)} paths survived health checks. Choosing a winner path.")
-        
-        winner_path: Optional[Path] = None
-        if viable_paths:
-            winner_path = max(viable_paths, key=lambda path: path.weighed_value(stage))
-
-        # Rewrite current node with data of winner candidate
-        if winner_path:
-
-            # Update node information
-            nx_graph.nodes[neigh_node_id]["pos"] = winner_path.target_pos
-            nx_graph.nodes[neigh_node_id]["kind"] = winner_path.target_kind
-
-            # Update edge_path dictionary
-            edge = tuple(sorted((source_node_id, neigh_node_id)))
-            edge_type = nx_graph.get_edge_data(source_node_id, neigh_node_id).get(
-                "type", "SIMPLE"
-            )  # Default to "SIMPLE" if type is not found
-            edge_paths[edge] = {
-                "path_coordinates": winner_path.coords_in_path,
-                "path_nodes": winner_path.all_nodes_in_path,
-                "edge_type": edge_type,
-            }
-
-            # Add path to position to list of graphs' occupied positions
-            full_coords_to_add = obstacle_coords_from_preexistent_structure(winner_path.all_nodes_in_path)
-            occupied_coords.extend(full_coords_to_add)
-
-            # Add beams of winner's target node to list of graphs' all_beams
-            all_beams.append(winner_path.target_beams)
-
-            # Return updated occupied_coords and all_beams, with success code
-            return occupied_coords, all_beams, edge_paths, True
-
-        # Handle cases where no winner is found
-        if not winner_path:
-            
-            # Explicit warning
-            print(f"Could not find path to node {neigh_node_id} within step {step}.")
-            
-            # Fill edge_path with error (allows process to move on but error is easy to spot)
-            edge = tuple(sorted((source_node_id, neigh_node_id)))
-            edge_paths[edge] = {
-                "path_coordinates": "error",
-                "path_nodes": "error",
-                "edge_type": "error",
-            }
-
-            # Return unchanged occupied_coords and all_beams, with failure boolean
-            return occupied_coords, all_beams, edge_paths, False
-
-    # DEAL WITH CASES WHERE BOTH NODES ARE ALREADY IN GRID
-    if next_neigh_pos is not None:
-        
-        print(f"Finding path between nodes {source_node_id} and {neigh_node_id}")
-
-        # Get target kind
-        target_kind: Optional[str] = nx_graph.nodes[neigh_node_id].get("kind")
-
-        # Remove source coordinate from occupied coords
-        occupied_coords_redux = occupied_coords[:]
-        if source_pos in occupied_coords_redux:
-            occupied_coords_redux.remove(source_pos)
-        if next_neigh_pos in occupied_coords_redux:
-            occupied_coords_redux.remove(next_neigh_pos)
-
-        # Find paths between existing nodes
-        clean_paths = run_pathfinder(
-            source_node,
-            next_neigh_zx_type,
-            step,
-            occupied_coords_redux if occupied_coords else [],
-            target_node_info=[next_neigh_pos, target_kind],
-        )
-
-        # If there is a path
-        if clean_paths:
-
-            for clean_path in clean_paths:
-                coords_in_path = [entry[0] for entry in clean_path]
-                return occupied_coords, all_beams, edge_paths, True
-
-            for clean_path in clean_paths:
-                coords_in_path = [entry[0] for entry in clean_path]
-
-                # Update edge_path dictionary
-                edge = tuple(sorted((source_node_id, neigh_node_id)))
-                edge_type = nx_graph.get_edge_data(source_node_id, neigh_node_id).get(
-                    "type", "SIMPLE"
-                )  # Default to "SIMPLE" if type is not found
-                edge_paths[edge] = {
-                    "path_coordinates": coords_in_path,
-                    "path_nodes": clean_path,
-                    "edge_type": edge_type,
-                }
-
-                # Update occupied coords
-                full_coords_to_add = obstacle_coords_from_preexistent_structure(clean_path)
-                occupied_coords.extend(full_coords_to_add)
-
-                # Update all_beams
-                # No need to update all_beams. No new nodes. No new beams.
-                # No need to establish how many beams path breaks: no selection between alternative paths possible for a single path.
-
-                # Return updated occupied_coords and all_beams, with success code
-                return occupied_coords, all_beams, edge_paths, True
-        else:
-            # No path found between existing nodes
-            print(
-                f"Could not find path between already placed nodes {source_node_id} and {neigh_node_id}."
-            )
-            edge = tuple(sorted((source_node_id, neigh_node_id)))
-            edge_paths[edge] = {
-                "path_coordinates": "error",
-                "path_nodes": "error",
-                "edge_type": "error",
-            }
-
-            # Return unchanged occupied_coords and all_beams, with failure boolean
-            return occupied_coords, all_beams, edge_paths, False
-    
-    # FAIL SAFE RETURN TO AVOID TYPE ERRORS
-    return occupied_coords, all_beams, edge_paths, False
-
-
-def second_pass(
-    nx_graph: nx.Graph,
-    occupied_coords: List[Tuple[int, int, int]],
-    all_beams: List[List[Tuple[int, int, int]]],
-    edge_paths: dict,
-    c: int
-) -> Tuple[dict, int]:
-  
-    # Update user
-    print("\nStarting second pass to connect already placed nodes.")
-
-    # BASE ALL OPERATIONS ON EDGES FROM GRAPH
-    for u, v, data in nx_graph.edges(data=True):
-
-        # Ensure occupied coords do not have duplicates
-        occupied_coords = list(set(occupied_coords))
-
-        # Get source and target node for specific edge
-        u_pos = nx_graph.nodes[u].get("pos")
-        v_pos = nx_graph.nodes[v].get("pos")
-
-        # Process only if both nodes have been placed on grid already
-        if u_pos is not None and v_pos is not None:
-            
-            # Update visualiser counter
-            c += 1
-            
-            # Format adjustments to match existing operations
-            u_kind = nx_graph.nodes[u].get("kind")
-            v_zx_type = nx_graph.nodes[v].get("type")
-            u_node = (u_pos, u_kind)
-            edge = tuple(sorted((u, v)))
-            
-            # Call pathfinder on any graph edge that does not have an entry in edge_paths
-            if edge not in edge_paths:
-
-                print(f"\nFinding path between existing nodes: {u}@{u_pos} - {v}@{v_pos}")
-
-                # Call pathfinder using optional parameters to tell the pathfinding algorithm
-                # to work in pure pathfinding (rather than path creation) mode
-                clean_paths = run_pathfinder(
-                    u_node,
-                    v_zx_type,
-                    3,
-                    occupied_coords[:],
-                    target_node_info=[v_pos, nx_graph.nodes[v].get("kind")],
-                )
-
-                # Write to edge_paths if an edge is found
-                if clean_paths:
-                    print(f"Found {len(clean_paths)} paths for edge ({u}, {v}).")
-                    coords_in_path = [
-                        entry[0] for entry in clean_paths[0]
-                    ]  # Take the first path
-                    edge_type = data.get("type", "SIMPLE")
-                    edge_paths[edge] = {
-                        "path_coordinates": coords_in_path,
-                        "path_nodes": clean_paths[0],
-                        "edge_type": edge_type,
-                    }
-                    
-                    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ABOVE
-                    new_nx_graph = make_graph_from_edge_paths(edge_paths)
-                    
-                    # VISUALISE NEW EDGE
-                    visualise_3d_graph(new_nx_graph)
-                    visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c:03d}")
-                
-                # Write an error to edge_paths if edge not found
-                else:
-                    print(
-                        f"Could not find path for edge ({u}, {v}) between placed nodes."
-                    )
-                    edge_paths[edge] = {
-                        "path_coordinates": "error",
-                        "path_nodes": "error",
-                        "edge_type": "error",
-                    }
-                    
-    # RETURN EDGE PATHS FOR FINAL CONSUMPTION
-    return edge_paths, c
-
-
-def main(graph: Dict[str, List[Any]]) -> Tuple[nx.Graph, dict, nx.Graph]:
-
-    # KEY VARIABLES
-    # Take a ZX graph and prepare a fresh 3D graph with positions set to None
-    nx_graph = prepare_graph(graph)
-
-    # Arrays/dicts to track coordinates
-    occupied_coords: List[Tuple[int, int, int]] = []
-    all_beams: List[List[Tuple[int, int, int]]] = []
-    edge_paths: dict = {}
-    
-    # VALIDITY CHECKS
-    if not zx_types_validity_checks(graph):
-        print("Graph validity checks failed. Aborting.")
-        return nx_graph, edge_paths, nx.Graph()  # Return an empty graph or handle as needed
-
-    # BFS management
-    start_node: Optional[int] = find_start_node_id(nx_graph)
-    queue: deque = deque([start_node])
-    visited: set = {start_node}
-
-    # SPECIAL PROCESS FOR CENTRAL NODE
-    # Terminate if there is no start node
-    if start_node is None:
-        print("Graph has no nodes.")
-        return nx_graph, edge_paths, nx.Graph()
-
-    # Place start node at origin
+        return None  # Cannot iterate, return None
     else:
+        for node, degree in node_degrees:
+            if degree > max_degree:
+                max_degree = degree
+                central_nodes = [node]
+            elif degree == max_degree:
+                central_nodes.append(node)
 
-        # Get kind from type family
-        randomly_chosen_kind: Optional[str] = None
-        possible_kinds: Optional[List[str]] = nx_graph.nodes[start_node].get(
-            "type_family"
-        )
-        randomly_chosen_kind = random.choice(possible_kinds) if possible_kinds else None
+    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING LOWER NODES
+    if central_nodes:
+        start_node: Optional[int] = random.choice(central_nodes)
+    else:
+        start_node: Optional[int] = None
 
-        # Write info of node
-        nx_graph.nodes[start_node]["pos"] = (0, 0, 0)
-        nx_graph.nodes[start_node]["kind"] = randomly_chosen_kind
-
-        # Update occupied_coords and all_beams with node's position & beams
-        occupied_coords.append((0, 0, 0))
-        _, start_node_beams = check_for_exits(
-            (0, 0, 0), randomly_chosen_kind, occupied_coords, all_beams
-        )
-        all_beams.append(start_node_beams)
-
-    # LOOP FOR ALL OTHER NODES
-    c = 0 # Visualiser counter (needed to save snapshots to file)
-    while queue:
-
-        # Get current parent node
-        current_parent_node: int = queue.popleft()
-
-        # Iterate over neighbours of current parent node
-        for neigh_node_id in nx_graph.neighbors(current_parent_node):
-
-            # Queue and add to visited set if BFS just arrived at node
-            if neigh_node_id not in visited:
-                visited.add(neigh_node_id)
-                queue.append(neigh_node_id)
-
-                # Ensure occupied_coords has unique entries each run
-                occupied_coords = list(set(occupied_coords))
-
-                # Try to place blocks as close to one another as as possible
-                step = 3
-                while step <= 18:
-                    occupied_coords, all_beams, edge_paths, successful_placement = (
-                        place_next_block(
-                            current_parent_node,
-                            neigh_node_id,
-                            nx_graph,
-                            occupied_coords,
-                            all_beams,
-                            edge_paths,
-                            step=step,
-                        )
-                    )
-                    
-                    # For visualisation purposes, on each step,
-                    # create a new graph from edge_paths
-                    if edge_paths:
-                        if c < int(len(edge_paths)):
-                            if list(edge_paths.values())[-1]["path_nodes"] != "error":
-                                
-                                # Create graph from existing edges
-                                new_nx_graph = make_graph_from_edge_paths(edge_paths)
-                                
-                                # Create visualisation
-                                visualise_3d_graph(new_nx_graph)
-                                visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c:03d}")
-                                
-                                c = len(edge_paths)
-                    
-                    # Move to next is there is a succesful placement
-                    if successful_placement:
-                        break
-                    
-                    # Increase distance between nodes if placement not possible
-                    step += 3
-
-    # SINCE IT WAS USED EXTENSIVELY DURING LOOP
-    # ENSURE OCCUPIED COORDS ARE UNIQUE
-    occupied_coords = list(set(occupied_coords))
-
-    # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    edge_paths, c = second_pass(nx_graph, occupied_coords, all_beams, edge_paths, c)
-
-    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
-    new_nx_graph = make_graph_from_edge_paths(edge_paths)
-
-    # VISUALISE FINAL LATTICE SURGERY
-    visualise_3d_graph(new_nx_graph)
-    visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c}")
-    
-    # CREATE A GIF FROM THE VISUALISATIONS
-    create_animation(
-        "./assets/plots/",
-        filename_prefix="steane_animation",
-        restart_delay=5000,
-        duration=2500,
-    )
-
-    # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
-    return nx_graph, edge_paths, new_nx_graph
+    # RETURN START NODE
+    return start_node
 
 
-# EXAMPLE USAGE
-# THE CODE BELOW CAN BE USED TO TEST THE ALGORITHM WITH A 7 QUBIT STEANE CODE
-if __name__ == "__main__":
-    
-    steane: Dict[str, List[Any]] = {
-        "nodes": [
-            [1, "X"],
-            [2, "Z"],
-            [3, "Z"],
-            [4, "Z"],
-            [5, "X"],
-            [6, "X"],
-            [7, "X"],
-            [8, "X"],
-            [9, "X"],
-            [10, "X"],
-            [11, "X"],
-            [12, "Z"],
-            [13, "Z"],
-            [14, "Z"],
-        ],
-        "edges": [
-            ((1, 2), "SIMPLE"),
-            ((1, 3), "SIMPLE"),
-            ((1, 4), "SIMPLE"),
-            ((5, 2), "SIMPLE"),
-            ((5, 3), "SIMPLE"),
-            ((6, 2), "SIMPLE"),
-            ((6, 4), "SIMPLE"),
-            ((7, 3), "SIMPLE"),
-            ((7, 4), "SIMPLE"),
-            ((8, 1), "SIMPLE"),
-            ((9, 5), "SIMPLE"),
-            ((10, 6), "SIMPLE"),
-            ((11, 7), "SIMPLE"),
-            ((2, 12), "SIMPLE"),
-            ((3, 13), "SIMPLE"),
-            ((4, 14), "SIMPLE"),
-        ],
-    }
+def _get_node_degree(graph: nx.Graph, node: int) -> int:
 
-    # CALL TO ALGORITHM
-    nx_graph_3d, edge_paths, new_nx_graph = main(steane)
+    # GET DEGREES FOR THE ENTIRE GRAPH
+    degrees = graph.degree
 
-    # PRINTOUT OF RESULTS
-    print("\nNodes:")
-    for node_id, data in nx_graph_3d.nodes(data=True):
-        print(f"  Node ID: {node_id}, Attributes: {data}")
+    # GET DEGREE FOR NODE OF INTEREST
+    if not isinstance(degrees, int) and hasattr(degrees, "__getitem__"):
+        return degrees[node]
 
-    print("\nEdges:")
-    for u, v, data in nx_graph_3d.edges(data=True):
-        print(f" Edge: ({u}, {v}), Attributes: {data}")
-
-    print("\nEdge paths:")
-    for key, edge_path in edge_paths.items():
-        print(f"  {key}: {edge_path['path_nodes']}")
+    # IF DEGREES NOT A LIST, RETURN 0 (SINGLE NODE WON'T HAVE EDGES)
+    return 0

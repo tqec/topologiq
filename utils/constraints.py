@@ -1,6 +1,18 @@
-from utils.utils import check_is_exit  
+import sys
+from pathlib import Path
+from utils.utils import check_is_exit
+from typing import List
 
-def check_face_match(source_coord: tuple, source_kind: str, target_coord: tuple, target_kind: str):
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.classes import StandardCoord
+
+
+def check_face_match(
+    source_coord: StandardCoord,
+    source_kind: str,
+    target_coord: StandardCoord,
+    target_kind: str,
+) -> bool:
     """
     Checks if a block or pipe has an available exit pointing towards a target coordinate.
     To use this functoin to check if two cubes match, run it twice: one from current to target and one from target to current.
@@ -20,26 +32,30 @@ def check_face_match(source_coord: tuple, source_kind: str, target_coord: tuple,
     # Sanitise kind in case of mixed case inputs
     source_kind = source_kind.lower()[:3]
     target_kind = target_kind.lower()[:3]
-    
+
     # Extract axis of displacement from kinds
     displacements = [p[1] - p[0] for p in list(zip(source_coord, target_coord))]
     axis_displacement = [True if axis != 0 else False for axis in displacements]
-    
+
     idx = axis_displacement.index(True)
-    
-    new_source_kind = source_kind[:idx] + source_kind[idx+1:]
-    new_target_kind = target_kind[:idx] + target_kind[idx+1:]
-    
+
+    new_source_kind = source_kind[:idx] + source_kind[idx + 1 :]
+    new_target_kind = target_kind[:idx] + target_kind[idx + 1 :]
+
     # Fail if two other dimensions do not match
     if not new_source_kind == new_target_kind:
         return False
-    
+
     # Pass otherwise
     return True
 
+
 def check_cube_match(
-    current_pos: tuple, current_kind: str, next_pos: tuple, next_kind: str
-):
+    current_pos: StandardCoord,
+    current_kind: str,
+    next_pos: StandardCoord,
+    next_kind: str,
+) -> bool:
     """
     Checks if two cubes match.
 
@@ -72,10 +88,13 @@ def check_cube_match(
     return True
 
 
-def get_valid_next_kinds(current_pos, current_kind, next_pos):
+def get_valid_next_kinds(
+    current_pos: StandardCoord, current_kind: str, next_pos: StandardCoord
+) -> List[str]:
 
     # HELPER VARIABLES
     possible_kinds = []
+    exit_kind = ["ooo"]
     all_cube_kinds = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
     all_pipe_kinds = [
         "zxo",
@@ -111,7 +130,6 @@ def get_valid_next_kinds(current_pos, current_kind, next_pos):
             if cube_match:
                 possible_kinds.append(next_kind)
 
-    
     # Now discard possible kinds where there is no colour match for all non-connection faces
     reduced_possible_kinds = []
     for next_kind in possible_kinds:
@@ -121,12 +139,3 @@ def get_valid_next_kinds(current_pos, current_kind, next_pos):
     # RETURN ARRAY OF POSSIBLE NEXT KINDS
     return reduced_possible_kinds
 
-
-if __name__ == "__main__":
-    current_pos = (-1, 0, 0)
-    current_kind = "oxz"
-    next_pos = (-3, 0, 0)
-    
-
-    result = get_valid_next_kinds(current_pos, current_kind, next_pos)
-    print(result)
