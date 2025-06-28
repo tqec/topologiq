@@ -1,12 +1,9 @@
-import sys
-from pathlib import Path
 from collections import deque
 from utils.utils import is_move_allowed
 from utils.constraints import get_valid_next_kinds
 from typing import List, Tuple, Optional
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.classes import StandardCoord, StandardBlock
+from utils.classes import StandardCoord, StandardBlock, Colours
 
 
 #########################
@@ -150,11 +147,11 @@ def bfs_extended_3d(
 
         current_manhattan_distance = abs(x - end_x) + abs(y - end_y) + abs(z - end_z)
         if current_manhattan_distance > 6 * initial_manhattan_distance:
-            print(f"- Terminated.")
+            print(Colours.RED + "x" + Colours.RESET, end="", flush=True)
             return False, -1, None
 
         if current_coords == end_coords and current_type == end_type:
-            print(f"- SUCCESS!")
+            print(Colours.GREEN + "." + Colours.RESET, end="", flush=True)
 
             return (
                 True,

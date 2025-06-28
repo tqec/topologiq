@@ -1,0 +1,38 @@
+from utils.classes import SimpleDictGraph
+
+steane: SimpleDictGraph = {
+    "nodes": [
+        (1, "X"),
+        (2, "Z"),
+        (3, "Z"),
+        (4, "Z"),
+        (5, "X"),
+        (6, "X"),
+        (7, "X"),
+        (8, "X"),
+        (9, "X"),
+        (10, "X"),
+        (11, "X"),
+        (12, "Z"),
+        (13, "Z"),
+        (14, "Z"),
+    ],
+    "edges": [
+        ((1, 2), "SIMPLE"),
+        ((1, 3), "SIMPLE"),
+        ((1, 4), "SIMPLE"),
+        ((5, 2), "SIMPLE"),
+        ((5, 3), "SIMPLE"),
+        ((6, 2), "SIMPLE"),
+        ((6, 4), "SIMPLE"),
+        ((7, 3), "SIMPLE"),
+        ((7, 4), "SIMPLE"),
+        ((8, 1), "SIMPLE"),
+        ((9, 5), "SIMPLE"),
+        ((10, 6), "SIMPLE"),
+        ((11, 7), "SIMPLE"),
+        ((2, 12), "SIMPLE"),
+        ((3, 13), "SIMPLE"),
+        ((4, 14), "SIMPLE"),
+    ],
+}

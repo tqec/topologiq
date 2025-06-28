@@ -1,8 +1,8 @@
+from typing import List, Tuple, TypedDict
 from dataclasses import dataclass
 from typing import Tuple, List
-from two_stage_greedy_bfs_config import VALUE_HYPERPARAMS
 
-from typing import List, Tuple, TypedDict
+from run_hyper_params import VALUE_HYPERPARAMS
 
 # TYPES FOR INCOMING 2D GRAPH
 GraphNode = Tuple[int, str]
@@ -53,3 +53,11 @@ class Block:
 
 
 EdgePath = List[Block]
+
+
+# LET'S ADD SOME COLOURS TO PRINT STATEMENTS. BECAUSE, WHY NOT
+class Colours:
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    BLUE = "\033[34m"
+    RESET = "\033[0m"

@@ -4,9 +4,8 @@ This file is an absolute mess at the moment. It works though.
 
 import numpy as np
 import networkx as nx
+from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from typing import Annotated, Literal, Any, Tuple
 from numpy.typing import NDArray
@@ -519,7 +518,9 @@ def visualise_3d_graph(
 
     # Pop visualisation or save to file
     if save_to_file:
-        plt.savefig(f"./assets/plots/{filename}.png")
+        temp_folder_path = "./assets/temp"
+        Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
+        plt.savefig(f"{temp_folder_path}/{filename}.png")
         plt.close()
     else:
         plt.show()
@@ -578,37 +579,3 @@ def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
                         )
 
     return final_graph
-
-
-# def make_graph_from_pathfinding(primary_node_and_edges, secondary_nodes: list[Any] =[]) -> nx.Graph:
-#
-#    graph = nx.Graph()
-#
-#    for index, pos, node_type in primary_node_and_edges:
-#        graph.add_node(index, pos=pos, type=node_type)
-#
-#    for i in range(len(primary_node_and_edges)):
-#        _, pos, node_type = primary_node_and_edges[i]
-#        if "o" in node_type:
-#            prev_index = i - 1
-#            next_index = i + 1
-#            if 0 <= prev_index < len(primary_node_and_edges) and 0 <= next_index < len(
-#                primary_node_and_edges
-#            ):
-#                graph.add_edge(prev_index, next_index, pipe_type=node_type)
-#
-#    if secondary_nodes:
-#        start_index = len(primary_node_and_edges)
-#        for i, (pos, node_type) in enumerate(secondary_nodes):
-#            index = start_index + i
-#            graph.add_node(index, pos=pos, type=node_type)
-#
-#            if "o" in node_type:
-#                prev_index = index - 1
-#                next_index = index + 1
-#                if 0 <= prev_index < start_index + len(secondary_nodes) and 0 <= next_index < start_index + len(
-#                    secondary_nodes
-#                ):
-#                    graph.add_edge(prev_index, next_index, pipe_type=node_type)
-#
-#    return graph

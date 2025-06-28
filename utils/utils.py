@@ -1,11 +1,8 @@
-import sys
 import random
-from pathlib import Path
 from typing import Tuple, List, Dict, Optional
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.classes import SimpleDictGraph, StandardCoord, StandardBeam, NodeBeams
-from two_stage_greedy_bfs_config import LENGTH_OF_BEAM
+from run_hyper_params import LENGTH_OF_BEAM
 
 
 def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
