@@ -2,7 +2,6 @@ import random
 from typing import Tuple, List, Dict, Optional
 
 from utils.classes import SimpleDictGraph, StandardCoord, StandardBeam, NodeBeams
-from run_hyper_params import LENGTH_OF_BEAM
 
 
 def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
@@ -69,7 +68,7 @@ def check_unobstructed(
     target_coord: StandardCoord,
     occupied: List[StandardCoord],
     all_beams: List[NodeBeams],
-    beam_length: int = LENGTH_OF_BEAM,
+    length_of_beams: int,
 ) -> Tuple[bool, StandardBeam]:
 
     single_beam_for_exit: StandardBeam = []
@@ -77,7 +76,7 @@ def check_unobstructed(
     directions = [target - source for source, target in zip(source_coord, target_coord)]
     directions = [1 if d > 0 else -1 if d < 0 else 0 for d in directions]
 
-    for i in range(1, beam_length):
+    for i in range(1, length_of_beams):
         dx, dy, dz = (directions[0] * i, directions[1] * i, directions[2] * i)
         single_beam_for_exit.append(
             (source_coord[0] + dx, source_coord[1] + dy, source_coord[2] + dz)
@@ -98,6 +97,7 @@ def check_for_exits(
     node_kind: str | None,
     occupied: List[StandardCoord],
     all_beams: List[NodeBeams],
+    length_of_beams: int,
 ) -> Tuple[int, NodeBeams]:
 
     unobstructed_exits_n = 0
@@ -121,7 +121,7 @@ def check_for_exits(
 
         if check_is_exit(node_coords, node_kind, target_coords):
             is_unobstructed, exit_beam = check_unobstructed(
-                node_coords, target_coords, occupied, all_beams
+                node_coords, target_coords, occupied, all_beams, length_of_beams
             )
             if is_unobstructed:
                 unobstructed_exits_n += 1

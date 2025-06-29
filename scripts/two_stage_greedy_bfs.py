@@ -16,7 +16,7 @@ from utils.classes import (
     NodeBeams,
     SimpleDictGraph,
     StandardCoord,
-    Colours
+    Colors,
 )
 from scripts.pathfinder import (
     run_bfs_for_all_potential_target_nodes,
@@ -24,14 +24,12 @@ from scripts.pathfinder import (
 )
 from grapher.grapher import visualise_3d_graph, make_graph_from_edge_paths
 
-from run_hyper_params import TERMINATION_DISTANCE
-
 
 ####################
 # WORKFLOW MANAGER #
 ####################
 def main(
-    graph: SimpleDictGraph, circuit_name: str = "no_name"
+    graph: SimpleDictGraph, circuit_name: str = "circuit", **kwargs
 ) -> Tuple[nx.Graph, dict, nx.Graph, int]:
 
     # KEY VARIABLES
@@ -45,13 +43,8 @@ def main(
 
     # VALIDITY CHECKS
     if not zx_types_validity_checks(graph):
-        print("Graph validity checks failed. Aborting.")
-        return (
-            nx_graph,
-            edge_paths,
-            nx.Graph(),
-            0
-        )
+        print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
+        return (nx_graph, edge_paths, nx.Graph(), 0)
 
     # BFS management
     start_node: Optional[int] = _find_start_node_id(nx_graph)
@@ -61,12 +54,12 @@ def main(
     # SPECIAL PROCESS FOR CENTRAL NODE
     # Terminate if there is no start node
     if start_node is None:
-        print("Graph has no nodes.")
+        print(Colors.RED + "Graph has no nodes." + Colors.RESET)
         return nx_graph, edge_paths, nx.Graph(), 0
 
     # Place start node at origin
     else:
-
+        print(Colors.BLUE + "\nPlacing first node." + Colors.RESET)
         # Get kind from type family
         possible_kinds: Optional[List[str]] = nx_graph.nodes[start_node].get(
             "type_family"
@@ -80,9 +73,14 @@ def main(
         # Update occupied_coords and all_beams with node's position & beams
         occupied_coords.append((0, 0, 0))
         _, start_node_beams = check_for_exits(
-            (0, 0, 0), randomly_chosen_kind, occupied_coords, all_beams
+            (0, 0, 0),
+            randomly_chosen_kind,
+            occupied_coords,
+            all_beams,
+            kwargs["length_of_beams"],
         )
         all_beams.append(start_node_beams)
+        print(f"{start_node}: ((0, 0, 0) '{randomly_chosen_kind}').")
 
     # LOOP FOR ALL OTHER NODES
     c = 0  # Visualiser counter (needed to save snapshots to file)
@@ -114,6 +112,7 @@ def main(
                             all_beams,
                             edge_paths,
                             step=step,
+                            **kwargs,
                         )
                     )
 
@@ -127,16 +126,16 @@ def main(
                                 new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                                 # Create visualisation
-                                # visualise_3d_graph(new_nx_graph)
+                                #visualise_3d_graph(new_nx_graph)
                                 visualise_3d_graph(
                                     new_nx_graph,
                                     save_to_file=True,
-                                    filename=f"steane{c:03d}",
+                                    filename=f"{circuit_name}{c:03d}",
                                 )
 
                                 c = len(edge_paths)
 
-                    # Move to next is there is a succesful placement
+                    # Move to next if there is a succesful placement
                     if successful_placement:
                         break
 
@@ -148,7 +147,9 @@ def main(
     occupied_coords = list(set(occupied_coords))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    edge_paths, c = second_pass(nx_graph, occupied_coords, edge_paths, c)
+    edge_paths, c = second_pass(
+        nx_graph, occupied_coords, edge_paths, circuit_name, c, **kwargs
+    )
 
     # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
     new_nx_graph = make_graph_from_edge_paths(edge_paths)
@@ -158,7 +159,12 @@ def main(
 
 
 def second_pass(
-    nx_graph: nx.Graph, occupied_coords: List[StandardCoord], edge_paths: dict, c: int
+    nx_graph: nx.Graph,
+    occupied_coords: List[StandardCoord],
+    edge_paths: dict,
+    circuit_name,
+    c: int,
+    **kwargs,
 ) -> Tuple[dict, int]:
 
     # BASE ALL OPERATIONS ON EDGES FROM GRAPH
@@ -186,7 +192,10 @@ def second_pass(
             # Call pathfinder on any graph edge that does not have an entry in edge_paths
             if edge not in edge_paths:
 
-                print(Colours.BLUE, "\nFinding path between existing nodes:", Colours.RESET, f"{u}@{u_pos} - {v}@{v_pos}")
+                print(
+                    Colors.BLUE + "\nFinding path between placed nodes." + Colors.RESET,
+                    f"{u}: ({u_pos, u_kind}) <--> {v}: {u_node}",
+                )
 
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
@@ -196,11 +205,12 @@ def second_pass(
                     3,
                     occupied_coords[:],
                     target_node_info=(v_pos, nx_graph.nodes[v].get("kind")),
+                    **kwargs,
                 )
 
                 # Write to edge_paths if an edge is found
                 if clean_paths:
-                    print(f"\nFound {len(clean_paths)} paths for edge ({u}, {v}).")
+                    print(f"\nPath found.")
                     coords_in_path = [
                         entry[0] for entry in clean_paths[0]
                     ]  # Take the first path
@@ -221,14 +231,14 @@ def second_pass(
                     # VISUALISE NEW EDGE
                     # visualise_3d_graph(new_nx_graph)
                     visualise_3d_graph(
-                        new_nx_graph, save_to_file=True, filename=f"steane{c:03d}"
+                        new_nx_graph,
+                        save_to_file=True,
+                        filename=f"{circuit_name}{c:03d}",
                     )
 
                 # Write an error to edge_paths if edge not found
                 else:
-                    print(
-                        f"\nCould not find path for edge ({u}, {v}) between placed nodes."
-                    )
+                    print("Path not found.")
                     edge_paths[edge] = {
                         "path_coordinates": "error",
                         "path_nodes": "error",
@@ -344,6 +354,7 @@ def place_next_block(
     edge_paths: dict,
     step: int = 3,
     stage: float = 0.5,
+    **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
 
     # PRUNE BEAMS TO CONSIDER RECENT NODE PLACEMENTS
@@ -366,12 +377,10 @@ def place_next_block(
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if next_neigh_pos is None:
-        print(Colours.BLUE,
-            "\nCreating path between existing and new node:",
-            Colours.RESET,
-            f"{source_node_id} @ {source_node} <-> node {neigh_node_id} @ {next_neigh_pos} (ZX type: {next_neigh_zx_type})"
+        print(
+            Colors.BLUE + "\nCreating path." + Colors.RESET,
+            f"{source_node_id}: {source_node} --> {neigh_node_id}: ((?, ?, ?), ???) (ZX type: {next_neigh_zx_type})",
         )
-        print(f"Several attempts will be made. Algorithm keeps best.\nResults for each attempt:", end=" ", flush=True)
 
         # Remove source coordinate from occupied coords
         occupied_coords_redux = occupied_coords[:]
@@ -384,6 +393,7 @@ def place_next_block(
             next_neigh_zx_type,
             step,
             occupied_coords_redux if occupied_coords else [],
+            **kwargs,
         )
 
         # Assemble a preliminary dictionary of viable paths
@@ -392,7 +402,11 @@ def place_next_block(
 
             target_coords, target_kind = clean_path[-1]
             target_unobstructed_exits_n, target_node_beams = check_for_exits(
-                target_coords, target_kind, occupied_coords_redux, all_beams
+                target_coords,
+                target_kind,
+                occupied_coords_redux,
+                all_beams,
+                length_of_beams=kwargs["length_of_beams"],
             )
 
             if target_unobstructed_exits_n >= next_neigh_edge_n:
@@ -417,12 +431,14 @@ def place_next_block(
                 viable_paths.append(PathBetweenNodes(**path_data))
 
         print(
-            f"\n{len(viable_paths)} paths survived health checks. One was chosen as winner using value function."
+            f"\n{len(viable_paths)} viable paths created. {'Algorithm picks best' if len(clean_paths)>1 else ''}."
         )
 
         winner_path: Optional[PathBetweenNodes] = None
         if viable_paths:
-            winner_path = max(viable_paths, key=lambda path: path.weighed_value(stage))
+            winner_path = max(
+                viable_paths, key=lambda path: path.weighed_value(stage, **kwargs)
+            )
 
         # Rewrite current node with data of winner candidate
         if winner_path:
@@ -458,7 +474,7 @@ def place_next_block(
         if not winner_path:
 
             # Explicit warning
-            print(f"Could not find path to node {neigh_node_id} within step {step}.")
+            print(Colors.RED + "Could not find path." + Colors.RESET)
 
             # Fill edge_path with error (allows process to move on but error is easy to spot)
             edge = tuple(sorted((source_node_id, neigh_node_id)))
@@ -481,6 +497,7 @@ def run_pathfinder(
     initial_step: int,
     occupied_coords: List[StandardCoord],
     target_node_info: Optional[StandardBlock] = None,
+    **kwargs,
 ) -> List[Any]:
 
     # ARRAYS TO HOLD TEMPORARY PATHS
@@ -526,7 +543,7 @@ def run_pathfinder(
                     next_neigh_zx_type,
                     step,
                     attempts_per_distance=1,
-                    occupied_coords=occupied_coords_copy,  # Copy occupied coords: function uses source_coords differently
+                    occupied_coords=occupied_coords_copy,
                     overwrite_target_node=(position, target_type),
                 )
             )
@@ -537,7 +554,7 @@ def run_pathfinder(
 
         # Break if valid paths generated at step
 
-        if valid_paths and step >= TERMINATION_DISTANCE:
+        if valid_paths and step >= kwargs["max_search_space"]:
             break
 
         # Increase distance if no valid paths found at current step
@@ -551,9 +568,8 @@ def run_pathfinder(
                 for node in clean_path:
                     if (
                         node[0] in occupied_coords_copy
-                    ):  # Copy occupied coords: path *will* contain source
+                    ):  # Needs the full occupied coords: path *will* contain source
                         return []
-            # Return list with single clean path
             return [clean_path]
         else:
             return []
@@ -603,9 +619,28 @@ def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
             elif degree == max_degree:
                 central_nodes.append(node)
 
-    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING LOWER NODES
+    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING CENTRALITY
     if central_nodes:
+
+        # Bias selection to slightly favour centrality when several high-degree nodes exist
+        c_centrality = nx.closeness_centrality(nx_graph)
+        max_centrality = max([c_centrality.get(node, -1) for node in central_nodes])
+        max_nodes = sum(
+            [
+                1
+                for node in central_nodes
+                if c_centrality.get(node, -1) == max_centrality
+            ]
+        )
+        if max_nodes != len(central_nodes):
+            central_node = max(
+                central_nodes, key=lambda node: c_centrality.get(node, -1)
+            )
+            central_nodes.append(central_node)
+
+        # Include all high-degree nodes in potential list of start nodes
         start_node: Optional[int] = random.choice(central_nodes)
+
     else:
         start_node: Optional[int] = None
 

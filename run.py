@@ -5,7 +5,13 @@ from scripts.two_stage_greedy_bfs import main
 from utils import examples
 from grapher.grapher import visualise_3d_graph
 from grapher.animation import create_animation
-from utils.classes import Colours
+from utils.classes import Colors
+
+from run_hyper_params import (
+    VALUE_FUNCTION_HYPERPARAMS,
+    LENGTH_OF_BEAMS,
+    MAX_PATHFINDER_SEARCH_SPACE,
+)
 
 
 ####################
@@ -13,8 +19,15 @@ from utils.classes import Colours
 ####################
 def run():
 
-    # START GENERAL TIMER
+    # START TIMER
     t1 = time.time()
+
+    # ASSEMBLE KWARGS
+    kwargs = {
+        "weights": VALUE_FUNCTION_HYPERPARAMS,
+        "length_of_beams": LENGTH_OF_BEAMS,
+        "max_search_space": MAX_PATHFINDER_SEARCH_SPACE,
+    }
 
     # GET CIRCUIT FROM PYTHON COMMAND
     circuit_name: str = ""
@@ -39,20 +52,20 @@ def run():
         # Loop until success or time limit
         while i < 10:
 
-            # Communicate loop iteration
-            i += 1
             print(
-                Colours.GREEN,
-                "\n\nCALLING ALGORITHM ON CIRCUIT OF NAME:",
-                circuit_name,
-                f". (Attempt # {i})",
-                Colours.RESET
+                "\n\n####################################################",
+                "\nSTARTING ALGORITHM FROM CLEAN SLATE",
+                f"\nAttempt {i + 1}",
+                "\n####################################################",
             )
+
+            # Update counters
+            i += 1
             t1_inner = time.time()
 
             # Call algorithm
             _, edge_paths, new_nx_graph, c = main(
-                circuit_graph_dict, circuit_name=circuit_name
+                circuit_graph_dict, circuit_name=circuit_name, **kwargs
             )
 
             for key, edge_path in edge_paths.items():
@@ -63,31 +76,33 @@ def run():
 
                 duration_total = (time.time() - t1) / 60
                 print(
-                    Colours.GREEN,
-                    f"SUCCESS! Total run time: {duration_total} min",
-                    Colours.RESET,
+                    Colors.GREEN,
+                    f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total} min",
+                    Colors.RESET,
                 )
-                
-                print("\nResults:")
+
+                print("Results:")
                 for key, edge_path in edge_paths.items():
                     print(f"  {key}: {edge_path['path_nodes']}")
-                    
+
                 # VISUALISE FINAL LATTICE SURGERY
                 visualise_3d_graph(new_nx_graph)
-                visualise_3d_graph(new_nx_graph, save_to_file=True, filename=f"steane{c}")
+                visualise_3d_graph(
+                    new_nx_graph, save_to_file=True, filename=f"steane{c}"
+                )
 
                 # CREATE A GIF FROM THE VISUALISATIONS
-                create_animation(filename_prefix=circuit_name, restart_delay=5000, duration=2500)
-                
-                print("\n", Colours.BLUE, "\nTHAT'S IT. THANKS FOR FLYING WITH US!", Colours.RESET)
+                create_animation(
+                    filename_prefix=circuit_name, restart_delay=5000, duration=2500
+                )
 
                 break
             else:
                 print(
-                    Colours.RED,
-                    "\nUNSUCCESFUL RUN. Algorithm will run again unless run limits have been exceeded.",
-                    Colours.RESET,
-                    f"\n- This run took: {((time.time() - t1_inner) / 60):.2f} min",
+                    Colors.RED,
+                    "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
+                    Colors.RESET,
+                    f"\n- This iteration took: {((time.time() - t1_inner) / 60):.2f} min",
                     f"\n- Total run time thus far: {((time.time() - t1) / 60):.2f} min",
                 )
 

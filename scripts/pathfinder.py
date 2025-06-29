@@ -3,7 +3,7 @@ from utils.utils import is_move_allowed
 from utils.constraints import get_valid_next_kinds
 from typing import List, Tuple, Optional
 
-from utils.classes import StandardCoord, StandardBlock, Colours
+from utils.classes import StandardCoord, StandardBlock, Colors
 
 
 #########################
@@ -147,11 +147,11 @@ def bfs_extended_3d(
 
         current_manhattan_distance = abs(x - end_x) + abs(y - end_y) + abs(z - end_z)
         if current_manhattan_distance > 6 * initial_manhattan_distance:
-            print(Colours.RED + "x" + Colours.RESET, end="", flush=True)
+            print(Colors.RED + "x" + Colors.RESET, end="", flush=True)
             return False, -1, None
 
         if current_coords == end_coords and current_type == end_type:
-            print(Colours.GREEN + "." + Colours.RESET, end="", flush=True)
+            print(Colors.GREEN + "." + Colors.RESET, end="", flush=True)
 
             return (
                 True,
@@ -230,7 +230,6 @@ def generate_tentative_target_position(
     """Generates a tentative coordinate for next target, favouring closer targets favoured, and checking position's validity.
     Note. Function is not really used in current flow (returns overwrite_target_coords). Here in case of future need.
     """
-
 
     if overwrite_target_coords:
         return overwrite_target_coords
@@ -315,7 +314,6 @@ def determine_grid_size(
 ) -> Tuple[int, ...]:
     """Determines the bounding box of the search space."""
 
-
     all_coords = [start_coords, end_coords]
     if obstacle_coords:
         all_coords.extend(obstacle_coords)
@@ -334,7 +332,6 @@ def generate_tentative_target_types(
     target_node_zx_type: str, overwrite_target_type: Optional[str] = None
 ) -> List[str]:
     """Returns all possible valid blockgraph types for a given ZX type."""
-
 
     if overwrite_target_type:
         return [overwrite_target_type]
@@ -359,7 +356,6 @@ def generate_tentative_target_types(
 
 def get_coords_occupied_by_blocks(preexistent_structure: List[StandardBlock]):
     """Converts a series of blocks into a list of all coordinates occupied by the blocks."""
-
 
     obstacle_coords = set()
 
