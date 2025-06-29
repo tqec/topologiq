@@ -408,6 +408,10 @@ def place_next_block(
                 all_beams,
                 length_of_beams=kwargs["length_of_beams"],
             )
+            
+            # Reset # of unobstructed exits and node beams if node is a boundary
+            if next_neigh_zx_type == "O":
+                target_unobstructed_exits_n, target_node_beams = (6, [])
 
             if target_unobstructed_exits_n >= next_neigh_edge_n:
                 coords_in_path = [entry[0] for entry in clean_path]
@@ -416,13 +420,21 @@ def place_next_block(
                     for coord in beam:
                         if coord in coords_in_path:
                             beams_broken_by_path += 1
+                
+                all_nodes_in_path = [entry for entry in clean_path]
+                if next_neigh_zx_type == "O":
+                    target_kind = "ooo"
+                    
+                    all_nodes_in_path[-1] = (all_nodes_in_path[-1][0], target_kind)
+                    
+                    
 
                 path_data = {
                     "target_pos": target_coords,
                     "target_kind": target_kind,
                     "target_beams": target_node_beams,
                     "coords_in_path": coords_in_path,
-                    "all_nodes_in_path": [entry for entry in clean_path],
+                    "all_nodes_in_path": all_nodes_in_path,
                     "beams_broken_by_path": beams_broken_by_path,
                     "len_of_path": len(clean_path),
                     "target_unobstructed_exits_n": target_unobstructed_exits_n,

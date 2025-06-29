@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 
@@ -98,6 +99,8 @@ def run():
 
                 break
             else:
+
+                # UPDATE USER
                 print(
                     Colors.RED,
                     "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
@@ -105,6 +108,12 @@ def run():
                     f"\n- This iteration took: {((time.time() - t1_inner) / 60):.2f} min",
                     f"\n- Total run time thus far: {((time.time() - t1) / 60):.2f} min",
                 )
+
+                # DELETE VISUALISATION TEMP FILES
+                temp_images_folder_path = "assets/temp"
+                for filename in os.listdir(temp_images_folder_path):
+                    os.remove(f"./{temp_images_folder_path}/{filename}")
+                os.rmdir(f"./{temp_images_folder_path}/")
 
             errors_in_result = False
 

@@ -150,7 +150,9 @@ def bfs_extended_3d(
             print(Colors.RED + "x" + Colors.RESET, end="", flush=True)
             return False, -1, None
 
-        if current_coords == end_coords and current_type == end_type:
+        if current_coords == end_coords and (
+            end_type == "ooo" or current_type == end_type
+        ):
             print(Colors.GREEN + "." + Colors.RESET, end="", flush=True)
 
             return (
@@ -339,11 +341,14 @@ def generate_tentative_target_types(
     # NODE TYPE FAMILIES
     X = ["xxz", "xzx", "zxx"]
     Z = ["xzz", "zzx", "zxz"]
+    BOUNDARY = ["ooo"]
     SIMPLE = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
     HADAMARD = ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
 
     if target_node_zx_type in ["X", "Z"]:
         family = X if target_node_zx_type == "X" else Z
+    elif target_node_zx_type == "O":
+        family = BOUNDARY
     elif target_node_zx_type == "SIMPLE":
         family = SIMPLE
     elif target_node_zx_type == "HADAMARD":
@@ -403,7 +408,5 @@ def get_coords_occupied_by_blocks(preexistent_structure: List[StandardBlock]):
 
                     if extended_coords:
                         obstacle_coords.add(extended_coords)
-                    else:
-                        print("Could not determine extended coords for 'o' type.")
 
     return list(obstacle_coords)
