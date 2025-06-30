@@ -2,10 +2,10 @@
 .vscode/
 .archive/
 
-# Temporary and output files
+# Output files (incl. temp files)
 # To include an output, DO NOT use dashes on filename (auto-generated outputs use dashes, which is used in the pattern below)
-assets/temp/
-assets/outputs/**/*-*
+outputs/temp/
+outputs/**/*-*
 
 # Python 
 .venv/

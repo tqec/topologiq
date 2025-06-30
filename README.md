@@ -12,9 +12,9 @@ To run an example, run the following command from the root of the repository to 
 python -m run --steane
 ```
 
-A succesfull result will produce a GIF animation like the one below (saved to `.assets/outputs/gif/`) and a dictionary of edges containing the different blocks needed to build the logical computation.
+A succesfull result will produce a GIF animation like the one below (saved to `./outputs/gif/`) and a dictionary of edges containing the different blocks needed to build the logical computation.
 
-![GIF animation of an example run of the algorithm](assets/outputs/gif/steane_example.gif)   
+![GIF animation of an example run of the algorithm](assets/media/steane_sota.gif)   
 *Figure 1. GIF animation of the process to build a Steane code (example run).*
 
 ***Note.*** Currently, hyper-parameters are set to values that more or less increase the odds of finding a successful solution in a test run using Steane and in a reasonable amount of time (in tests carried out locally, 5 min in average, with super lucky runs taking less than a minute). To vary hyper-parameters manually, edit `run_hyper_params.py`, which will enable results of varied quality and significant variation in run-times. There is, currently, no automatic method of varying or smartly-determining hyper-parameters.

@@ -13,7 +13,7 @@ def create_animation(
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
     images = []
-    temp_images_folder_path = "./assets/temp"
+    temp_images_folder_path = "./outputs/temp"
     image_filenames = os.listdir(temp_images_folder_path)
     image_filenames = [img for img in image_filenames if img.endswith(".png")]
     
@@ -27,7 +27,7 @@ def create_animation(
             return
 
     # BUILD THE GIF
-    output_folder_path = "./assets/outputs/gif"
+    output_folder_path = "./outputs/gif"
     if images:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         Path(output_folder_path).mkdir(parents=True, exist_ok=True)

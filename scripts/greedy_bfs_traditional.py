@@ -22,7 +22,7 @@ from scripts.pathfinder import (
     run_bfs_for_all_potential_target_nodes,
     get_coords_occupied_by_blocks,
 )
-from grapher.grapher import visualise_3d_graph, make_graph_from_edge_paths
+from utils.grapher import visualise_3d_graph, make_graph_from_edge_paths
 
 
 ####################

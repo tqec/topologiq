@@ -518,7 +518,7 @@ def visualise_3d_graph(
 
     # Pop visualisation or save to file
     if save_to_file:
-        temp_folder_path = "./assets/temp"
+        temp_folder_path = "./outputs/temp"
         Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_path}/{filename}.png")
         plt.close()

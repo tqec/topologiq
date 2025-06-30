@@ -2,10 +2,10 @@ import os
 import sys
 import time
 
-from scripts.two_stage_greedy_bfs import main
+from scripts.greedy_bfs_traditional import main
 from utils import examples
-from grapher.grapher import visualise_3d_graph
-from grapher.animation import create_animation
+from utils.grapher import visualise_3d_graph
+from utils.animation import create_animation
 from utils.classes import Colors
 
 from run_hyper_params import (
@@ -78,7 +78,7 @@ def run():
                 duration_total = (time.time() - t1) / 60
                 print(
                     Colors.GREEN,
-                    f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total} min",
+                    f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
                     Colors.RESET,
                 )
 
@@ -101,16 +101,18 @@ def run():
             else:
 
                 # UPDATE USER
+                duration_this_run = (time.time() - t1_inner) / 60
+                duration_thus_far = (time.time() - t1) / 60
                 print(
                     Colors.RED,
                     "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
                     Colors.RESET,
-                    f"\n- This iteration took: {((time.time() - t1_inner) / 60):.2f} min",
-                    f"\n- Total run time thus far: {((time.time() - t1) / 60):.2f} min",
+                    f"\n- This iteration took: {duration_this_run:.2f} min",
+                    f"\n- Total run time thus far: {duration_thus_far:.2f} min",
                 )
 
                 # DELETE VISUALISATION TEMP FILES
-                temp_images_folder_path = "assets/temp"
+                temp_images_folder_path = "./outputs/temp"
                 for filename in os.listdir(temp_images_folder_path):
                     os.remove(f"./{temp_images_folder_path}/{filename}")
                 os.rmdir(f"./{temp_images_folder_path}/")
