@@ -1,13 +1,11 @@
-import os
 import sys
-import time
-
-from scripts.greedy_bfs_traditional import main
-from utils import examples
-from utils.grapher import visualise_3d_graph
-from utils.animation import create_animation
-from utils.classes import Colors
-
+import json
+from typing import cast
+from scripts.runner import runner
+from assets.graphs import simple_graphs
+from utils.interop_pyzx import get_simple_graph_from_pyzx
+from assets.graphs.pyzx_graphs import cnot
+from utils.classes import SimpleDictGraph, GraphEdge
 from run_hyper_params import (
     VALUE_FUNCTION_HYPERPARAMS,
     LENGTH_OF_BEAMS,
@@ -20,104 +18,55 @@ from run_hyper_params import (
 ####################
 def run():
 
-    # START TIMER
-    t1 = time.time()
-
     # ASSEMBLE KWARGS
+
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "length_of_beams": LENGTH_OF_BEAMS,
         "max_search_space": MAX_PATHFINDER_SEARCH_SPACE,
     }
 
-    # GET CIRCUIT FROM PYTHON COMMAND
-    circuit_name: str = ""
+    # GET CIRCUIT
+    circuit_name: str | None = None
+    circuit_graph_dict: SimpleDictGraph = {"nodes": [], "edges": []}
     for arg in sys.argv:
-        if arg.startswith("--"):
-            circuit_name = arg.replace("--", "")
+        # From arguments in command
+        if arg.startswith("--simple:"):
 
-    # GET CIRCUIT FROM PyZX
-    if circuit_name == "":
-        pass
+            circuit_name = arg.replace("--simple:", "")
+            circuit_graph_dict = getattr(simple_graphs, circuit_name)
+
+        # Using a pre-determined PyZX script
+        if arg.startswith("--pyzx:"):
+            circuit_name = arg.replace("--pyzx:", "")
+
+            if circuit_name == "cnot":
+                g = cnot()
+                circuit_graph_dict = get_simple_graph_from_pyzx(g)
 
     # CALL ALGORITHM ON CIRCUIT
-    if circuit_name != "":
+    if circuit_name and circuit_graph_dict["nodes"] and circuit_graph_dict["edges"]:
+        runner(circuit_graph_dict, circuit_name, **kwargs)
 
-        # Aux variables
-        i: int = 0
-        errors_in_result: bool = False
 
-        # Get circuit as a dictionary
-        circuit_graph_dict = getattr(examples, circuit_name)
+def get_circuit_from_json(path_to_json: str) -> SimpleDictGraph:
 
-        # Loop until success or time limit
-        while i < 10:
+    circuit_graph_dict: SimpleDictGraph = {"nodes": [], "edges": []}
 
-            print(
-                "\n\n####################################################",
-                "\nSTARTING ALGORITHM FROM CLEAN SLATE",
-                f"\nAttempt {i + 1}",
-                "\n####################################################",
-            )
+    with open(path_to_json, "r") as f:
+        json_string = f.read()
+        f.close()
 
-            # Update counters
-            i += 1
-            t1_inner = time.time()
+    data = json.loads(json_string)
 
-            # Call algorithm
-            _, edge_paths, new_nx_graph, c = main(
-                circuit_graph_dict, circuit_name=circuit_name, **kwargs
-            )
+    for n in data["nodes"]:
+        circuit_graph_dict["nodes"].append(tuple(n))
 
-            for key, edge_path in edge_paths.items():
-                if edge_path["edge_type"] == "error":
-                    errors_in_result = True
+    for e in data["edges"]:
+        e_tuple = cast(GraphEdge, tuple([tuple(e[0]), e[1]]))
+        circuit_graph_dict["edges"].append(e_tuple)
 
-            if not errors_in_result:
-
-                duration_total = (time.time() - t1) / 60
-                print(
-                    Colors.GREEN,
-                    f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
-                    Colors.RESET,
-                )
-
-                print("Results:")
-                for key, edge_path in edge_paths.items():
-                    print(f"  {key}: {edge_path['path_nodes']}")
-
-                # VISUALISE FINAL LATTICE SURGERY
-                visualise_3d_graph(new_nx_graph)
-                visualise_3d_graph(
-                    new_nx_graph, save_to_file=True, filename=f"steane{c}"
-                )
-
-                # CREATE A GIF FROM THE VISUALISATIONS
-                create_animation(
-                    filename_prefix=circuit_name, restart_delay=5000, duration=2500
-                )
-
-                break
-            else:
-
-                # UPDATE USER
-                duration_this_run = (time.time() - t1_inner) / 60
-                duration_thus_far = (time.time() - t1) / 60
-                print(
-                    Colors.RED,
-                    "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
-                    Colors.RESET,
-                    f"\n- This iteration took: {duration_this_run:.2f} min",
-                    f"\n- Total run time thus far: {duration_thus_far:.2f} min",
-                )
-
-                # DELETE VISUALISATION TEMP FILES
-                temp_images_folder_path = "./outputs/temp"
-                for filename in os.listdir(temp_images_folder_path):
-                    os.remove(f"./{temp_images_folder_path}/{filename}")
-                os.rmdir(f"./{temp_images_folder_path}/")
-
-            errors_in_result = False
+    return circuit_graph_dict
 
 
 if __name__ == "__main__":

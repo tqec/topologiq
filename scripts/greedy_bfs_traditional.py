@@ -126,7 +126,7 @@ def main(
                                 new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                                 # Create visualisation
-                                #visualise_3d_graph(new_nx_graph)
+                                # visualise_3d_graph(new_nx_graph)
                                 visualise_3d_graph(
                                     new_nx_graph,
                                     save_to_file=True,
@@ -186,7 +186,7 @@ def second_pass(
             # Format adjustments to match existing operations
             u_kind = nx_graph.nodes[u].get("kind")
             v_zx_type = nx_graph.nodes[v].get("type")
-            u_node = (u_pos, u_kind)
+            v_kind = nx_graph.nodes[v].get("kind")
             edge = tuple(sorted((u, v)))
 
             # Call pathfinder on any graph edge that does not have an entry in edge_paths
@@ -194,13 +194,13 @@ def second_pass(
 
                 print(
                     Colors.BLUE + "\nFinding path between placed nodes." + Colors.RESET,
-                    f"{u}: ({u_pos, u_kind}) <--> {v}: {u_node}",
+                    f"{u}: ({(u_pos, u_kind)}) <--> {v}: {v_pos, v_kind}",
                 )
 
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
                 clean_paths = run_pathfinder(
-                    u_node,
+                    (u_pos, u_kind),
                     v_zx_type,
                     3,
                     occupied_coords[:],
@@ -408,7 +408,7 @@ def place_next_block(
                 all_beams,
                 length_of_beams=kwargs["length_of_beams"],
             )
-            
+
             # Reset # of unobstructed exits and node beams if node is a boundary
             if next_neigh_zx_type == "O":
                 target_unobstructed_exits_n, target_node_beams = (6, [])
@@ -420,14 +420,12 @@ def place_next_block(
                     for coord in beam:
                         if coord in coords_in_path:
                             beams_broken_by_path += 1
-                
+
                 all_nodes_in_path = [entry for entry in clean_path]
                 if next_neigh_zx_type == "O":
                     target_kind = "ooo"
-                    
+
                     all_nodes_in_path[-1] = (all_nodes_in_path[-1][0], target_kind)
-                    
-                    
 
                 path_data = {
                     "target_pos": target_coords,

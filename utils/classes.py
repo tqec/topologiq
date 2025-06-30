@@ -1,6 +1,7 @@
+import numpy as np
 from typing import List, Tuple, TypedDict
 from dataclasses import dataclass
-from typing import Tuple, List
+from typing import Tuple, List, cast
 
 # TYPES FOR INCOMING 2D GRAPH
 GraphNode = Tuple[int, str]
@@ -33,11 +34,12 @@ class PathBetweenNodes:
     target_unobstructed_exits_n: int
 
     def weighed_value(self, stage, **kwargs) -> int:
-        path_len_hp, beams_broken_hp, target_exits_hp = kwargs["weights"]
+
+        path_len_hp, beams_broken_hp = kwargs["weights"]
+
         return (
             self.len_of_path * path_len_hp
             + self.beams_broken_by_path * beams_broken_hp
-            + self.target_unobstructed_exits_n * target_exits_hp
         )
 
 

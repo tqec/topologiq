@@ -9,7 +9,7 @@ A family of algorithms (ok, there's currently *one* full algorithm, but it is a 
 To run an example, run the following command from the root of the repository to run the algorithm for a 7-qubit Steane code. The algorithm will stop when it finds a succesfull solution (most times), or run up to ten times (sometimes).
 
 ```
-python -m run --steane
+python -m run --json:steane
 ```
 
 A succesfull result will produce a GIF animation like the one below (saved to `./outputs/gif/`) and a dictionary of edges containing the different blocks needed to build the logical computation.
