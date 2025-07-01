@@ -4,7 +4,11 @@ A family of algorithms (ok, there's currently *one* full algorithm, but it is a 
 It produces logical computations like the ones below (individual examples available as animated GIFs in the media folder). 
 
 
-<video width="480" src="./assets/media/combo.mp4"></video>
+
+
+
+
+<video width="850" height="480" src="https://github.com/user-attachments/assets/624df80d-7ed6-42e6-9567-fc59798f70c8" style="border:none"></video>
 
 *Video 1. A sample of outputs.*
 
