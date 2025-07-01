@@ -1,14 +1,9 @@
 # Algorithmic Lattice Surgery
 A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
 
-It produces logical computations like the ones below (individual examples available as animated GIFs in the media folder). 
+It produces logical computations like the ones below (individual examples available in `./assets/media`). 
 
-
-
-
-
-
-<video width="850" height="480" src="https://github.com/user-attachments/assets/624df80d-7ed6-42e6-9567-fc59798f70c8" style="border:none"></video>
+<video width="850" height="480" src="https://github.com/user-attachments/assets/624df80d-7ed6-42e6-9567-fc59798f70c8"></video>
 
 *Video 1. A sample of outputs.*
 
