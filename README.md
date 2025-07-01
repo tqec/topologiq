@@ -1,10 +1,12 @@
 # Algorithmic Lattice Surgery
 A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
 
-It produces logical computations like the one below, an example using a Steane code.
+It produces logical computations like the ones below (individual examples available as animated GIFs in the media folder). 
 
-![GIF animation of an example run of the algorithm](assets/media/steane.gif)   
-*Figure 1. GIF animation of the process to build a Steane code (example run).*
+
+<video width="480" src="./assets/media/combo.mp4"></video>
+
+*Video 1. A sample of outputs.*
 
 ***Note.*** This is work in progress.
 
