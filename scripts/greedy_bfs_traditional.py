@@ -9,6 +9,7 @@ from utils.utils import (
     check_for_exits,
     generate_tentative_target_positions,
     prune_all_beams,
+    get_zx_type_from_kind,
 )
 from utils.classes import (
     PathBetweenNodes,
@@ -194,7 +195,7 @@ def second_pass(
 
                 print(
                     Colors.BLUE + "\nFinding path between placed nodes." + Colors.RESET,
-                    f"{u}: ({(u_pos, u_kind)}) <--> {v}: {v_pos, v_kind}",
+                    f"Node ID: {u} ({(u_pos, u_kind)}) <--> Node ID: {v} {v_pos, v_kind}",
                 )
 
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
@@ -210,12 +211,17 @@ def second_pass(
 
                 # Write to edge_paths if an edge is found
                 if clean_paths:
-                    print(f"\nPath found.")
+
+                    # Update user
+                    print("\rPath found:", clean_paths[0])
+
+                    # Update edge paths
                     coords_in_path = [
                         entry[0] for entry in clean_paths[0]
                     ]  # Take the first path
                     edge_type = data.get("type", "SIMPLE")
                     edge_paths[edge] = {
+                        "src_tgt_ids": (u, v),
                         "path_coordinates": coords_in_path,
                         "path_nodes": clean_paths[0],
                         "edge_type": edge_type,
@@ -240,6 +246,7 @@ def second_pass(
                 else:
                     print("Path not found.")
                     edge_paths[edge] = {
+                        "src_tgt_ids": "error",
                         "path_coordinates": "error",
                         "path_nodes": "error",
                         "edge_type": "error",
@@ -379,7 +386,7 @@ def place_next_block(
     if next_neigh_pos is None:
         print(
             Colors.BLUE + "\nCreating path." + Colors.RESET,
-            f"{source_node_id}: {source_node} --> {neigh_node_id}: ((?, ?, ?), ???) (ZX type: {next_neigh_zx_type})",
+            f"Node ID (source): {source_node_id} {source_node} --> Node ID (target): {neigh_node_id} ((?, ?, ?), ???) (ZX type: {next_neigh_zx_type})",
         )
 
         # Remove source coordinate from occupied coords
@@ -441,7 +448,7 @@ def place_next_block(
                 viable_paths.append(PathBetweenNodes(**path_data))
 
         print(
-            f"\n{len(viable_paths)} viable paths created. {'Algorithm picks best' if len(clean_paths)>1 else ''}."
+            f"\r{len(viable_paths)} viable paths created. {'Algorithm picks best' if len(clean_paths)>1 else ''}."
         )
 
         winner_path: Optional[PathBetweenNodes] = None
@@ -453,6 +460,21 @@ def place_next_block(
         # Rewrite current node with data of winner candidate
         if winner_path:
 
+            # Update user
+            readable_chosen_path = [
+                (block[0], get_zx_type_from_kind(block[1]))
+                for block in winner_path.all_nodes_in_path
+            ]
+            readable_chosen_path = [
+                (
+                    block
+                    if len(block[1]) == 1 or block[1] == "BOUNDARY"
+                    else (f"{block[1]} EDGE")
+                )
+                for block in readable_chosen_path
+            ]
+            print("Chosen path:", readable_chosen_path)
+
             # Update node information
             nx_graph.nodes[neigh_node_id]["pos"] = winner_path.target_pos
             nx_graph.nodes[neigh_node_id]["kind"] = winner_path.target_kind
@@ -463,6 +485,7 @@ def place_next_block(
                 "type", "SIMPLE"
             )  # Default to "SIMPLE" if type is not found
             edge_paths[edge] = {
+                "src_tgt_ids": (source_node_id, neigh_node_id),
                 "path_coordinates": winner_path.coords_in_path,
                 "path_nodes": winner_path.all_nodes_in_path,
                 "edge_type": edge_type,
@@ -489,6 +512,7 @@ def place_next_block(
             # Fill edge_path with error (allows process to move on but error is easy to spot)
             edge = tuple(sorted((source_node_id, neigh_node_id)))
             edge_paths[edge] = {
+                "src_tgt_ids": "error",
                 "path_coordinates": "error",
                 "path_nodes": "error",
                 "edge_type": "error",
@@ -547,7 +571,7 @@ def run_pathfinder(
 
         # Try finding path to each tentative positions
         for position in tentative_positions:
-            path_found, _, _, all_paths_from_round = (
+            path_found, _, path, all_paths_from_round = (
                 run_bfs_for_all_potential_target_nodes(
                     previous_node_info,
                     next_neigh_zx_type,

@@ -1,7 +1,7 @@
 from collections import deque
 from utils.utils import is_move_allowed
 from utils.constraints import get_valid_next_kinds
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 from utils.classes import StandardCoord, StandardBlock, Colors
 
@@ -17,7 +17,7 @@ def run_bfs_for_all_potential_target_nodes(
     attempts_per_distance: int = 10,
     overwrite_target_node: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     occupied_coords: List[StandardCoord] = [],
-):
+) -> tuple[bool, Optional[int], Optional[List[StandardBlock]], List[Optional[List[StandardBlock]]]]:
     """
     Runs BFS on a loop until path is found within predetermined distance of source node or max distance is reached.
 

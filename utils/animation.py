@@ -1,7 +1,6 @@
 import os
 import imageio.v2 as iio
 from pathlib import Path
-from datetime import datetime
 
 
 def create_animation(
@@ -30,20 +29,19 @@ def create_animation(
     # BUILD THE GIF
     output_folder_path = "./outputs/gif"
     if images:
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         Path(output_folder_path).mkdir(parents=True, exist_ok=True)
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
         if video:
             # Important! Succesful video production requires FFmpeg installed on system (the actual thing, not just the Python wrapper)
             iio.mimsave(
-                f"./{output_folder_path}/{filename_prefix}-{timestamp}.mp4", images, fps=0.7
+                f"./{output_folder_path}/{filename_prefix}.mp4", images, fps=0.7
             )    
-            print(f"\nMP4 video of result saved to ./{output_folder_path}/{filename_prefix}-{timestamp}.mp4")
+            print(f"\nMP4 video of result saved to {output_folder_path}/{filename_prefix}.mp4")
         else:
             iio.mimsave(
-                f"./{output_folder_path}/{filename_prefix}-{timestamp}.gif", images, duration=iter_duration, loop=0
+                f"./{output_folder_path}/{filename_prefix}.gif", images, duration=iter_duration, loop=0
             )
-            print(f"\nGIF animation of result saved to ./{output_folder_path}/{filename_prefix}-{timestamp}.gif")
+            print(f"\nGIF animation of result saved to {output_folder_path}/{filename_prefix}.gif")
 
     # CLEAN UP TEMPORARY IMAGES
     if remove_temp_images:

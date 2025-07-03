@@ -1,10 +1,12 @@
 import os
 import time
-
+from pathlib import Path
+from typing import List
 from scripts.greedy_bfs_traditional import main
 from utils.grapher import visualise_3d_graph
 from utils.animation import create_animation
 from utils.classes import Colors, SimpleDictGraph
+from utils.utils import build_newly_indexed_path_dict
 
 ####################
 # MAIN RUN MANAGER #
@@ -48,10 +50,35 @@ def runner(circuit_graph_dict:SimpleDictGraph, circuit_name:str, **kwargs):
                 f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
                 Colors.RESET,
             )
-
-            print("Results:")
+            
+            lines: List[str] = []
+            
+            lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
+            lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
+            for node in circuit_graph_dict["nodes"]:
+                lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
+            lines.append("\n")
+            for edge in circuit_graph_dict["edges"]:
+                lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
+            
+            lines.append('\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n')
             for key, edge_path in edge_paths.items():
-                print(f"  {key}: {edge_path['path_nodes']}")
+                lines.append(f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n")
+            
+            lines.append('\n__________________________\nLATTICE SURGERY (Given as graph)\n')
+            lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
+            for key, node in lattice_nodes.items():
+                lines.append(f"Node ID: {key}. Type: {node}\n")
+            for edge in lattice_edges:
+                lines.append(f"Edge: {edge}\n")
+            
+            output_folder_path = "./outputs/txt"
+            Path(output_folder_path).mkdir(parents=True, exist_ok=True)
+            with open(f"{output_folder_path}/{circuit_name}.txt", "w") as f:
+                f.writelines(lines)
+                f.close()
+            
+            print(f"Result saved to: {output_folder_path}/{circuit_name}.txt")
 
             # Visualise result
             visualise_3d_graph(new_nx_graph)

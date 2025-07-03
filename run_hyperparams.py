@@ -2,7 +2,7 @@
 
 # Weights for the main value functoin
 # Used to choose between several valid paths between blocks
-# (length of path, beams broken by path, # of unobstructed exits in next cube)
+# (length of path, beams broken by path)
 VALUE_FUNCTION_HYPERPARAMS = (-1, -0.5)
 
 # Length of beams

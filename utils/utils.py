@@ -1,7 +1,13 @@
 import random
 from typing import Tuple, List, Dict, Optional
 
-from utils.classes import SimpleDictGraph, StandardCoord, StandardBeam, NodeBeams
+from utils.classes import (
+    SimpleDictGraph,
+    StandardCoord,
+    StandardBeam,
+    NodeBeams,
+    StandardBlock,
+)
 
 
 def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
@@ -263,3 +269,76 @@ def prune_all_beams(
         new_all_beams = all_beams
 
     return new_all_beams
+
+
+def get_zx_type_from_kind(kind: str) -> str:
+
+    if kind == "ooo":
+        zx_type = "BOUNDARY"
+    elif "o" in kind:
+        zx_type = "HADAMARD" if "h" in kind else "SIMPLE"
+    else:
+        zx_type = max(set(kind), key=lambda c: kind.count(c)).capitalize()
+
+    return zx_type
+
+
+def build_newly_indexed_path_dict(
+    edge_paths: dict,
+) -> Tuple[dict[int, StandardBlock], List[Tuple[int, int]]]:
+
+    max_id = 0
+    indexed_paths = {}
+    for edge_path in edge_paths.values():
+        max_id = max(max_id, edge_path["src_tgt_ids"][0], edge_path["src_tgt_ids"][1])
+    next_id = max_id + 1
+
+    for edge_path in edge_paths.values():
+
+        indexed_path = {}
+        start_key, end_key = edge_path["src_tgt_ids"]
+        nodes_in_path = edge_path["path_nodes"]
+
+        indexed_path[start_key] = nodes_in_path[0]
+
+        for i in range(1, len(nodes_in_path) - 1):
+            intermediate_node = nodes_in_path[i]
+            indexed_path[next_id] = intermediate_node
+            next_id += 1
+
+        if len(nodes_in_path) > 1:
+            indexed_path[end_key] = nodes_in_path[-1]
+
+        indexed_paths[(start_key, end_key)] = indexed_path
+
+    final_edges = []
+
+    for original_edge_key, path_id_value_map in indexed_paths.items():
+
+        ordered_node_ids = sorted(path_id_value_map.keys())
+
+        surviving_node_ids_in_sequence = []
+        for i in range(len(ordered_node_ids)):
+            if i % 2 == 0:
+                surviving_node_ids_in_sequence.append(ordered_node_ids[i])
+
+        if len(surviving_node_ids_in_sequence) >= 2:
+            for i in range(len(surviving_node_ids_in_sequence) - 1):
+                node1 = surviving_node_ids_in_sequence[i]
+                node2 = surviving_node_ids_in_sequence[i + 1]
+                final_edges.append((node1, node2))
+
+    latice_nodes: dict[int, StandardBlock] = {}
+    latice_edges: List[Tuple[int, int]] = []
+    for item in indexed_paths.values():
+        keys = list(item.keys())
+        i = 0
+        for node_key, node_info in item.items():
+            if i % 2 == 0:
+                latice_nodes[node_key] = node_info
+            else:
+                edge = (keys[i - 1], keys[i + 1])
+                latice_edges.append(edge)
+            i += 1
+
+    return latice_nodes, latice_edges
