@@ -14,7 +14,7 @@ It produces logical computations like the ones below (individual examples availa
 ***Note.*** A better README is on the way.
 
 ## Examples
-To run an example, run any of the following commands from the root of the repository. The algorithm will stop when it finds a succesfull solution (most times), or run up to ten times (sometimes).
+To run an example, run any of the following commands from the root of the repository. The algorithm will stop when it finds a succesfull solution or run up to ten times.
 
 ``` bash
 # A CNOT, using PyZX.
@@ -34,17 +34,24 @@ python -m run --pyzx:random_optimised
 python -m run --graph:steane
 
 ```
-You can also generate PyZX circuits programatically and convert them into the type of graphs needed for the algorithm to run. Check `run.py` for a blueprint.
 
-***IMPORTANT!*** Hyperparameters are currently set to values that more or less increase the odds of finding a successful solution in a test run with the examples above. This does **NOT** mean the algorithm will produce an optimised (or any) computation by simply running it with current hyperparameters. The idea is, of course, to add an automated approach to discovering optimal hyperparameters for different graphs, but this is not currently available. To vary hyperparameters manually, edit `run_hyper_params.py`.
+It would also be fantastic to hear of tests using other circuits. You can use a non-descript ZX graph defined as a dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples) or a PyZX graph (check `run.py` for a blueprint and `assets/graphs/pyzx_graphs.py` for examples).
+
+That said, please note a degree of failed results is expected. The current goal is to inform developmental priorities by identifying types of circuits for which the current implementation performs good, less good, bad, and awfully.
+
+***IMPORTANT!*** Hyperparameters are currently set to values that more or less increase the odds of finding a successful solution in a test run with the examples above. This does **NOT** mean the algorithm will produce an optimal result by simply running it with current hyperparameters. The idea is, of course, to add an automated approach to discovering optimal hyperparameters for different graphs, but this is not currently available. To vary hyperparameters manually, edit `run_hyper_params.py`.
 
 ## Outputs
-A succesfull result will produce a 3D interactive graph (pops up), a GIF animation of the process (saves to `./outputs/gif/`) and a dictionary of edges containing the different blocks needed to build the logical computation.
+A succesfull result will produce:
+- a 3D interactive graph (pops up)
+- a GIF animation of the process (saves to `./outputs/gif/`)
+- a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`).
+
+The information printed to the TXT file is also available for programmatic use.
 
 ## Pending
 Everything is pending, but below a list of highest priorities:
-- Enable automatic selection and variation of hyperparameters.
-- Add support for Hadamards.
-- Improve PyZX support.
+- Enable automatic selection and variation of hyperparameters
+- Add support for Hadamards
+- Improve PyZX support
 - Improve run-times.
-
