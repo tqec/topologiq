@@ -326,6 +326,7 @@ def render_colored_cuboid(
 
 def visualise_3d_graph(
     graph: nx.Graph,
+    hide_boundaries: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
     save_to_file: bool = False,
     filename: str | None = None,
@@ -350,17 +351,21 @@ def visualise_3d_graph(
     # RENDER CUBES (NODES)
     for node_id in graph.nodes():
         node_type = node_types.get(node_id)
-        if node_type and "o" not in node_type:
+        if (
+            node_type
+            and "o" not in node_type
+            or (not hide_boundaries and node_type == "ooo")
+        ):
             position = node_positions.get(node_id)
             if position:
                 size = [1.0, 1.0, 1.0]
                 edge_color = "black"
                 alpha = 1.0
 
-                if "b" in node_type:
+                if node_type == "ooo":
                     size = [0.9, 0.9, 0.9]
-                    edge_color = "teal"
-                    alpha = 0.7
+                    edge_color = "white"
+                    alpha = 0.5
 
                 if "*" in node_type:
                     edge_color = "white"

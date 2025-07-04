@@ -30,7 +30,10 @@ from utils.grapher import visualise_3d_graph, make_graph_from_edge_paths
 # WORKFLOW MANAGER #
 ####################
 def main(
-    graph: SimpleDictGraph, circuit_name: str = "circuit", **kwargs
+    graph: SimpleDictGraph,
+    circuit_name: str = "circuit",
+    hide_boundaries: bool = False,
+    **kwargs,
 ) -> Tuple[nx.Graph, dict, nx.Graph, int]:
 
     # KEY VARIABLES
@@ -127,9 +130,10 @@ def main(
                                 new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                                 # Create visualisation
-                                # visualise_3d_graph(new_nx_graph)
+                                # visualise_3d_graph(new_nx_graph, hide_boundaries=hide_boundaries)
                                 visualise_3d_graph(
                                     new_nx_graph,
+                                    hide_boundaries=hide_boundaries,
                                     save_to_file=True,
                                     filename=f"{circuit_name}{c:03d}",
                                 )
@@ -619,8 +623,8 @@ def run_pathfinder(
                                 node[0] in occupied_coords_copy
                             ):  # Copy occupied coords: path *will* contain source
                                 remove_flag = True
-                if remove_flag == False:
-                    clean_paths.append(path)
+                    if remove_flag == False:
+                        clean_paths.append(path)
 
     # RETURN CLEAN PATHS OR EMPTY LIST IF NO VIABLE PATHS FOUND
     return clean_paths

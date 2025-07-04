@@ -256,6 +256,8 @@ def prune_all_beams(
     all_beams: List[NodeBeams], occupied_coords: List[StandardCoord]
 ) -> List[NodeBeams]:
 
+    # Remove beams that have already been broken
+    # They're no longer indicative of anything
     try:
         new_all_beams = []
         for node_beams in all_beams:
