@@ -114,7 +114,7 @@ def runner(
 
             # Create GIF or result
             create_animation(
-                filename_prefix=circuit_name, restart_delay=5000, duration=2500, video=True
+                filename_prefix=circuit_name, restart_delay=5000, duration=2500
             )
 
             # End loop

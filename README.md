@@ -1,11 +1,11 @@
 # Algorithmic Lattice Surgery
 A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
 
-It produces logical computations like the ones below (individual examples available in `./assets/media`). 
+It produces logical computations like the one below (video examples available in `./assets/media`).
 
-<video width="850" height="480" src="https://github.com/user-attachments/assets/624df80d-7ed6-42e6-9567-fc59798f70c8"></video>
+![GIF animation of an example using Steane code](./assets/media/steane.gif)
 
-*Video 1. A sample of outputs.*
+*Figure 1. Example output (Stene code).*
 
 ***Note.*** This is work in progress.
 
@@ -79,7 +79,7 @@ That said, please note a degree of failed results is expected. The current goal 
 ## Outputs
 A succesfull result will produce:
 - a 3D interactive graph (pops up)
-- a GIF animation of the process (saves to `./outputs/gif/`)
+- a GIF animation of the process (saves to `./outputs/media/`) (videos possible, but FFmpeg must be installed)
 - a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`).
 
 The information printed to the TXT file is also available for programmatic use.

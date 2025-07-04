@@ -29,7 +29,7 @@ def create_animation(
             return
 
     # BUILD THE GIF
-    output_folder_path = "./outputs/gif"
+    output_folder_path = "./outputs/media"
     if images:
         Path(output_folder_path).mkdir(parents=True, exist_ok=True)
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
