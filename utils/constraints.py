@@ -27,8 +27,10 @@ def check_face_match(
     """
 
     # Sanitise kind in case of mixed case inputs
-    source_kind = source_kind.lower()[:3]
-    target_kind = target_kind.lower()[:3]
+    source_kind = source_kind.lower()
+    if "h" in source_kind:
+        source_kind = source_kind.replace("h", "")
+    target_kind = target_kind.lower()
 
     # Extract axis of displacement from kinds
     displacements = [p[1] - p[0] for p in list(zip(source_coord, target_coord))]
@@ -86,27 +88,16 @@ def check_cube_match(
 
 
 def get_valid_next_kinds(
-    current_pos: StandardCoord, current_kind: str, next_pos: StandardCoord
+    current_pos: StandardCoord,
+    current_kind: str,
+    next_pos: StandardCoord,
+    hadamard_flag: bool = False,
 ) -> List[str]:
 
     # HELPER VARIABLES
     possible_kinds = []
-    exit_kind = ["ooo"]
     all_cube_kinds = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
-    all_pipe_kinds = [
-        "zxo",
-        "xzo",
-        "oxz",
-        "ozx",
-        "xoz",
-        "zox",
-        "zxoh",
-        "xzoh",
-        "oxzh",
-        "ozxh",
-        "xozh",
-        "zoxh",
-    ]
+    all_pipe_kinds = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
     # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
     # If current kind has an "o", the next kind is a cube
@@ -135,4 +126,3 @@ def get_valid_next_kinds(
 
     # RETURN ARRAY OF POSSIBLE NEXT KINDS
     return reduced_possible_kinds
-

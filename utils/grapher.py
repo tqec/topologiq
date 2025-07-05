@@ -10,6 +10,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from typing import Annotated, Literal, Any, Tuple
 from numpy.typing import NDArray
 
+from utils.utils import rotate_o_types
+
 # CONSTANTS
 node_hex_map = {
     "xxz": ["#d7a4a1", "#d7a4a1", "#b9cdff"],
@@ -429,12 +431,7 @@ def visualise_3d_graph(
                     color_y = color[1]
                     color_z = color[2]
 
-                    face_colors[4] = color_x  # right (+x)
-                    face_colors[5] = color_x  # left (-x)
-                    face_colors[2] = color_y  # front (-y)
-                    face_colors[3] = color_y  # back (+y)
-                    face_colors[0] = color_z  # bottom (-z)
-                    face_colors[1] = color_z  # top (+z)
+                    face_colors = [color[2]] * 2 + [color[1]] * 2 + [color[0]] * 2
 
                     if "h" in pipe_type:
 
@@ -467,14 +464,28 @@ def visualise_3d_graph(
                             centre2 = midpoint
                             centre3 = midpoint + offset3
 
-                            face_colors_colored = list(face_colors)
+                            face_colors_1 = list(face_colors)
                             face_colors_yellow = [yellow_hex] * 6  # Yellow color
+
+                            rotated_pipe_type = rotate_o_types(pipe_type[:3]) + "h"
+                            color = node_hex_map.get(rotated_pipe_type, ["gray"] * 3)
+                            color_x = color[0]
+                            color_y = color[1]
+                            color_z = color[2]
+
+                            face_colors_2 = [gray_hex] * 6
+                            face_colors_2[4] = color_x  # right (+x)
+                            face_colors_2[5] = color_x  # left (-x)
+                            face_colors_2[2] = color_y  # front (-y)
+                            face_colors_2[3] = color_y  # back (+y)
+                            face_colors_2[0] = color_z  # bottom (-z)
+                            face_colors_2[1] = color_z  # top (+z)
 
                             render_colored_cuboid(
                                 ax,
                                 centre1,
                                 size_colored,
-                                face_colors_colored,
+                                face_colors_1,
                                 edge_color,
                                 alpha,
                             )
@@ -490,7 +501,7 @@ def visualise_3d_graph(
                                 ax,
                                 centre3,
                                 size_colored,
-                                face_colors_colored,
+                                face_colors_2,
                                 edge_color,
                                 alpha,
                             )

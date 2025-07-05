@@ -9,8 +9,6 @@ It produces logical computations like the one below (video examples available in
 
 ***Note.*** This is work in progress.
 
-***Note.*** Hadamards are NOT supported yet.
-
 ***Note.*** A better README is on the way.
 
 ## Process
@@ -54,6 +52,17 @@ python -m run --pyzx:random_optimised
 # Ps. This one takes longest. It is a tightly-packed/highly-optimised circuit, so a few rounds are often needed to find a successful solution.
 python -m run --graph:steane
 
+# Line of hadamards
+python -m run --graph:hadamard_line
+
+# Made up circuit with Hadamards on bends
+# (No relation with reality, meant to push the algorithm into uncomfortable operations)
+python -m run --graph:hadamard_bend
+
+# A mess of hadamards
+# (No relation with reality, meant to push the algorithm into uncomfortable operations)
+python -m run --graph:mess_of_hadamards
+
 ```
 
 There are also several visualisation options that can be appended to any command.
@@ -70,7 +79,6 @@ python -m run --pyzx:cnot --hide_boundaries
 python -m run --pyzx:cnot --strip_boundaries
 
 ```
-
 
 It would be great to hear of tests using other circuits. You can use a non-descript ZX graph defined as a dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples) or a PyZX graph (check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs).
 

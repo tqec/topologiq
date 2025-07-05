@@ -114,7 +114,10 @@ def runner(
 
             # Create GIF or result
             create_animation(
-                filename_prefix=circuit_name, restart_delay=5000, duration=2500
+                filename_prefix=circuit_name,
+                restart_delay=5000,
+                duration=2500,
+                video=False,
             )
 
             # End loop
@@ -136,9 +139,14 @@ def runner(
 
             # Delete temporary files
             temp_images_folder_path = "./outputs/temp"
-            for filename in os.listdir(temp_images_folder_path):
-                os.remove(f"./{temp_images_folder_path}/{filename}")
-            os.rmdir(f"./{temp_images_folder_path}/")
+            try:
+                for filename in os.listdir(temp_images_folder_path):
+                    os.remove(f"./{temp_images_folder_path}/{filename}")
+                os.rmdir(f"./{temp_images_folder_path}/")
+            except (ValueError, FileNotFoundError) as e:
+                print(
+                    "Unable to delete temporary files or temp folder does not exist", e
+                )
 
         # Reset errors flag for next loop (if there is one)
         errors_in_result = False

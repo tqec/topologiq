@@ -31,7 +31,7 @@ def cnots(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
 def random(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
-    g= zx.generate.cliffordT(3, 10)
+    g = zx.generate.cliffordT(3, 10)
 
     if draw_graph:
         zx.draw(g)
@@ -41,7 +41,7 @@ def random(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
 def random_optimised(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
-    g= zx.generate.cliffordT(4, 7)
+    g = zx.generate.cliffordT(4, 7)
     zx.simplify.phase_free_simp(g)
 
     if draw_graph:

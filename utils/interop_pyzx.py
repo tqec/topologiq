@@ -87,9 +87,6 @@ def get_simple_graph_from_pyzx(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
         src = g_full["edges"][e]["src"]
         tgt = g_full["edges"][e]["tgt"]
         e_type = g_full["edges"][e]["type"]
-        e_type = (
-            "SIMPLE" if e_type != "SIMPLE" else e_type
-        )  # DELETE LINE WHEN HADAMARDS SUPPORTED
         g_simple["edges"].append(((src, tgt), e_type))
 
     return g_simple

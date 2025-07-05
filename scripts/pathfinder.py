@@ -1,7 +1,7 @@
 from collections import deque
-from utils.utils import is_move_allowed
+from utils.utils import adjust_hadamards_direction, is_move_allowed, rotate_o_types
 from utils.constraints import get_valid_next_kinds
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional
 
 from utils.classes import StandardCoord, StandardBlock, Colors
 
@@ -17,7 +17,13 @@ def run_bfs_for_all_potential_target_nodes(
     attempts_per_distance: int = 10,
     overwrite_target_node: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     occupied_coords: List[StandardCoord] = [],
-) -> tuple[bool, Optional[int], Optional[List[StandardBlock]], List[Optional[List[StandardBlock]]]]:
+    hadamard_flag: bool = False,
+) -> tuple[
+    bool,
+    Optional[int],
+    Optional[List[StandardBlock]],
+    List[Optional[List[StandardBlock]]],
+]:
     """
     Runs BFS on a loop until path is found within predetermined distance of source node or max distance is reached.
 
@@ -92,6 +98,7 @@ def run_bfs_for_all_potential_target_nodes(
                 source_node,
                 target_node,
                 forbidden_cords=obstacle_coords,
+                hadamard_flag=hadamard_flag,
             )
 
             # If path found, keep shortest path of round
@@ -118,6 +125,7 @@ def bfs_extended_3d(
     source_node: StandardBlock,
     target_node: StandardBlock,
     forbidden_cords: List[StandardCoord] = [],
+    hadamard_flag: bool = False,
 ):
 
     # Unpack information for source and target nodes
@@ -188,11 +196,46 @@ def bfs_extended_3d(
                 ):
                     continue
 
+            if "h" in current_type:
+
+                hadamard_flag = False
+                if (
+                    sum(
+                        [
+                            p[0] + p[1] if p[0] != p[1] else 0
+                            for p in list(zip(source_node[0], current_coords))
+                        ]
+                    )
+                    < 0
+                ):
+                    current_type = adjust_hadamards_direction(current_type)
+                    current_type = rotate_o_types(current_type)
+                else:
+                    rotated_type = rotate_o_types(current_type)
+                    current_type = rotated_type
+
+                current_type = current_type[:3]
+
             possible_next_types = get_valid_next_kinds(
-                current_coords, current_type, next_coords
+                current_coords, current_type, next_coords, hadamard_flag=hadamard_flag
             )
 
             for next_type in possible_next_types:
+
+                # If hadamard flag is on and the block being placed is "o", place a hadamard instead of regular pipe
+                if hadamard_flag and "o" in next_type:
+                    next_type += "h"
+                    if (
+                        sum(
+                            [
+                                p[0] + p[1] if p[0] != p[1] else 0
+                                for p in list(zip(current_coords, next_coords))
+                            ]
+                        )
+                        < 0
+                    ):
+                        next_type = rotate_o_types(next_type)
+
                 next_node_info: StandardBlock = (next_coords, next_type)
 
                 if (

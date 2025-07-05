@@ -202,6 +202,13 @@ def second_pass(
                     f"Node ID: {u} ({(u_pos, u_kind)}) <--> Node ID: {v} {v_pos, v_kind}",
                 )
 
+                # Check if edge is hadamard
+                original_zx_edge_type = nx_graph.get_edge_data(u, v).get("type")
+                hadamard_flag: bool = (
+                    True if original_zx_edge_type == "HADAMARD" else False
+                )
+                print("Original ZX type for edge:", original_zx_edge_type)
+
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
                 clean_paths = run_pathfinder(
@@ -210,6 +217,7 @@ def second_pass(
                     3,
                     occupied_coords[:],
                     target_node_info=(v_pos, nx_graph.nodes[v].get("kind")),
+                    hadamard_flag=hadamard_flag,
                     **kwargs,
                 )
 
@@ -393,6 +401,13 @@ def place_next_block(
             f"Node ID (source): {source_node_id} {source_node} --> Node ID (target): {neigh_node_id} ((?, ?, ?), ???) (ZX type: {next_neigh_zx_type})",
         )
 
+        # Current edge data
+        original_zx_edge_type = nx_graph.get_edge_data(
+            source_node_id, neigh_node_id
+        ).get("type")
+        hadamard_flag: bool = True if original_zx_edge_type == "HADAMARD" else False
+        print("Original ZX type for edge:", original_zx_edge_type)
+
         # Remove source coordinate from occupied coords
         occupied_coords_redux = occupied_coords[:]
         if source_pos in occupied_coords_redux:
@@ -404,6 +419,7 @@ def place_next_block(
             next_neigh_zx_type,
             step,
             occupied_coords_redux if occupied_coords else [],
+            hadamard_flag=hadamard_flag,
             **kwargs,
         )
 
@@ -535,6 +551,7 @@ def run_pathfinder(
     initial_step: int,
     occupied_coords: List[StandardCoord],
     target_node_info: Optional[StandardBlock] = None,
+    hadamard_flag: bool = False,
     **kwargs,
 ) -> List[Any]:
 
@@ -583,6 +600,7 @@ def run_pathfinder(
                     attempts_per_distance=1,
                     occupied_coords=occupied_coords_copy,
                     overwrite_target_node=(position, target_type),
+                    hadamard_flag=hadamard_flag,
                 )
             )
 

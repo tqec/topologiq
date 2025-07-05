@@ -1,4 +1,5 @@
 import random
+import numpy as np
 from typing import Tuple, List, Dict, Optional
 
 from utils.classes import (
@@ -344,3 +345,51 @@ def build_newly_indexed_path_dict(
             i += 1
 
     return latice_nodes, latice_edges
+
+
+def rotate_o_types(block_type: str) -> str:
+
+    h_flag = False
+    if "h" in block_type:
+        h_flag = True
+        block_type.replace("h", "")
+
+    # Build rotation matrix based on placement of "o" node
+    available_indexes = [0, 1, 2]
+    available_indexes.remove(block_type.index("o"))
+
+    new_matrix = {
+        block_type.index("o"): np.eye(3, dtype=int)[block_type.index("o")],
+        available_indexes[0]: np.eye(3, dtype=int)[available_indexes[1]],
+        available_indexes[1]: np.eye(3, dtype=int)[available_indexes[0]],
+    }
+
+    rotation_matrix = np.array([new_matrix[0], new_matrix[1], new_matrix[2]])
+
+    # Rotate kind
+    rotated_name = ""
+    for row in rotation_matrix:
+        entry = ""
+        for j, element in enumerate(row):
+            entry += abs(int(element)) * block_type[j]
+        rotated_name += entry
+
+    if h_flag:
+        rotated_name += "h"
+
+    return rotated_name
+
+
+def adjust_hadamards_direction(block_type: str) -> str:
+    # List of hadamard equivalences
+    hdm_equivalences = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
+
+    # Match to equivalent block given direction
+    if block_type in hdm_equivalences.keys():
+        block_type = hdm_equivalences[block_type]
+    else:
+        inv_equivalences = {value: key for key, value in hdm_equivalences.items()}
+        block_type = inv_equivalences[block_type]
+
+    # Return revised kind
+    return block_type
