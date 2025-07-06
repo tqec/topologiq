@@ -3,14 +3,18 @@ import networkx as nx
 from collections import deque
 from typing import Tuple, List, Optional, Any, cast
 
-from utils.utils import (
-    zx_types_validity_checks,
-    get_type_family,
+from utils.utils_greedy_bfs import (
     check_for_exits,
     generate_tentative_target_positions,
     prune_all_beams,
+)
+
+from utils.utils_zx_graphs import (
+    zx_types_validity_checks,
+    get_type_family,
     get_zx_type_from_kind,
 )
+
 from utils.classes import (
     PathBetweenNodes,
     StandardBlock,

@@ -1,7 +1,7 @@
-from utils.utils import check_is_exit
 from typing import List
 
 from utils.classes import StandardCoord
+from utils.utils_greedy_bfs import check_is_exit
 
 
 def check_face_match(

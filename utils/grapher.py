@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from typing import Annotated, Literal, Any, Tuple
 from numpy.typing import NDArray
 
-from utils.utils import rotate_o_types
+from utils.utils_greedy_bfs import rotate_o_types
 
 # CONSTANTS
 node_hex_map = {

@@ -1,9 +1,9 @@
 from collections import deque
-from utils.utils import adjust_hadamards_direction, is_move_allowed, rotate_o_types
-from utils.constraints import get_valid_next_kinds
 from typing import List, Tuple, Optional
 
 from utils.classes import StandardCoord, StandardBlock, Colors
+from utils.utils_greedy_bfs import adjust_hadamards_direction, is_move_allowed, rotate_o_types
+from utils.constraints import get_valid_next_kinds
 
 
 #########################

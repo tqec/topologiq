@@ -6,7 +6,7 @@ from typing import List
 from scripts.greedy_bfs_traditional import main
 
 from utils.classes import Colors, SimpleDictGraph
-from utils.utils import build_newly_indexed_path_dict
+from utils.utils_greedy_bfs import build_newly_indexed_path_dict
 from utils.utils_zx_graphs import strip_boundaries_from_zx_graph
 from utils.grapher import visualise_3d_graph
 from utils.animation import create_animation
