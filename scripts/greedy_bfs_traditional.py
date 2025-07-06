@@ -187,8 +187,12 @@ def second_pass(
         v_pos = nx_graph.nodes[v].get("pos")
 
         # Process only if both nodes have been placed on grid already
-        if u_pos is not None and v_pos is not None:
+        if u_pos is None or v_pos is None:
+            # Not yet implemented. Will catch instances where some nodes are not directly connected with other nodes in circuit
+            # (i.e., graphs with subgraphs).
+            edge = tuple(sorted((u, v)))
 
+        if u_pos is not None and v_pos is not None:
             # Update visualiser counter
             c += 1
 

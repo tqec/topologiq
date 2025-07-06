@@ -35,6 +35,8 @@ Several things happen when you run the algorithm.
 ## Examples
 For examples of what the algorithms can currently do, run any of the following commands from the root of the repository. The algorithm will stop when it finds a succesfull solution or run up to ten times.
 
+Please note, however, that the current goal is to inform developmental priorities. Critical to this end is identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully. It is worth highlighting, in particular, that graphs with independent subgraphs (i.e. when circuit has groups of nodes that do not interact with other groups of nodes) will NOT currently produce correct results. The graph-manager will traverse one of the subgraphs and think it's done.
+
 ``` bash
 # A CNOT, using PyZX.
 python -m run --pyzx:cnot
@@ -82,7 +84,7 @@ python -m run --pyzx:cnot --strip_boundaries
 
 It would be great to hear of tests using other circuits. You can use a non-descript ZX graph defined as a dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples) or a PyZX graph (check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs).
 
-That said, please note a degree of failed results is expected. The current goal is to inform developmental priorities by identifying types of circuits for which the current implementation performs good, less good, bad, and awfully.
+That said, please recall the current priority is to identify types of circuits for which the current implementation performs good, less good, bad, and awfully.
 
 ## Outputs
 A succesfull result will produce:
