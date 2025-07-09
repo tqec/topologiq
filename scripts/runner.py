@@ -61,7 +61,11 @@ def runner(
         # Return result is there are no errors
         if not errors_in_result:
 
+            # Last computations
             duration_total = (time.time() - t1) / 60
+            lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
+            
+            # Print update and save results
             print(
                 Colors.GREEN,
                 f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
@@ -81,6 +85,7 @@ def runner(
             lines.append(
                 '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
             )
+            
             for key, edge_path in edge_paths.items():
                 lines.append(
                     f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
@@ -89,11 +94,10 @@ def runner(
             lines.append(
                 "\n__________________________\nLATTICE SURGERY (Given as graph)\n"
             )
-            lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
             for key, node in lattice_nodes.items():
-                lines.append(f"Node ID: {key}. Type: {node}\n")
-            for edge in lattice_edges:
-                lines.append(f"Edge: {edge}\n")
+                lines.append(f"Node ID: {key}. Info: {node}\n")
+            for key, edge_type in lattice_edges.items():
+                lines.append(f"Edge ID: {key}. Info: {edge_type} \n")
 
             output_folder_path = "./outputs/txt"
             Path(output_folder_path).mkdir(parents=True, exist_ok=True)
@@ -117,7 +121,7 @@ def runner(
                 filename_prefix=circuit_name,
                 restart_delay=5000,
                 duration=2500,
-                video=False,
+                video=True,
             )
 
             # End loop

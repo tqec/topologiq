@@ -240,7 +240,7 @@ def prune_all_beams(
 
 def build_newly_indexed_path_dict(
     edge_paths: dict,
-) -> Tuple[dict[int, StandardBlock], List[Tuple[int, int]]]:
+) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], str]]:
 
     max_id = 0
     indexed_paths = {}
@@ -265,35 +265,42 @@ def build_newly_indexed_path_dict(
             indexed_path[end_key] = nodes_in_path[-1]
 
         indexed_paths[(start_key, end_key)] = indexed_path
-
+    
     final_edges = []
-
     for original_edge_key, path_id_value_map in indexed_paths.items():
-
-        ordered_node_ids = sorted(path_id_value_map.keys())
-
-        surviving_node_ids_in_sequence = []
-        for i in range(len(ordered_node_ids)):
+        
+        node_ids = list(path_id_value_map.keys())
+        
+        block_ids = []
+        edge_ids = []
+        for i in range(len(node_ids)):
             if i % 2 == 0:
-                surviving_node_ids_in_sequence.append(ordered_node_ids[i])
+                block_ids.append(node_ids[i])
+            else:
+                edge_ids.append(node_ids[i])
 
-        if len(surviving_node_ids_in_sequence) >= 2:
-            for i in range(len(surviving_node_ids_in_sequence) - 1):
-                node1 = surviving_node_ids_in_sequence[i]
-                node2 = surviving_node_ids_in_sequence[i + 1]
-                final_edges.append((node1, node2))
+        if len(block_ids) >= 2:
+            for i in range(len(block_ids) - 1):
+                node1 = block_ids[i]
+                node2 = block_ids[i + 1]
+                edge_type = path_id_value_map[edge_ids[i]][1]
+                
+                final_edges.append({(node1, node2): edge_type})
 
     latice_nodes: dict[int, StandardBlock] = {}
-    latice_edges: List[Tuple[int, int]] = []
+    latice_edges: dict[Tuple[int, int], str] = {}
     for item in indexed_paths.values():
+        
         keys = list(item.keys())
+        
         i = 0
         for node_key, node_info in item.items():
             if i % 2 == 0:
                 latice_nodes[node_key] = node_info
             else:
-                edge = (keys[i - 1], keys[i + 1])
-                latice_edges.append(edge)
+                edge_key = (keys[i - 1], keys[i + 1])
+                edge_type = node_info[1]
+                latice_edges[edge_key] = edge_type
             i += 1
 
     return latice_nodes, latice_edges
