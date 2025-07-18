@@ -1,6 +1,7 @@
 # Admin
 .vscode/
 .archive/
+.admin/
 
 # Outputs
 outputs/

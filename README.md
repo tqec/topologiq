@@ -17,6 +17,7 @@ Several things happen when you run the algorithm.
 **In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
 - ***Native format:*** A simple dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples).
 - ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
+  - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
 
 **After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may involve a need to add intermediate blocks). This second part of the process is itself divided into several stages:
 - ***Positioning:*** organises the process of placing each node into a number of tentative positions.
@@ -35,8 +36,6 @@ Several things happen when you run the algorithm.
 ## Examples
 For examples of what the algorithms can currently do, run any of the following commands from the root of the repository. The algorithm will stop when it finds a succesfull solution or run up to ten times.
 
-Please note, however, that the current goal is to inform developmental priorities. Critical to this end is identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully. It is worth highlighting, in particular, that graphs with independent subgraphs (i.e. when circuit has groups of nodes that do not interact with other groups of nodes) will NOT currently produce correct results. The graph-manager will traverse one of the subgraphs and think it's done.
-
 ``` bash
 # A CNOT, using PyZX.
 python -m run --pyzx:cnot
@@ -44,26 +43,26 @@ python -m run --pyzx:cnot
 # Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
 python -m run --pyzx:cnots
 
-# Random circuit, using PyZX: zx.generate.cliffordT().
-python -m run --pyzx:random
-
-# Random circuit, optimised, using PyZX: zx.generate.cliffordT(), zx.simplify.phase_free_simp().
-python -m run --pyzx:random_optimised
-
-# A 7-qubit Steane code, from a non-descript graph. 
-# Ps. This one takes longest. It is a tightly-packed/highly-optimised circuit, so a few rounds are often needed to find a successful solution.
-python -m run --graph:steane
+# A medium-size circuit with three interconnected lines.
+python -m run --pyzx:simple_mess
 
 # Line of hadamards
 python -m run --graph:hadamard_line
 
-# Made up circuit with Hadamards on bends
-# (No relation with reality, meant to push the algorithm into uncomfortable operations)
+# Circuit with Hadamards on bends
 python -m run --graph:hadamard_bend
 
+# A 7-qubit Steane code, from a non-descript graph. 
+# Ps. This is a tightly-packed circuit with several interconnected nodes, so a few rounds might be needed for success.
+python -m run --graph:steane
+
 # A mess of hadamards
-# (No relation with reality, meant to push the algorithm into uncomfortable operations)
-python -m run --graph:mess_of_hadamards
+# Ps. This is a tightly-packed circuit with several interconnected nodes and a few Hadamards, so a few rounds might be needed for success.
+python -m run --graph:hadamards_mess
+
+# Random circuit, optimised, using PyZX: zx.generate.cliffordT(), zx.simplify.phase_free_simp().
+# Ps. Check the randomly generated graph to ensure all qubit lines are interconnected. See "process" section above for details.
+python -m run --pyzx:random
 
 ```
 
@@ -84,7 +83,7 @@ python -m run --pyzx:cnot --strip_boundaries
 
 It would be great to hear of tests using other circuits. You can use a non-descript ZX graph defined as a dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples) or a PyZX graph (check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs).
 
-That said, please recall the current priority is to identify types of circuits for which the current implementation performs good, less good, bad, and awfully.
+Please note, however, that the current goal is to inform developmental priorities. Critical to this end is identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully.
 
 ## Outputs
 A succesfull result will produce:
@@ -96,7 +95,7 @@ The information printed to the TXT file is also available for programmatic use.
 
 ## Pending
 Everything is pending, but below a list of highest priorities:
-- Enable automatic selection and variation of hyperparameters
-- Add support for Hadamards
-- Improve PyZX support
+- Perform manual validation tests to ensure correctness of results.
+- Enable automatic selection and variation of hyperparameters.
+- Improve PyZX support.
 - Improve run-times.

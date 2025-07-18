@@ -3,7 +3,7 @@ from typing import Union
 
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
-from pyzx.generate import CNOT_HAD_PHASE_circuit
+from pyzx.generate import CNOT_HAD_PHASE_circuit, cliffords
 
 
 def cnot(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
@@ -20,7 +20,29 @@ def cnot(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
 def cnots(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
-    c = CNOT_HAD_PHASE_circuit(qubits=2, depth=4, clifford=True)
+    c = zx.Circuit(2)
+    c.add_gate("CNOT", 0, 1)
+    c.add_gate("CNOT", 1, 0)
+    c.add_gate("CNOT", 1, 0)
+
+    g = c.to_graph()
+
+    if draw_graph:
+        zx.draw(g)
+
+    return g
+
+
+def simple_mess(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
+
+    c = zx.Circuit(3)
+    c.add_gate("CNOT", 1, 2)
+    c.add_gate("S", 2)
+    c.add_gate("CNOT", 1, 0)
+    c.add_gate("CNOT", 0, 1)
+    c.add_gate("S", 2)
+    c.add_gate("CNOT", 0, 2)
+
     g = c.to_graph()
 
     if draw_graph:
@@ -31,18 +53,10 @@ def cnots(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
 def random(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
-    g = zx.generate.cliffordT(3, 7)
-
-    if draw_graph:
-        zx.draw(g)
-
-    return g
-
-
-def random_optimised(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
-
-    g = zx.generate.cliffordT(2, 7)
-    zx.simplify.phase_free_simp(g)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=3, depth=7, clifford=True)
+    g = c.to_graph()
+    zx.clifford_simp(g)
+    g.normalize()
 
     if draw_graph:
         zx.draw(g)
