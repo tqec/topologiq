@@ -10,7 +10,7 @@ It produces logical computations like the one below (video examples available in
 ***Note.*** This is work in progress.
 
 ## Background
-ZX-calculus[^1],[^2],[^3],[^4],[^5],[^6],[^7] is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
+ZX-calculus[^1-7] is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
 
 A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code[^8],[^9],[^10],[^11],[^12],[^13],[^14], a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery[^15],[^16],[^17],[^18],[^19],[^20],[^21],[^22],[^23] is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
 
@@ -120,7 +120,8 @@ Everything is pending, but below a list of highest priorities:
 ## License
 All code in this repository is under an Apache 2.0 open source license.
 
-## References
+--
+
 [^1]: Coecke, B. & Duncan, R. Interacting Quantum Observables. In *Automata, Languages and Programming* (eds. Aceto, L. et al.) 298–310 (Springer, Berlin, Heidelberg, 2008).
 [^2]:	Duncan, R. & Perdrix, S. Graph States and the Necessity of Euler Decomposition. In *Mathematical Theory and Computational Practice* (eds. Ambos-Spies, K., Löwe, B. & Merkle, W.) 167–177 (Springer, Berlin, Heidelberg, 2009).
 [^3]:	Coecke, B. & Duncan, R. Interacting quantum observables: categorical algebra and diagrammatics. *New J. Phys*. 13, 043016 (2011).
