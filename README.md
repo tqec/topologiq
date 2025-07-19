@@ -9,32 +9,30 @@ It produces logical computations like the one below (video examples available in
 
 ***Note.*** This is work in progress.
 
-***Note.*** A better README is on the way.
+## Background
+ZX-calculus[^1],[^2],[^3],[^4],[^5],[^6],[^7] is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
 
-## Process
-Several things happen when you run the algorithm.
+A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code[^8],[^9],[^10],[^11],[^12],[^13],[^14], a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery[^15],[^16],[^17],[^18],[^19],[^20],[^21],[^22],[^23] is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
 
-**In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
-- ***Native format:*** A simple dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples).
-- ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
-  - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
+Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.[^18],[^19],[^20],[^24],[^25],[^26],[^27] These blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.
 
-**After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may involve a need to add intermediate blocks). This second part of the process is itself divided into several stages:
-- ***Positioning:*** organises the process of placing each node into a number of tentative positions.
-  - Step currently follows a greedy Breadth First Search (BFS) approach.
-  - Additional strategies will be explored in due course. 
-- ***Pathfinding:*** explores a 4D space (x, y, z, block type) to determine which tentative positions allow topologically-correct paths.
-  - Step currently uses a slightly-modified Dijkstra.
-  - Additional strategies may be explored in due course mainly because Dijkstra is an inherently-slow algorithm.
-  - That said, the priority is to optimise the existing approach to ensure maximal robustness.
-- ***Value function:*** Chooses best path from the pathfinding algorithm based on given hyperparameters attached to the positioning algorithm.
-  - Hyperparameters currently set to values that increase the odds of finding a successful solution in test runs. 
-  - This does **NOT** mean the algorithm will produce optimal results with current hyperparameters.
-  - An automated approach to discovering optimal hyperparameters will eventually be added, but this is not currently available.
-  - To vary hyperparameters manually, edit `run_hyper_params.py`.
+When you name these "primitives" by reference to both the underlying quantum operations and the coordinate space, the names become "symbolic" in a very mathematical sense:
+- The names can be manipulated using symbolic operations
+- The names can be used to establish potential placements for linked operations
+- The names can be used to ensure the outcome of a lattice surgery is topologically correct.
+
+The algorithms in this repository use these and other properties of these "primitives" to traverse a ZX graph, place the nodes of the said graph in a 3D space, and devise any operations needed for all nodes and edges to be rendered into a topologically-correct space-time diagram.
 
 ## Examples
-For examples of what the algorithms can currently do, run any of the following commands from the root of the repository. The algorithm will stop when it finds a succesfull solution or run up to ten times.
+For examples of what the algorithm can currently do, run any of the commands below from the root of the repository. All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
+
+The algorithm will stop when it finds a succesfull solution or run up to ten times.
+
+A succesfull result will produce:
+- a 3D interactive graph (pops up)
+- a GIF animation of the process (saves to `./outputs/media/`)
+- a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`)
+  - All information printed to this TXT file is also available for programmatic use.
 
 ``` bash
 # A CNOT, using PyZX.
@@ -81,21 +79,72 @@ python -m run --pyzx:cnot --strip_boundaries
 
 ```
 
-It would be great to hear of tests using other circuits. You can use a non-descript ZX graph defined as a dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples) or a PyZX graph (check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs).
+## Use your own circuits
+It would be great to hear of tests using other circuits.
+- You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `assets/graphs/simple_graphs.py` for examples.
+- You can also use a PyZX graph. See check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs.
 
-Please note, however, that the current goal is to inform developmental priorities. Critical to this end is identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully.
+Please note, however, that the current goal is to inform developmental priorities by identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully.
 
-## Outputs
-A succesfull result will produce:
-- a 3D interactive graph (pops up)
-- a GIF animation of the process (saves to `./outputs/media/`) (videos possible, but FFmpeg must be installed)
-- a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`).
+## Yeah, but how does it work, really?
+A detailed overview and, hopefully, a paper, is in progress. Meanwhile, this is an overview of the inner workings of the algorithm. 
 
-The information printed to the TXT file is also available for programmatic use.
+**In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
+- ***Native format:*** A simple dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples).
+- ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
+  - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
+
+**After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may involve a need to add intermediate blocks). This second part of the process is itself divided into several stages:
+- ***Positioning:*** organises the process of placing each node into a number of tentative positions.
+  - Step currently follows a greedy Breadth First Search (BFS) approach.
+  - Additional strategies will be explored in due course. 
+- ***Pathfinding:*** explores a 4D space (x, y, z, block type) to determine which tentative positions allow topologically-correct paths.
+  - Step currently uses a slightly-modified Dijkstra.
+  - Additional strategies may be explored in due course mainly because Dijkstra is an inherently-slow algorithm.
+  - That said, the priority is to optimise the existing approach to ensure maximal robustness.
+- ***Value function:*** Chooses best path from the pathfinding algorithm based on given hyperparameters attached to the positioning algorithm.
+  - Hyperparameters currently set to values that increase the odds of finding a successful solution in test runs. 
+  - This does **NOT** mean the algorithm will produce optimal results with current hyperparameters.
+  - An automated approach to discovering optimal hyperparameters will eventually be added, but this is not currently available.
+  - To vary hyperparameters manually, edit `run_hyper_params.py`.
 
 ## Pending
 Everything is pending, but below a list of highest priorities:
-- Perform manual validation tests to ensure correctness of results.
-- Enable automatic selection and variation of hyperparameters.
+- Add health checks to outcomes to avoid undetected errors.
 - Improve PyZX support.
+- Add better documentation.
+- Add detailed example sheets.
+- Enable automatic selection and variation of hyperparameters.
 - Improve run-times.
+
+## License
+All code in this repository is under an Apache 2.0 open source license.
+
+## References
+[^1]: Coecke, B. & Duncan, R. Interacting Quantum Observables. In *Automata, Languages and Programming* (eds. Aceto, L. et al.) 298–310 (Springer, Berlin, Heidelberg, 2008).
+[^2]:	Duncan, R. & Perdrix, S. Graph States and the Necessity of Euler Decomposition. In *Mathematical Theory and Computational Practice* (eds. Ambos-Spies, K., Löwe, B. & Merkle, W.) 167–177 (Springer, Berlin, Heidelberg, 2009).
+[^3]:	Coecke, B. & Duncan, R. Interacting quantum observables: categorical algebra and diagrammatics. *New J. Phys*. 13, 043016 (2011).
+[^4]:	Backens, M. The ZX-calculus is complete for stabilizer quantum mechanics. *New J. Phys*. 16, 093021 (2014).
+[^5]:	Backens, M. Making the stabilizer ZX-calculus complete for scalars. *Electron. Proc. Theor. Comput. Sci*. 195, 17–32 (2015).
+[^6]:	Wetering, J. van de. ZX-calculus for the working quantum computer scientist. PrePrint (2020).
+[^7]: Kissinger, A. & Wetering, J. van de. Universal MBQC with generalised parity-phase interactions and Pauli measurements. *Quantum* 3, 134 (2019).
+[^8]:	Kitaev, A. Yu. Quantum Error Correction with Imperfect Gates. In *Quantum Communication, Computing, and Measurement* (eds. Hirota, O., Holevo, A. S. & Caves, C. M.) 181–188 (Springer US, Boston, MA, 1997).
+[^9]: Kitaev, A. Y. Fault-tolerant quantum computation by anyons. *Ann. Phys*. 303, 2–30 (2003).
+[^10]: Bravyi, S. B. & Kitaev, A. Y. Quantum codes on a lattice with boundary. Preprint (1998).
+[^11]: Dennis, E., Kitaev, A., Landahl, A. & Preskill, J. Topological quantum memory. *J. Math. Phys*. 43, 4452–4505 (2002).
+[^12]: Fowler, A. G., Stephens, A. M. & Groszkowski, P. High threshold universal quantum computation on the surface code. *Phys. Rev*. A 80, 052312 (2009).
+[^13]: Fowler, A. G., Mariantoni, M., Martinis, J. M. & Cleland, A. N. Surface codes: Towards practical large-scale quantum computation. *Phys. Rev*. A 86, 032324 (2012).
+[^14]: Acharya, R. et al. Quantum error correction below the surface code threshold. *Nature* 638, 920–926 (2025).
+[^15]: Horsman, D., Fowler, A. G., Devitt, S. & Meter, R. V. Surface code quantum computing by lattice surgery. *New J. Phys*. 14, 123011 (2012).
+[^16]: Litinski, D. & Oppen, F. von. Lattice Surgery with a Twist: Simplifying Clifford Gates of Surface Codes. *Quantum* 2, 62 (2018).
+[^17]: Landahl, A. J. & Ryan-Anderson, C. Quantum computing by color-code lattice surgery. Preprint (2014).
+[^18]: Fowler, A. G. & Gidney, C. Low overhead quantum computation using lattice surgery. Preprint (2019).
+[^19]: Gidney, C. & Fowler, A. G. Efficient magic state factories with a catalyzed |CCZ〉-> |T〉transformation. *Quantum* 3, 135 (2019).
+[^20]: Gidney, C. & Fowler, A. G. Flexible layout of surface code computations using AutoCCZ states. Preprint (2019).
+[^21]: Tan, D. B., Niu, M. Y. & Gidney, C. A SAT Scalpel for Lattice Surgery: Representation and Synthesis of Subroutines for Surface-Code Fault-Tolerant Quantum Computing. In *2024 ACM/IEEE 51st Annual International Symposium on Computer Architecture (ISCA)* 325–339 (2024).
+[^22]: Shaw, A. T. E., Bremner, M. J., Paler, A., Herr, D. & Devitt, S. J. Quantum computation on a 19-qubit wide 2d nearest neighbour qubit array. Preprint (2022).
+[^23]: Gehér, G. P., McLauchlan, C., Campbell, E. T., Moylett, A. E. & Crawford, O. Error-corrected Hadamard gate simulated at the circuit level. *Quantum* 8, 1394 (2024).
+[^24]: Paetznick, A. & Fowler, A. G. Quantum circuit optimization by topological compaction in the surface code. Preprint (2013).
+[^25]: Paler, A., Devitt, S. J. & Fowler, A. G. Synthesis of Arbitrary Quantum Circuits to Topological Assembly. *Sci. Rep*. 6, 30600 (2016).
+[^26]: Fowler, A. G. Computing with fewer qubits: Pitfalls and tools to keep you safe [Conference Presentation]. *Munich Quantum Software Forum* (2023).
+[^27]: Fowler, A. G. Programming a quantum computer using SketchUp [Conference Presentation]. *Munich Quantum Software Forum* (2024).
