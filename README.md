@@ -10,11 +10,11 @@ It produces logical computations like the one below (video examples available in
 ***Note.*** This is work in progress.
 
 ## Background
-ZX-calculus[^1-7] is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
+ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
 
-A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code[^8],[^9],[^10],[^11],[^12],[^13],[^14], a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery[^15],[^16],[^17],[^18],[^19],[^20],[^21],[^22],[^23] is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
+A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code,<sup>[8-14]</sup> a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery<sup>[15-23]</sup> is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
 
-Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.[^18],[^19],[^20],[^24],[^25],[^26],[^27] These blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.
+Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.<sup>[18-20, 24-27]</sup> These blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.
 
 When you name these "primitives" by reference to both the underlying quantum operations and the coordinate space, the names become "symbolic" in a very mathematical sense:
 - The names can be manipulated using symbolic operations
@@ -120,32 +120,31 @@ Everything is pending, but below a list of highest priorities:
 ## License
 All code in this repository is under an Apache 2.0 open source license.
 
---
-
-[^1]: Coecke, B. & Duncan, R. Interacting Quantum Observables. In *Automata, Languages and Programming* (eds. Aceto, L. et al.) 298–310 (Springer, Berlin, Heidelberg, 2008).
-[^2]:	Duncan, R. & Perdrix, S. Graph States and the Necessity of Euler Decomposition. In *Mathematical Theory and Computational Practice* (eds. Ambos-Spies, K., Löwe, B. & Merkle, W.) 167–177 (Springer, Berlin, Heidelberg, 2009).
-[^3]:	Coecke, B. & Duncan, R. Interacting quantum observables: categorical algebra and diagrammatics. *New J. Phys*. 13, 043016 (2011).
-[^4]:	Backens, M. The ZX-calculus is complete for stabilizer quantum mechanics. *New J. Phys*. 16, 093021 (2014).
-[^5]:	Backens, M. Making the stabilizer ZX-calculus complete for scalars. *Electron. Proc. Theor. Comput. Sci*. 195, 17–32 (2015).
-[^6]:	Wetering, J. van de. ZX-calculus for the working quantum computer scientist. PrePrint (2020).
-[^7]: Kissinger, A. & Wetering, J. van de. Universal MBQC with generalised parity-phase interactions and Pauli measurements. *Quantum* 3, 134 (2019).
-[^8]:	Kitaev, A. Yu. Quantum Error Correction with Imperfect Gates. In *Quantum Communication, Computing, and Measurement* (eds. Hirota, O., Holevo, A. S. & Caves, C. M.) 181–188 (Springer US, Boston, MA, 1997).
-[^9]: Kitaev, A. Y. Fault-tolerant quantum computation by anyons. *Ann. Phys*. 303, 2–30 (2003).
-[^10]: Bravyi, S. B. & Kitaev, A. Y. Quantum codes on a lattice with boundary. Preprint (1998).
-[^11]: Dennis, E., Kitaev, A., Landahl, A. & Preskill, J. Topological quantum memory. *J. Math. Phys*. 43, 4452–4505 (2002).
-[^12]: Fowler, A. G., Stephens, A. M. & Groszkowski, P. High threshold universal quantum computation on the surface code. *Phys. Rev*. A 80, 052312 (2009).
-[^13]: Fowler, A. G., Mariantoni, M., Martinis, J. M. & Cleland, A. N. Surface codes: Towards practical large-scale quantum computation. *Phys. Rev*. A 86, 032324 (2012).
-[^14]: Acharya, R. et al. Quantum error correction below the surface code threshold. *Nature* 638, 920–926 (2025).
-[^15]: Horsman, D., Fowler, A. G., Devitt, S. & Meter, R. V. Surface code quantum computing by lattice surgery. *New J. Phys*. 14, 123011 (2012).
-[^16]: Litinski, D. & Oppen, F. von. Lattice Surgery with a Twist: Simplifying Clifford Gates of Surface Codes. *Quantum* 2, 62 (2018).
-[^17]: Landahl, A. J. & Ryan-Anderson, C. Quantum computing by color-code lattice surgery. Preprint (2014).
-[^18]: Fowler, A. G. & Gidney, C. Low overhead quantum computation using lattice surgery. Preprint (2019).
-[^19]: Gidney, C. & Fowler, A. G. Efficient magic state factories with a catalyzed |CCZ〉-> |T〉transformation. *Quantum* 3, 135 (2019).
-[^20]: Gidney, C. & Fowler, A. G. Flexible layout of surface code computations using AutoCCZ states. Preprint (2019).
-[^21]: Tan, D. B., Niu, M. Y. & Gidney, C. A SAT Scalpel for Lattice Surgery: Representation and Synthesis of Subroutines for Surface-Code Fault-Tolerant Quantum Computing. In *2024 ACM/IEEE 51st Annual International Symposium on Computer Architecture (ISCA)* 325–339 (2024).
-[^22]: Shaw, A. T. E., Bremner, M. J., Paler, A., Herr, D. & Devitt, S. J. Quantum computation on a 19-qubit wide 2d nearest neighbour qubit array. Preprint (2022).
-[^23]: Gehér, G. P., McLauchlan, C., Campbell, E. T., Moylett, A. E. & Crawford, O. Error-corrected Hadamard gate simulated at the circuit level. *Quantum* 8, 1394 (2024).
-[^24]: Paetznick, A. & Fowler, A. G. Quantum circuit optimization by topological compaction in the surface code. Preprint (2013).
-[^25]: Paler, A., Devitt, S. J. & Fowler, A. G. Synthesis of Arbitrary Quantum Circuits to Topological Assembly. *Sci. Rep*. 6, 30600 (2016).
-[^26]: Fowler, A. G. Computing with fewer qubits: Pitfalls and tools to keep you safe [Conference Presentation]. *Munich Quantum Software Forum* (2023).
-[^27]: Fowler, A. G. Programming a quantum computer using SketchUp [Conference Presentation]. *Munich Quantum Software Forum* (2024).
+## References
+1. Coecke, B. & Duncan, R. Interacting Quantum Observables. In *Automata, Languages and Programming* (eds. Aceto, L. et al.) 298–310 (Springer, Berlin, Heidelberg, 2008).  
+2. Duncan, R. & Perdrix, S. Graph States and the Necessity of Euler Decomposition. In *Mathematical Theory and Computational Practice* (eds. Ambos-Spies, K., Löwe, B. & Merkle, W.) 167–177 (Springer, Berlin, Heidelberg, 2009).  
+3. Coecke, B. & Duncan, R. Interacting quantum observables: categorical algebra and diagrammatics. *New J. Phys*. 13, 043016 (2011).  
+4. Backens, M. The ZX-calculus is complete for stabilizer quantum mechanics. *New J. Phys*. 16, 093021 (2014).  
+5. Backens, M. Making the stabilizer ZX-calculus complete for scalars. *Electron. Proc. Theor. Comput. Sci*. 195, 17–32 (2015).  
+6. Wetering, J. van de. ZX-calculus for the working quantum computer scientist. PrePrint (2020).  
+7. Kissinger, A. & Wetering, J. van de. Universal MBQC with generalised parity-phase interactions and Pauli measurements. *Quantum* 3, 134 (2019).  
+8. Kitaev, A. Yu. Quantum Error Correction with Imperfect Gates. In *Quantum Communication, Computing, and Measurement* (eds. Hirota, O., Holevo, A. S. & Caves, C. M.) 181–188 (Springer US, Boston, MA, 1997).  
+9. Kitaev, A. Y. Fault-tolerant quantum computation by anyons. *Ann. Phys*. 303, 2–30 (2003).  
+10. Bravyi, S. B. & Kitaev, A. Y. Quantum codes on a lattice with boundary. Preprint (1998).  
+11. Dennis, E., Kitaev, A., Landahl, A. & Preskill, J. Topological quantum memory. *J. Math. Phys*. 43, 4452–4505 (2002).  
+12. Fowler, A. G., Stephens, A. M. & Groszkowski, P. High threshold universal quantum computation on the surface code. *Phys. Rev*. A 80, 052312 (2009).  
+13. Fowler, A. G., Mariantoni, M., Martinis, J. M. & Cleland, A. N. Surface codes: Towards practical large-scale quantum computation. *Phys. Rev*. A 86, 032324 (2012).  
+14. Acharya, R. et al. Quantum error correction below the surface code threshold. *Nature* 638, 920–926 (2025).  
+15. Horsman, D., Fowler, A. G., Devitt, S. & Meter, R. V. Surface code quantum computing by lattice surgery. *New J. Phys*. 14, 123011 (2012).  
+16. Litinski, D. & Oppen, F. von. Lattice Surgery with a Twist: Simplifying Clifford Gates of Surface Codes. *Quantum* 2, 62 (2018).  
+17. Landahl, A. J. & Ryan-Anderson, C. Quantum computing by color-code lattice surgery. Preprint (2014).  
+18. Fowler, A. G. & Gidney, C. Low overhead quantum computation using lattice surgery. Preprint (2019).  
+19. Gidney, C. & Fowler, A. G. Efficient magic state factories with a catalyzed |CCZ〉-> |T〉transformation. *Quantum* 3, 135 (2019).  
+20. Gidney, C. & Fowler, A. G. Flexible layout of surface code computations using AutoCCZ states. Preprint (2019).  
+21. Tan, D. B., Niu, M. Y. & Gidney, C. A SAT Scalpel for Lattice Surgery: Representation and Synthesis of Subroutines for Surface-Code Fault-Tolerant Quantum Computing. In *2024 ACM/IEEE 51st Annual International Symposium on Computer Architecture (ISCA)* 325–339 (2024).  
+22. Shaw, A. T. E., Bremner, M. J., Paler, A., Herr, D. & Devitt, S. J. Quantum computation on a 19-qubit wide 2d nearest neighbour qubit array. Preprint (2022).  
+23. Gehér, G. P., McLauchlan, C., Campbell, E. T., Moylett, A. E. & Crawford, O. Error-corrected Hadamard gate simulated at the circuit level. *Quantum* 8, 1394 (2024).  
+24. Paetznick, A. & Fowler, A. G. Quantum circuit optimization by topological compaction in the surface code. Preprint (2013).  
+25. Paler, A., Devitt, S. J. & Fowler, A. G. Synthesis of Arbitrary Quantum Circuits to Topological Assembly. *Sci. Rep*. 6, 30600 (2016).  
+26. Fowler, A. G. Computing with fewer qubits: Pitfalls and tools to keep you safe [Conference Presentation]. *Munich Quantum Software Forum* (2023).  
+27. Fowler, A. G. Programming a quantum computer using SketchUp [Conference Presentation]. *Munich Quantum Software Forum* (2024).  
