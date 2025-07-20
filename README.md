@@ -1,7 +1,7 @@
 # Topologiq: Algorithmic Lattice Surgery
 A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
 
-It produces logical computations like the one below (video examples available in `./assets/media`).
+It is based on the surface code and lattice surgery and produces topologically correct space-time diagrams (logical computations) like the one below (see `./assets/media` for additional examples).
 
 ![GIF animation of an example using Steane code](./assets/media/steane.gif)
 
@@ -16,12 +16,12 @@ A leading approach to building logical quantum computations that are seemingly r
 
 Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.<sup>[18-20, 24-27]</sup> The blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.<sup>[28]</sup>
 
-When you name these "primitives" by reference to both the underlying quantum operations and the coordinate space, the names become "symbolic" in a very mathematical sense:
+When you name these "primitives" by reference to both the underlying topological features of the surface code *and* the coordinate space, the names become "symbolic" in a very mathematical sense:
 - The names can be manipulated using symbolic operations
 - The names can be used to establish potential placements for linked operations
 - The names can be used to ensure the outcome of a lattice surgery is topologically correct.
 
-The algorithms in this repository use these and other properties of these "primitives" to traverse a ZX graph, place the nodes of the said graph in a 3D space, and devise any operations needed for all nodes and edges to be rendered into a topologically-correct space-time diagram.
+The algorithms in this repository use the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
 
 ## Install
 The goal is to enable usage as a dependency.
@@ -30,7 +30,7 @@ Meanwhile, the best way to install is to clone the repository, recreate the envi
 
 Clone. 
 ```
-git clone https://github.com/jbolns/algorithmic_lattice_surgery.git
+git clone https://github.com/jbolns/topologiq.git
 ```
 
 Recreate environment.
@@ -126,7 +126,7 @@ A detailed insight into the algorithm and, hopefully, a paper, is in progress. M
 - ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
   - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
 
-**After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may need to add intermediate blocks and break edges in the process). This second part of the process is itself divided into several stages:
+**After,** the algorithm will traverse the ZX graph transforming each node into an equivalent "primitive" and position it in a way that honours the original graph. This second part of the process is itself divided into several stages:
 - ***Positioning:*** organises the process of placing each node into a number of tentative positions.
   - Step currently follows a greedy Breadth First Search (BFS) approach.
   - Additional strategies will be explored in due course. 
