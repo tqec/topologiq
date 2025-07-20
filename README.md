@@ -1,4 +1,4 @@
-# Algorithmic Lattice Surgery
+# Topologiq: Algorithmic Lattice Surgery
 A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
 
 It produces logical computations like the one below (video examples available in `./assets/media`).
