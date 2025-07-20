@@ -709,6 +709,7 @@ def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
         start_node: Optional[int] = None
 
     # RETURN START NODE
+    start_node = 1
     return start_node
 
 
