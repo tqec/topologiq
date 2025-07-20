@@ -14,7 +14,7 @@ ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and mani
 
 A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code,<sup>[8-14]</sup> a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery<sup>[15-23]</sup> is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
 
-Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.<sup>[18-20, 24-27]</sup> These blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.
+Researchers have found a number of basic "primitive" lattice surgery operations that can be combined to form logical computations.<sup>[18-20, 24-27]</sup> The blocks have been validated as valid instances of surface code operations in an ongoing open-source effort to develop “automation software for representing, constructing and compiling large-scale fault-tolerant quantum computations based on surface code and lattice surgery”.<sup>[28]</sup>
 
 When you name these "primitives" by reference to both the underlying quantum operations and the coordinate space, the names become "symbolic" in a very mathematical sense:
 - The names can be manipulated using symbolic operations
@@ -23,16 +23,48 @@ When you name these "primitives" by reference to both the underlying quantum ope
 
 The algorithms in this repository use these and other properties of these "primitives" to traverse a ZX graph, place the nodes of the said graph in a 3D space, and devise any operations needed for all nodes and edges to be rendered into a topologically-correct space-time diagram.
 
-## Examples
-For examples of what the algorithm can currently do, run any of the commands below from the root of the repository. All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
+## Install
+The goal is to enable usage as a dependency.
 
-The algorithm will stop when it finds a succesfull solution or run up to ten times.
+Meanwhile, the best way to install is to clone the repository, recreate the environment, and install all dependencies.
+
+Clone. 
+```
+git clone https://github.com/jbolns/algorithmic_lattice_surgery.git
+```
+
+Recreate environment.
+```
+# In the root of the repository.
+
+## GNU/Linux and MacOS
+python -m venv .venv
+source .venv/bin/activate
+
+## Windows
+### CMD
+python -m venv .venv
+.venv\Scripts\activate.bat
+### PowerShell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Install dependencies.
+```
+pip install -r requirements.txt
+```
+
+## Examples
+For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times. 
 
 A succesfull result will produce:
 - a 3D interactive graph (pops up)
 - a GIF animation of the process (saves to `./outputs/media/`)
 - a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`)
   - All information printed to this TXT file is also available for programmatic use.
+
+All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
 
 ``` bash
 # A CNOT, using PyZX.
@@ -84,17 +116,17 @@ It would be great to hear of tests using other circuits.
 - You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `assets/graphs/simple_graphs.py` for examples.
 - You can also use a PyZX graph. See check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs.
 
-Please note, however, that the current goal is to inform developmental priorities by identifying **types** of circuits for which the current implementation performs good, less good, bad, and awfully.
+Please note, however, that the algorithm is not expected to always succeed. The current goal is to inform developmental priorities by identifying types of circuits for which the current implementation performs good, less good, bad, and awfully.
 
 ## Yeah, but how does it work, really?
-A detailed overview and, hopefully, a paper, is in progress. Meanwhile, this is an overview of the inner workings of the algorithm. 
+A detailed insight into the algorithm and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of the inner workings of the algorithm. 
 
 **In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
 - ***Native format:*** A simple dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples).
 - ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
   - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
 
-**After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may involve a need to add intermediate blocks). This second part of the process is itself divided into several stages:
+**After,** the algorithm will traverse the ZX graph transforming each node into a 3D equivalent "block" and positioning the resulting blocks in a way that honours the original edges in the graph (may need to add intermediate blocks and break edges in the process). This second part of the process is itself divided into several stages:
 - ***Positioning:*** organises the process of placing each node into a number of tentative positions.
   - Step currently follows a greedy Breadth First Search (BFS) approach.
   - Additional strategies will be explored in due course. 
@@ -118,7 +150,7 @@ Everything is pending, but below a list of highest priorities:
 - Improve run-times.
 
 ## License
-All code in this repository is under an Apache 2.0 open source license.
+This repository is open source software. All code in the repository is under an Apache 2.0 license.
 
 ## References
 1. Coecke, B. & Duncan, R. Interacting Quantum Observables. In *Automata, Languages and Programming* (eds. Aceto, L. et al.) 298–310 (Springer, Berlin, Heidelberg, 2008).  
@@ -147,4 +179,5 @@ All code in this repository is under an Apache 2.0 open source license.
 24. Paetznick, A. & Fowler, A. G. Quantum circuit optimization by topological compaction in the surface code. Preprint (2013).  
 25. Paler, A., Devitt, S. J. & Fowler, A. G. Synthesis of Arbitrary Quantum Circuits to Topological Assembly. *Sci. Rep*. 6, 30600 (2016).  
 26. Fowler, A. G. Computing with fewer qubits: Pitfalls and tools to keep you safe [Conference Presentation]. *Munich Quantum Software Forum* (2023).  
-27. Fowler, A. G. Programming a quantum computer using SketchUp [Conference Presentation]. *Munich Quantum Software Forum* (2024).  
+27. Fowler, A. G. Programming a quantum computer using SketchUp [Conference Presentation]. *Munich Quantum Software Forum* (2024). 
+28. TQEC Community. TQEC (Topological Quantum Error Correction): Design Automation Software Tools for Topological Quantum Error Correction. https://github.com/tqec/tqec (2025).
