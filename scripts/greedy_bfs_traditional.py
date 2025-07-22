@@ -39,6 +39,31 @@ def main(
     hide_boundaries: bool = False,
     **kwargs,
 ) -> Tuple[nx.Graph, dict, nx.Graph, int]:
+    """Manages the generalities of the BFS process.
+
+    Args:
+        - graph: a ZX circuit as a simple dictionary of nodes and edges.
+        - circuit_name: name of ZX circuit.
+        - hide_boundaries:
+            - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
+            - false: boundary nodes are factored into the process and shown on visualisation.
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - nx_graph: a nx_graph with the nodes and edges in the incoming ZX graph formatted to facilitate positioning of 3D blocks and pipes,
+            updated regularly over the course of the process.
+        - edge_paths: the raw set of 3D edges found (with redundant blocks for start and end positions of some edges),
+            updated regularly over the course of the process.
+        - new_nx_graph: a nx_graph containing the 3D blocks and pipes that have been placed successfully at any given point in time,
+            used mainly for visualisations.
+        - c: a counter for the number of top-level iterations by BFS (used to organise visualisations),
+            updated regularly over the course of the process.
+
+    """
 
     # KEY VARIABLES
     # Take a ZX graph and prepare a fresh 3D graph with positions set to None
@@ -175,6 +200,28 @@ def second_pass(
     c: int,
     **kwargs,
 ) -> Tuple[dict, int]:
+    """Undertakes a second pass of the graph to process any edges missed by the original BFS,
+    which typically happens when there are multiple interconnected nodes.
+
+    Args:
+        - nx_graph: a nx_graph containing all nodes and edges in incoming ZX graph,
+            formatted to facilitate positioning of 3D blocks and pipes,
+            and updated regularly over the course of the process.
+        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - circuit_name: name of ZX circuit.
+        - c: a counter for the number of top-level iterations by BFS (used to organise visualisations)
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - edge_paths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - c: updated counter for the number of top-level iterations by BFS (used to organise visualisations)
+
+    """
 
     # BASE ALL OPERATIONS ON EDGES FROM GRAPH
     for u, v, data in nx_graph.edges(data=True):
@@ -280,6 +327,18 @@ def second_pass(
 # CORE BFS OPERATIONS #
 #######################
 def prepare_graph(graph: SimpleDictGraph) -> nx.Graph:
+    """Takes a simple dictionary of nodes and edges representing a ZX graph and formats all elements
+    in a way that facilitates subsequent positioning of 3D blocks and pipes, without, in doing so, adding any
+    information to the outgoing graph.
+
+    Args:
+        - graph: a ZX circuit as a simple dictionary of nodes and edges.
+
+    Returns:
+        - nx_graph: a nx_graph containing all nodes and edges in incoming ZX graph,
+            formatted to facilitate positioning of 3D blocks and pipes.
+
+    """
 
     # PREPARE EMPTY NETWORKX GRAPH
     nx_graph = nx.Graph()
@@ -383,6 +442,35 @@ def place_next_block(
     stage: float = 0.5,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
+    """Takes care of positioning nodes in the 3D space as part of the main BFS flow. The function does not explicitly create the paths, 
+    this is the responsibility of the inner *pathfinder* algorithm. However, the function generates a number of tentative positions 
+    and calls the pathfinder for each of these positions, to be able to return a best path from many. 
+
+    Args:
+        - source_node_id: the ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
+        - neigh_node_id: the ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
+        - nx_graph: a nx_graph containing the nodes and edges in the incoming ZX graph formatted to facilitate placements in the 3D space,
+            updated regularly over the course of the process.
+        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph.
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - step: intended (Manhattan) distance between origin and target blocks.
+        - stage (not in use): may eventually be used to determine if algorithm is at the start, middle, or end of a given circuit.
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - occupied_coords: updated list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - all_beams: updated list of coordinates occupied by the beams of all blocks in original ZX-graph.
+        - edge_paths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - bool:
+            - True: placement succesful
+            - False: placement not succesful
+
+    """
 
     # PRUNE BEAMS TO CONSIDER RECENT NODE PLACEMENTS
     all_beams = prune_all_beams(all_beams, occupied_coords)
@@ -562,6 +650,30 @@ def run_pathfinder(
     hadamard_flag: bool = False,
     **kwargs,
 ) -> List[Any]:
+    """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
+    with optional parameters to send the information of a target node that was already placed as part of previous operations.
+
+    Args:
+        - previous_node_info: the information of the source node including its position in the 3D space and its kind,
+        - next_neigh_zx_type: the ZX type of the block that needs to be connected to the node already in the 3D space,
+            which can be overriden by the optional parameter *target_node_info*.
+        - initial_step: intended (Manhattan) distance between source and target blocks.
+        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - target_node_info: optional parameter to send the information of a node that has already been placed in the 3D space, 
+            which overrides *next_neigh_zx_type* and tells the inner pathfinder algorithm that it is finding a path between existing blocks
+            as opposed to creating a path between an existing block a new one to be placed at a tentative position. 
+        - hadamard_flag: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
+            which gets handled differently depending on the characteristics of the edge. 
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - clean_paths: a list of 3D blocks and pipes needed to connect source and target node in the 3D space in a topologically-correct manner
+
+    """
 
     # ARRAYS TO HOLD TEMPORARY PATHS
     path = []
@@ -660,6 +772,15 @@ def run_pathfinder(
 # AUX OPERATIONS #
 ##################
 def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
+    """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
+
+    Args:
+        - nx_graph: an nx Graph.
+
+    Returns:
+        - start_node: the node with highest closeness centrality or a random selection from a list of highest degree nodes.
+
+    """
 
     # TERMINATE IF THERE ARE NO NODES
     if not nx_graph.nodes:
@@ -713,6 +834,16 @@ def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
 
 
 def _get_node_degree(graph: nx.Graph, node: int) -> int:
+    """Gets the degree (# of edges) of a given node.
+
+    Args:
+        - graph: an nx Graph.
+        - node: the node of interest.
+
+    Returns:
+        - int: the degree for the node of interest, or 0 if graph has no edges.
+
+    """
 
     # GET DEGREES FOR THE ENTIRE GRAPH
     degrees = graph.degree

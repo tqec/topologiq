@@ -2,7 +2,11 @@ from collections import deque
 from typing import List, Tuple, Optional
 
 from utils.classes import StandardCoord, StandardBlock, Colors
-from utils.utils_greedy_bfs import adjust_hadamards_direction, is_move_allowed, rotate_o_types
+from utils.utils_greedy_bfs import (
+    adjust_hadamards_direction,
+    is_move_allowed,
+    rotate_o_types,
+)
 from utils.constraints import get_valid_next_kinds
 
 
@@ -25,7 +29,7 @@ def run_bfs_for_all_potential_target_nodes(
     List[Optional[List[StandardBlock]]],
 ]:
     """
-    Runs BFS on a loop until path is found within predetermined distance of source node or max distance is reached.
+    Runs core pathfinder on a loop until path is found within predetermined distance of source node or max distance is reached.
 
     Args:
         - source_node: source node's coordinates (tuple) and type (str).
@@ -33,6 +37,18 @@ def run_bfs_for_all_potential_target_nodes(
         - distance: current allowed distance between source and target nodes.
         - max_distance: maximum allowed distance between source and target nodes.
         - attempts_per_distance: number of random target positions to try at each distance.
+        - overwrite_target_node: the information of a specific block including its position and kind,
+            used to override placement of a new node when the target node/block has already been placed in 3D space as part of previous operations.
+        - occupied_coords: list of coordinates that have already been occupied as part of previous operations.
+        - hadamard_flag: a flag that highlights the current operation corresponds to a Hadamard edge.
+
+    Returns:
+        - path_found:
+            True: path was found (success)
+            False: path was not found (fail)
+        - length: the lenght of the best path of round
+        - path: the best path of round
+        - all_paths_from_round: an object containing all paths found in round
 
     """
 
@@ -127,6 +143,23 @@ def bfs_extended_3d(
     forbidden_cords: List[StandardCoord] = [],
     hadamard_flag: bool = False,
 ):
+    """Core pathfinder function. Takes a source and target node (given to it as part of a loop with many possible combinations)
+    and a list of obstacle coordinates to avoid and determines if a topologically-correct path is possible between the source and target nodes.
+
+    Args:
+        - source_node: source block's coordinates (tuple) and kind (str).
+        - target_node: target block's node's coordinates (tuple) and kind (str).
+        - forbidden_cords: list of coordinates that have already been occupied as part of previous operations.
+        - hadamard_flag: a flag that highlights the current operation corresponds to a Hadamard edge.
+
+    Returns:
+        - bool:
+            - True: path found (success),
+            - False: path NOT found (fail).
+        - path_length: the lenght of the path found, or -1 if path not found.
+        - path: the topologically-correct path between source and target blocks.
+
+    """
 
     # Unpack information for source and target nodes
     start_coords, _ = source_node
@@ -274,6 +307,16 @@ def generate_tentative_target_position(
 ) -> StandardCoord | None:
     """Generates a tentative coordinate for next target, favouring closer targets favoured, and checking position's validity.
     Note. Function is not really used in current flow (returns overwrite_target_coords). Here in case of future need.
+
+    Args:
+        - source_node: the information of the source block including position and kind.
+        - min_x, max_x, min_y, max_y, min_z, max_z: min and max coordinates for all axes in 3D space.
+        - obstacle_coords: list of coordinates that have already been occupied as part of previous operations.
+        - overwrite_target_coords: specific coordinates to use as ideal placement position for target block.
+
+    Returns:
+        - (x, y, z): a tuple containing a 3D coordinate
+
     """
 
     if overwrite_target_coords:
@@ -357,7 +400,18 @@ def determine_grid_size(
     obstacle_coords: Optional[List[StandardCoord]] = None,
     margin: int = 5,
 ) -> Tuple[int, ...]:
-    """Determines the bounding box of the search space."""
+    """Determines the bounding box of the search space.
+
+    Args:
+        - start_coords: (x, y, z) position of the source node.
+        - end_coords: (x, y, z) position of the target node
+        - obstacle_coords: list of coordinates that have already been occupied as part of previous operations.
+        - margin: the margin to leave beyond the bounding box made by start_coord and end_coords.
+
+    Returns:
+        - min_x, max_x, min_y, max_y, min_z, max_z: min and max coordinates for all axes in 3D space.
+
+    """
 
     all_coords = [start_coords, end_coords]
     if obstacle_coords:
@@ -376,7 +430,19 @@ def determine_grid_size(
 def generate_tentative_target_types(
     target_node_zx_type: str, overwrite_target_type: Optional[str] = None
 ) -> List[str]:
-    """Returns all possible valid blockgraph types for a given ZX type."""
+    """Returns all possible valid kinds/types for a given ZX type,
+    typically needed when a new block is being added to the 3D space,
+    as each ZX type can be fulfilled with more than one block types/kinds.
+
+    Args:
+        - target_node_zx_type: the ZX type of the target node.
+        - overwrite_target_type: a specific block/pipe type/kind to return irrespective of ZX type,
+            used when the target block was already placed as part of previous operations and therefore already has an assigned kind.
+
+    Returns:
+        - family: a list of applicable types/kinds for the given ZX type.
+
+    """
 
     if overwrite_target_type:
         return [overwrite_target_type]
@@ -403,7 +469,15 @@ def generate_tentative_target_types(
 
 
 def get_coords_occupied_by_blocks(preexistent_structure: List[StandardBlock]):
-    """Converts a series of blocks into a list of all coordinates occupied by the blocks."""
+    """Converts a series of blocks into a list of all coordinates occupied by the blocks.
+
+    Args:
+        - preexistent_structure: a list of blocks and pipes that altogether make a space-time diagram.
+
+    Returns:
+        - list(obstacle_coords): a list of coordinates taken by the blocks and pipes in the preexistent_structure.
+
+    """
 
     obstacle_coords = set()
 

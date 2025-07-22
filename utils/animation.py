@@ -10,6 +10,23 @@ def create_animation(
     remove_temp_images: bool = True,
     video: bool = False,
 ):
+    """ Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `.outputs/temp/`).
+
+    Args:
+        - filename_prefix: filename to use for animation.
+        - duration: duration of each frame.
+        - restart_delay: helper variable to ensure a pause at the end of any GIF animation.
+        - remove_temp_images:
+            - True: delete the temp snapshots used to create the animation.
+            - False: do NOT delete the temp snapshots used to create the animation.
+        - video: 
+            - False: save animation as GIF 
+            - True: save the animation as MP4 (requires FFmpeg)
+
+    Returns
+        - n/a. The animation is not returned but saved to `.outputs/media/` folder.
+
+    """
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
     images = []

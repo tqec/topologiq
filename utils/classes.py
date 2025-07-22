@@ -34,6 +34,20 @@ class PathBetweenNodes:
     target_unobstructed_exits_n: int
 
     def weighed_value(self, stage, **kwargs) -> int:
+        """ Returns the weighed value of a given path, which can be used for comparing many paths
+        
+        Args:
+            - stage (not in use): may eventually be used to determine if algorithm is at the start, middle, or end of a given circuit
+        
+        Keyword arguments (**kwargs):
+            - weights: weights for the value function to pick best of many paths.
+            - length_of_beams: length of each of the beams coming out of open nodes.
+            - max_search_space: maximum size of 3D space to generate paths for.
+        
+        Returns:
+            - Weighed value of a path
+        
+        """
 
         path_len_hp, beams_broken_hp = kwargs["weights"]
 

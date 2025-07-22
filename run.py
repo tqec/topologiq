@@ -1,3 +1,12 @@
+# This file is the main runner script for examples ran via the command line.
+#
+# It picks up the arguments from the command line and
+# calls the algorithm on the specified circuit with hyperparameters from run_hyperparams.py.
+#
+# The file is compatible with any graph in the folder `./assets/graphs`,
+# but the graph needs to exist in either `assets/graphs/simple_graphs.py` or `assets/graphs/pyzx_graphs.py`
+#
+
 import sys
 from scripts.runner import runner
 from assets.graphs import simple_graphs
@@ -15,6 +24,24 @@ from run_hyperparams import (
 # MAIN RUN MANAGER #
 ####################
 def run():
+    """Runs algorithm when prompted from command line, using args given in command.
+
+    Args (function does not take args directly, but args below can be given to it via the command):
+        - `--graph:<name_of_graph>`: name of the graph in `./assets/graphs/simple_graphs.py` to run.
+        - `--pyzx:<name_of_pyzx_graph>`: name of the graph in `./assets/graphs/pyzx_graphs.py` to run.
+        - `--strip_boundaries`: instructs the algorithm to eliminate any boundary nodes and their corresponding edges
+                (without it, nodes are factored into the process and shown on visualisation).
+        - `--hide_boundaries`: instructs the algorithm to use boundary nodes but do not display them in visualisation
+                (without it, nodes are factored into the process and shown on visualisation).
+
+    Returns:
+        - n/a. All outputs below result from separate functions at different parts of the process.
+            - Pops up an interactive 3D viewer for user to examine the space-time diagram produced as output.
+            - Saves a TXT file with detailed results to `.outputs/txt/` folder.
+            - Saves a GIF or MP4 animation to `.outputs/media/` folder.
+            - IMPORTANT! This is NOT the function you need to use any of the above programmatically – see `./scripts/runner.py` for that.
+
+    """
 
     # ASSEMBLE KWARGS
     kwargs = {
@@ -53,7 +80,7 @@ def run():
 
     # CALL ALGORITHM ON CIRCUIT
     if circuit_name and circuit_graph_dict["nodes"] and circuit_graph_dict["edges"]:
-        runner(
+        _, _, _, _ = runner(
             circuit_graph_dict,
             circuit_name,
             strip_boundaries=strip_boundaries,

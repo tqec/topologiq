@@ -6,6 +6,15 @@ from utils.classes import SimpleDictGraph
 def strip_boundaries_from_zx_graph(
     circuit_graph_dict: SimpleDictGraph,
 ) -> SimpleDictGraph:
+    """Strips an incoming ZX graph from "O" (boundaries) nodes and their corresponding edges.
+
+    Args:
+        - circuit_graph_dict: a ZX circuit as a simple dictionary of nodes and edges.
+
+    Returns
+        - new_circuit_graph: a new version of the incoming ZX circuit, with "O" nodes and corresponding edges removed
+
+    """
 
     boundary_ids: List[int] = []
     new_circuit_graph: SimpleDictGraph = {"nodes": [], "edges": []}
@@ -24,6 +33,18 @@ def strip_boundaries_from_zx_graph(
 
 
 def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
+    """Checks that all nodes in an incoming ZX graph have valid types.
+
+    Args:
+        - graph: a simple graph dictionary with nodes and edges representing a ZX graph.
+
+
+    Returns:
+        - bool:
+            - True: all types are valid
+            - False: there is at least one invalid type.
+
+    """
 
     valid_types: List[str] = ["X", "Y", "Z", "O", "SIMPLE", "HADAMARD"]
     valid_types_lower = [key.lower() for key in [t.lower() for t in valid_types]]
@@ -36,6 +57,15 @@ def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
 
 
 def get_type_family(node_type: str) -> Optional[List[str]]:
+    """Gets the family of block or pipe types/kinds that correspond to a given ZX type.
+
+    Args:
+        - node_type: the ZX type of a given node.
+
+    Returns:
+        - array: a list of possible block or pipe kinds that correspond to the node_type given to the function.
+
+    """
 
     families: Dict[str, List[str]] = {
         "X": ["xxz", "xzx", "zxx"],
@@ -54,6 +84,15 @@ def get_type_family(node_type: str) -> Optional[List[str]]:
 
 
 def get_zx_type_from_kind(kind: str) -> str:
+    """Gets the ZX type corresponding to a given block or pipe type/kind.
+
+    Args:
+        - kind: the type/kind of a given block/type.
+
+    Returns:
+        - zx_type: the ZX type that corresponds to the block or pipe type/kind given to the function.
+
+    """
 
     if kind == "ooo":
         zx_type = "BOUNDARY"

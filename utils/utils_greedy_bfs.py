@@ -8,6 +8,20 @@ from utils.classes import StandardCoord, StandardBeam, NodeBeams, StandardBlock
 def check_is_exit(
     source_coord: StandardCoord, source_kind: Optional[str], target_coord: StandardCoord
 ) -> bool:
+    """Checks if a face is an exit by matching exit markers in the block/pipe's symbolic name
+    and an displacement array symbolising the direction of the target block/pipe.
+
+    Args:
+        - source_coord: (x, y, z) coordinates for the current block/pipe.
+        - source_kind: current block's/pipe's kind.
+        - target_coord: coordinates for the target block/pipe.
+
+    Returns:
+        - bool:
+            - True: face is an exist
+            - False: face is not an exit.
+
+    """
 
     source_kind = source_kind.lower()[:3] if isinstance(source_kind, str) else ""
     kind_3D = [source_kind[0], source_kind[1], source_kind[2]]
@@ -41,6 +55,21 @@ def check_unobstructed(
     all_beams: List[NodeBeams],
     length_of_beams: int,
 ) -> Tuple[bool, StandardBeam]:
+    """Checks if a face (typically an exit: call after verifying face is exit) is unobstructed.
+
+    Args:
+        - source_coord: (x, y, z) coordinates for the current block/pipe.
+        - target_coord: coordinates for the target block/pipe.
+        - occupied: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph
+        - length_of_beams: int representing how long does each beam spans from its originating block.
+
+    Returns:
+        - bool:
+            - True: face is unobstructed
+            - False: face is obstructed.
+
+    """
 
     single_beam_for_exit: StandardBeam = []
 
@@ -70,6 +99,22 @@ def check_for_exits(
     all_beams: List[NodeBeams],
     length_of_beams: int,
 ) -> Tuple[int, NodeBeams]:
+    """Finds the number of unobstructed exits for any given block/pipe by calling other functions that use the
+    block's/pipe's symbolic name to determine if each face is or is not
+    and whether the said exit is unobstructed.
+
+    Args:
+        - node_coords: (x, y, z) coordinates for the block/pipe of interest.
+        - node_kind: kind/type of the block/pipe of interest.
+        - occupied: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph
+        - length_of_beams: int representing how long does each beam spans from its originating block.
+
+    Returns:
+        - unobstructed_exits_n: the number of unobstructed exist for the block/pipe of interest.
+        - node_beams: the beams emanating from the block/pipe of interest.
+
+    """
 
     unobstructed_exits_n = 0
     node_beams: NodeBeams = []
@@ -102,6 +147,19 @@ def check_for_exits(
 
 
 def is_move_allowed(source_coords: StandardCoord, next_coords: StandardCoord) -> bool:
+    """Uses a Manhattan distance to quickly checks if a potential (source, target) combination
+    is possible given the standard size of a block and pipe and that all blocks are followed by a pipe.
+
+    Args:
+        - source_coords: (x, y, z) coordinates for the originating block.
+        - next_coords: (x, y, z) coordinates for the potential placement of the target block.
+
+    Returns:
+        - bool:
+            - True: move is theoretically possible,
+            - False: move is not theoretically possible.
+
+    """
 
     sx, sy, sz = source_coords
     nx, ny, nz = next_coords
@@ -114,6 +172,17 @@ def generate_tentative_target_positions(
     step: int = 3,
     occupied_coords: List[StandardCoord] = [],
 ) -> List[StandardCoord]:
+    """Generates a number of potential placement positions for target node.
+
+    Args:
+        - source_coords: (x, y, z) coordinates for the originating block.
+        - step: intended (Manhattan) distance between origin and target blocks.
+        - occupied_coords: a list of coordinates already occupied by previous operations.
+
+    Returns:
+        - potential_targets: a list of coordinates that make good candidates for placing the target block.
+
+    """
 
     # EXTRACT SOURCE COORDS
     sx, sy, sz = source_coords
@@ -220,9 +289,17 @@ def generate_tentative_target_positions(
 def prune_all_beams(
     all_beams: List[NodeBeams], occupied_coords: List[StandardCoord]
 ) -> List[NodeBeams]:
+    """Removes beams that have already been broken, as these are no longer indicative of anything.
 
-    # Remove beams that have already been broken
-    # They're no longer indicative of anything
+    Args:
+        - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph
+        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+
+    Returns:
+        - new_all_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with occupied coords.
+
+    """
+
     try:
         new_all_beams = []
         for node_beams in all_beams:
@@ -241,6 +318,16 @@ def prune_all_beams(
 def build_newly_indexed_path_dict(
     edge_paths: dict,
 ) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], str]]:
+    """Distils an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
+
+    Args:
+        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+
+    Returns:
+        - lattice_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
+        - lattice_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+
+    """
 
     max_id = 0
     indexed_paths = {}
@@ -265,12 +352,12 @@ def build_newly_indexed_path_dict(
             indexed_path[end_key] = nodes_in_path[-1]
 
         indexed_paths[(start_key, end_key)] = indexed_path
-    
+
     final_edges = []
     for original_edge_key, path_id_value_map in indexed_paths.items():
-        
+
         node_ids = list(path_id_value_map.keys())
-        
+
         block_ids = []
         edge_ids = []
         for i in range(len(node_ids)):
@@ -284,15 +371,15 @@ def build_newly_indexed_path_dict(
                 node1 = block_ids[i]
                 node2 = block_ids[i + 1]
                 edge_type = path_id_value_map[edge_ids[i]][1]
-                
+
                 final_edges.append({(node1, node2): edge_type})
 
     latice_nodes: dict[int, StandardBlock] = {}
     latice_edges: dict[Tuple[int, int], str] = {}
     for item in indexed_paths.values():
-        
+
         keys = list(item.keys())
-        
+
         i = 0
         for node_key, node_info in item.items():
             if i % 2 == 0:
@@ -306,19 +393,29 @@ def build_newly_indexed_path_dict(
     return latice_nodes, latice_edges
 
 
-def rotate_o_types(block_type: str) -> str:
+def rotate_o_types(pipe_type: str) -> str:
+    """Rotates a pipe around its length by using the exit marker in its symbolic name to create a rotational matrix,
+    which is then used to rotate the original name with a symbolic multiplication.
+
+    Args:
+        - pipe_type: the type/kind/name of the pipe that needs rotation.
+
+    Returns:
+        - rotated_name: a new type/kind/name with the rotation incorporated into the new name.
+
+    """
 
     h_flag = False
-    if "h" in block_type:
+    if "h" in pipe_type:
         h_flag = True
-        block_type.replace("h", "")
+        pipe_type.replace("h", "")
 
     # Build rotation matrix based on placement of "o" node
     available_indexes = [0, 1, 2]
-    available_indexes.remove(block_type.index("o"))
+    available_indexes.remove(pipe_type.index("o"))
 
     new_matrix = {
-        block_type.index("o"): np.eye(3, dtype=int)[block_type.index("o")],
+        pipe_type.index("o"): np.eye(3, dtype=int)[pipe_type.index("o")],
         available_indexes[0]: np.eye(3, dtype=int)[available_indexes[1]],
         available_indexes[1]: np.eye(3, dtype=int)[available_indexes[0]],
     }
@@ -330,7 +427,7 @@ def rotate_o_types(block_type: str) -> str:
     for row in rotation_matrix:
         entry = ""
         for j, element in enumerate(row):
-            entry += abs(int(element)) * block_type[j]
+            entry += abs(int(element)) * pipe_type[j]
         rotated_name += entry
 
     if h_flag:
@@ -339,16 +436,26 @@ def rotate_o_types(block_type: str) -> str:
     return rotated_name
 
 
-def adjust_hadamards_direction(block_type: str) -> str:
+def adjust_hadamards_direction(pipe_type: str) -> str:
+    """ Quickly flips a Hadamard for the opposite Hadamard with length on the same axis. 
+    
+    Args:
+        - pipe_type: the type/kind/name of the Hadamard that needs inverting.
+    
+    Returns:
+        - pipe_type: the type/kind/name of the corresponding/inverted Hadamard.
+    
+    
+    """
     # List of hadamard equivalences
     hdm_equivalences = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
 
     # Match to equivalent block given direction
-    if block_type in hdm_equivalences.keys():
-        block_type = hdm_equivalences[block_type]
+    if pipe_type in hdm_equivalences.keys():
+        pipe_type = hdm_equivalences[pipe_type]
     else:
         inv_equivalences = {value: key for key, value in hdm_equivalences.items()}
-        block_type = inv_equivalences[block_type]
+        pipe_type = inv_equivalences[pipe_type]
 
     # Return revised kind
-    return block_type
+    return pipe_type

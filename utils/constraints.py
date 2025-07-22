@@ -10,20 +10,23 @@ def check_face_match(
     target_coord: StandardCoord,
     target_kind: str,
 ) -> bool:
-    """
-    Checks if a block or pipe has an available exit pointing towards a target coordinate.
-    To use this functoin to check if two cubes match, run it twice: one from current to target and one from target to current.
+    """Checks if a block or pipe has an available exit pointing towards a target coordinate
+    by matching exit marker in the block's or pipe's symbolic name to the direction of target coordinate.
 
     ! Note. Function does not test if target coordinate is available.
     ! Note. Function does not test if exit is unobstructed.
+    ! Note. To check if two cubes match, run this function twice: current to target, target to current.
 
     Args:
-        - source_coord: (x, y, z) coordinates for source node
-        - source_kind: kind for the source node
-        - target_coord: (x, y, z) coordinates for target node
+        - source_coord: (x, y, z) coordinates for source node.
+        - source_kind: kind for the source node.
+        - target_coord: (x, y, z) coordinates for target node.
 
     Returns:
-        - bool: True if source node is open to the side of the target coordinate, else False.
+        - boolean:
+            - True: available exit towards target coordinate,
+            - False: NO available exit towards target coordinate.
+
     """
 
     # Sanitise kind in case of mixed case inputs
@@ -55,19 +58,23 @@ def check_cube_match(
     next_pos: StandardCoord,
     next_kind: str,
 ) -> bool:
-    """
-    Checks if two cubes match.
+    """Checks if two cubes match by comparing the symbols of their colours.
 
-    ! Note. Function does not handle HADAMARDS... Yet
+    ! Note. Function does not handle HADAMARDS.
+    ! Note. To handle hadamards in "next_pos", strip the "h" from name, run as a regular pipe, add "h" back after match is found.
+    ! Note. To handle hadamards in "current_pos", rotate it, then run as regular pipe.
 
     Args:
-        - current_pos: (x, y, z) coordinates for the current node
-        - current_kind: current node's kind
-        - next_pos: (x, y, z) coordinates for the next node
-        - next_kind: target node's kind
+        - current_pos: (x, y, z) coordinates for the current node.
+        - current_kind: current node's kind.
+        - next_pos: (x, y, z) coordinates for the next node.
+        - next_kind: target node's kind.
 
     Returns:
-        - bool: True if the cubes match, else False.
+        - bool:
+            - True: cubes match
+            - False: no match.
+
     """
 
     # SANITISE
@@ -93,6 +100,17 @@ def get_valid_next_kinds(
     next_pos: StandardCoord,
     hadamard_flag: bool = False,
 ) -> List[str]:
+    """Reduces the number of possible types for next block/pipe by quickly running the current kind by a pre-match operations.
+
+    Args:
+        - current_pos: (x, y, z) coordinates for the current node.
+        - current_kind: current node's kind.
+        - next_pos: (x, y, z) coordinates for the next node.
+
+    Returns:
+        - reduced_possible_kinds: a subset of kinds applicable to next move.
+
+    """
 
     # HELPER VARIABLES
     possible_kinds = []

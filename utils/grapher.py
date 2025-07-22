@@ -1,6 +1,5 @@
-"""NetworkX / Matplotlib functions to create quick 3D visualisations of algorithmic progress into a blockgraph.
-This file is an absolute mess at the moment. It works though.
-"""
+# NetworkX / Matplotlib functions to create quick 3D visualisations of algorithmic progress and a visualisation of final result.
+# File is an absolute mess at the moment. It works though.
 
 import numpy as np
 import networkx as nx
@@ -38,169 +37,7 @@ node_hex_map = {
 }
 
 
-# MISC FUNCTIONS
-def get_vertices(
-    x: int, y: int, z: int, size_x: float, size_y: float, size_z: float
-) -> Annotated[NDArray[np.float64], Literal[..., 3]]:
-    """
-    Calculates the coordinates of the eight vertices of a cuboid.
-
-    Args:
-        - x: x-coordinate of the centre of the cuboid.
-        - y: y-coordinate of the centre of the cuboid.
-        - z: z-coordinate of the centre of the cuboid.
-        - size_x: length of the cuboid along the x-axis.
-        - size_y: length of the cuboid along the y-axis.
-        - size_z: length of the cuboid along the z-axis.
-
-    Returns:
-        numpy.ndarray: A NumPy array of shape (8, 3) where each row represents the
-                       (x, y, z) coordinates of a vertex of the cuboid. The order
-                       of the vertices is consistent with how Matplotlib's
-                       Poly3DCollection expects them for defining faces.
-    """
-
-    half_size_x = size_x / 2
-    half_size_y = size_y / 2
-    half_size_z = size_z / 2
-    return np.array(
-        [
-            [x - half_size_x, y - half_size_y, z - half_size_z],
-            [x + half_size_x, y - half_size_y, z - half_size_z],
-            [x + half_size_x, y + half_size_y, z - half_size_z],
-            [x - half_size_x, y + half_size_y, z - half_size_z],
-            [x - half_size_x, y - half_size_y, z + half_size_z],
-            [x + half_size_x, y - half_size_y, z + half_size_z],
-            [x + half_size_x, y + half_size_y, z + half_size_z],
-            [x - half_size_x, y + half_size_y, z + half_size_z],
-        ]
-    )
-
-
-def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
-    """
-    Defines the faces of a cuboid based on its vertices.
-
-    Args:
-        - vertices: A NumPy array of shape (8, 3) containing the
-                                  coordinates of the cuboid's vertices, as returned
-                                  by the `get_vertices` function. The order of
-                                  vertices is assumed to be consistent with that
-                                  function's output.
-
-    Returns:
-        list: A list of lists, where each inner list represents a face of the
-              cuboid and contains the coordinates of the four vertices that form
-              that face. The order of faces typically corresponds to:
-              [bottom, top, front, back, right, left].
-    """
-
-    return [
-        [vertices[0], vertices[1], vertices[2], vertices[3]],
-        [vertices[4], vertices[5], vertices[6], vertices[7]],
-        [vertices[0], vertices[1], vertices[5], vertices[4]],
-        [vertices[2], vertices[3], vertices[7], vertices[6]],
-        [vertices[1], vertices[2], vertices[6], vertices[5]],
-        [vertices[0], vertices[3], vertices[7], vertices[4]],
-    ]
-
-
-def render_block(
-    ax: Any,
-    position: Tuple[int, int, int],
-    size: list[float],
-    node_type: str,
-    node_hex_map: dict[str, list[str]],
-    alpha: float = 1.0,
-    edge_col: None | str = None,
-    line_width: float = 1.0,
-):
-    """
-    Renders a regular (non-'h') node.
-
-    Args:
-        - ax: The Matplotlib 3D subplot object.
-        - position: The (x, y, z) coordinates of the node.
-        - size: The (size_x, size_y, size_z) of the node.
-        - node_type: The type string of the node.
-        - node_hex_map: The map of (HEX) colours for the nodes.
-        - edge_col: The color of the edges.
-    """
-
-    x, y, z = position
-    size_x, size_y, size_z = size
-
-    vertices = get_vertices(x, y, z, size_x, size_y, size_z)
-    faces = get_faces(vertices)
-
-    # ADD COLORS AS PER MAP
-    cols = node_hex_map.get(node_type, ["gray"] * 3)
-    face_cols = [cols[2]] * 2 + [cols[1]] * 2 + [cols[0]] * 2
-
-    # JOIN
-    poly_collection = Poly3DCollection(
-        faces,
-        facecolors=face_cols if "_visited" not in node_type else "red",
-        linewidths=1,
-        edgecolors=edge_col,
-        alpha=alpha,
-    )
-
-    # ADD TO PLOT
-    ax.add_collection3d(poly_collection)
-
-
-def render_edge(
-    ax: Any,
-    centre: NDArray[np.float64],
-    size: list[float],
-    face_cols: list[str],
-    edge_col: str,
-    alpha: float | int,
-):
-
-    # ESTABLISH CUBOID'S CENTRE & SIZE
-    x, y, z = centre
-    sx, sy, sz = size
-
-    # DETERMINE VERTICES
-    vertices = np.array(
-        [
-            [x - sx / 2, y - sy / 2, z - sz / 2],
-            [x + sx / 2, y - sy / 2, z - sz / 2],
-            [x + sx / 2, y + sy / 2, z - sz / 2],
-            [x - sx / 2, y + sy / 2, z - sz / 2],
-            [x - sx / 2, y - sy / 2, z + sz / 2],
-            [x + sx / 2, y - sy / 2, z + sz / 2],
-            [x + sx / 2, y + sy / 2, z + sz / 2],
-            [x - sx / 2, y + sy / 2, z + sz / 2],
-        ]
-    )
-
-    # ADD FACES
-    faces = [
-        [0, 1, 2, 3],
-        [4, 5, 6, 7],
-        [0, 1, 5, 4],
-        [2, 3, 7, 6],
-        [0, 3, 7, 4],
-        [1, 2, 6, 5],
-    ]
-    face_list = [vertices[face] for face in faces]
-
-    # MAKE COLLECTION
-    poly = Poly3DCollection(
-        face_list,
-        facecolors=face_cols,
-        edgecolors=edge_col,
-        linewidths=1,
-        alpha=alpha,
-    )
-
-    # ADD TO PLOT
-    ax.add_collection3d(poly)
-
-
+# MAIN WORKFLOW FUNCTIONS
 def visualise_3d_graph(
     graph: nx.Graph,
     hide_boundaries: bool = False,
@@ -208,6 +45,20 @@ def visualise_3d_graph(
     save_to_file: bool = False,
     filename: str | None = None,
 ):
+    """Manages the process of visualising a graph with many nodes/blocks and edges/pipes.
+
+    Args:
+        - graph: An incoming graph formatted as an nx.Graph,
+        - hide_boundaries:
+            - True: do not display boundaries nodes even if present in the incoming graph,
+            - False: display boundary nodes if present.
+        - node_hex_map: a hex map of colours covering all possible blocks and pipes.
+        - save_to_file:
+            - True: saves visualisation to file and does NOT show it on screen,
+            - False: shows visualisation on screen and does NOT save it to file.
+        - filename: filename to use if saving a visualisation.
+
+    """
 
     # HELPER VARIABLES
     gray_hex = "gray"
@@ -259,7 +110,6 @@ def visualise_3d_graph(
                         node_hex_map,
                         alpha=alpha,
                         edge_col=edge_col,
-                        line_width=0.5 if "_visited" in node_type else 1.0,
                     )
 
     # RENDER PIPES (EDGES)
@@ -322,7 +172,7 @@ def visualise_3d_graph(
 
                             # Base of hadamard
                             face_cols_1 = list(face_cols)
-                            
+
                             # Middle yellow ring
                             face_cols_yellow = [yellow_hex] * 6
 
@@ -339,9 +189,20 @@ def visualise_3d_graph(
                             face_cols_2[0] = col[2]  # bottom (-z)
                             face_cols_2[1] = col[2]  # top (+z)
 
-                            render_edge(ax, centre1, size_col, face_cols_1, edge_col, alpha)
-                            render_edge(ax, centre2, size_yellow, face_cols_yellow, edge_col, alpha)
-                            render_edge(ax, centre3, size_col, face_cols_2, edge_col, alpha)
+                            render_edge(
+                                ax, centre1, size_col, face_cols_1, edge_col, alpha
+                            )
+                            render_edge(
+                                ax,
+                                centre2,
+                                size_yellow,
+                                face_cols_yellow,
+                                edge_col,
+                                alpha,
+                            )
+                            render_edge(
+                                ax, centre3, size_col, face_cols_2, edge_col, alpha
+                            )
                     else:
                         render_edge(ax, midpoint, size, face_cols, edge_col, alpha)
 
@@ -374,6 +235,17 @@ def visualise_3d_graph(
 
 
 def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
+    """Converts an edge_paths object into an nx.Graph that can be visualised with `visualise_3d_graph`. It is worth noting
+    that the function will create a graph with potentially redundant blocks, which is irrelevant for visualisation purposes
+    but does mean the function should not be used when producing final results.
+
+    Args:
+        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+
+    Returns:
+        - final_graph: an nx.Graph with all the information in edge_paths but in a format more amicable for visualisation
+
+    """
     final_graph = nx.Graph()
     node_counter = 0
     for edge, path_data in edge_paths.items():
@@ -426,3 +298,165 @@ def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
                         )
 
     return final_graph
+
+
+# MISC FUNCTIONS
+def get_vertices(
+    x: int, y: int, z: int, size_x: float, size_y: float, size_z: float
+) -> Annotated[NDArray[np.float64], Literal[..., 3]]:
+    """Calculates the coordinates of the eight vertices of a cuboid.
+
+    Args:
+        - x: x-coordinate of the centre of the cuboid.
+        - y: y-coordinate of the centre of the cuboid.
+        - z: z-coordinate of the centre of the cuboid.
+        - size_x: length of the cuboid along the x-axis.
+        - size_y: length of the cuboid along the y-axis.
+        - size_z: length of the cuboid along the z-axis.
+
+    Returns:
+        - array: array (numpy) of shape (8, 3) where each row represents the (x, y, z) coordinates of a vertex of the cuboid.
+
+    """
+
+    half_size_x = size_x / 2
+    half_size_y = size_y / 2
+    half_size_z = size_z / 2
+    return np.array(
+        [
+            [x - half_size_x, y - half_size_y, z - half_size_z],
+            [x + half_size_x, y - half_size_y, z - half_size_z],
+            [x + half_size_x, y + half_size_y, z - half_size_z],
+            [x - half_size_x, y + half_size_y, z - half_size_z],
+            [x - half_size_x, y - half_size_y, z + half_size_z],
+            [x + half_size_x, y - half_size_y, z + half_size_z],
+            [x + half_size_x, y + half_size_y, z + half_size_z],
+            [x - half_size_x, y + half_size_y, z + half_size_z],
+        ]
+    )
+
+
+def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
+    """Defines the faces of a cuboid based on its vertices.
+
+    Args:
+        - vertices: array (numpy) of shape (8, 3) where each row represents the (x, y, z) coordinates of a vertex of the cuboid,
+            as returned by `get_vertices`.
+
+    Returns:
+        - list: list of lists, where each inner list represents a face and contains the coords of the vertices for that face.
+
+    """
+
+    return [
+        [vertices[0], vertices[1], vertices[2], vertices[3]],
+        [vertices[4], vertices[5], vertices[6], vertices[7]],
+        [vertices[0], vertices[1], vertices[5], vertices[4]],
+        [vertices[2], vertices[3], vertices[7], vertices[6]],
+        [vertices[1], vertices[2], vertices[6], vertices[5]],
+        [vertices[0], vertices[3], vertices[7], vertices[4]],
+    ]
+
+
+def render_block(
+    ax: Any,
+    position: Tuple[int, int, int],
+    size: list[float],
+    node_type: str,
+    node_hex_map: dict[str, list[str]],
+    alpha: float = 1.0,
+    edge_col: None | str = None,
+):
+    """Renders a regular (non-'h') block.
+
+    Args:
+        - ax: Matplotlib's 3D subplot object.
+        - position: (x, y, z) coordinates of the block.
+        - size: (size_x, size_y, size_z) of the block.
+        - node_type: block's kind.
+        - node_hex_map: map of (HEX) colours for block.
+        - edge_col: color for the edges of blocks.
+    """
+
+    x, y, z = position
+    size_x, size_y, size_z = size
+
+    vertices = get_vertices(x, y, z, size_x, size_y, size_z)
+    faces = get_faces(vertices)
+
+    # ADD COLORS AS PER MAP
+    cols = node_hex_map.get(node_type, ["gray"] * 3)
+    face_cols = [cols[2]] * 2 + [cols[1]] * 2 + [cols[0]] * 2
+
+    # JOIN
+    poly_collection = Poly3DCollection(
+        faces,
+        facecolors=face_cols if "_visited" not in node_type else "red",
+        linewidths=1,
+        edgecolors=edge_col,
+        alpha=alpha,
+    )
+
+    # ADD TO PLOT
+    ax.add_collection3d(poly_collection)
+
+
+def render_edge(
+    ax: Any,
+    centre: NDArray[np.float64],
+    size: list[float],
+    face_cols: list[str],
+    edge_col: str,
+    alpha: float | int,
+):
+    """Renders edges/pipes.
+
+    Args:
+        - ax: Matplotlib's 3D subplot object.
+        - centre: (x, y, z) coordinates of the edge's centre (midpoint between connecting nodes).
+        - size: (size_x, size_y, size_z) of the edge/pipe.
+        - face_cols: colour pattern for the edge/pipe.
+        - edge_col: color of the edges for the edge/pipe.
+        - alpha: any desired value for alpha (transparency)
+    """
+
+    # ESTABLISH CUBOID'S CENTRE & SIZE
+    x, y, z = centre
+    sx, sy, sz = size
+
+    # DETERMINE VERTICES
+    vertices = np.array(
+        [
+            [x - sx / 2, y - sy / 2, z - sz / 2],
+            [x + sx / 2, y - sy / 2, z - sz / 2],
+            [x + sx / 2, y + sy / 2, z - sz / 2],
+            [x - sx / 2, y + sy / 2, z - sz / 2],
+            [x - sx / 2, y - sy / 2, z + sz / 2],
+            [x + sx / 2, y - sy / 2, z + sz / 2],
+            [x + sx / 2, y + sy / 2, z + sz / 2],
+            [x - sx / 2, y + sy / 2, z + sz / 2],
+        ]
+    )
+
+    # ADD FACES
+    faces = [
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [2, 3, 7, 6],
+        [0, 3, 7, 4],
+        [1, 2, 6, 5],
+    ]
+    face_list = [vertices[face] for face in faces]
+
+    # MAKE COLLECTION
+    poly = Poly3DCollection(
+        face_list,
+        facecolors=face_cols,
+        edgecolors=edge_col,
+        linewidths=1,
+        alpha=alpha,
+    )
+
+    # ADD TO PLOT
+    ax.add_collection3d(poly)

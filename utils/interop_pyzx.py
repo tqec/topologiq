@@ -7,8 +7,7 @@ from utils.classes import SimpleDictGraph
 
 
 def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
-    """
-    Extracts circuit information from a PyZX graph and dumps it into a dictionary.
+    """Extracts circuit information from a PyZX graph and dumps it into a dictionary.
     Output is slightly more complete than a `to_json` export using PyZX native capacities.
 
     Args:
@@ -16,6 +15,7 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
 
     Returns:
         - g_dict: a dictionary with graph info.
+
     """
 
     # EMPTY DICT FOR RESULTS
@@ -60,14 +60,14 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
 
 
 def get_simple_graph_from_pyzx(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
-    """
-    Extracts circuit information from a PyZX graph and dumps it into a simple graph.
+    """Extracts circuit information from a PyZX graph and dumps it into a simple graph.
 
     Args:
         - g: a PyZX graph.
 
     Returns:
         - g_simple: a dictionary with graph info.
+
     """
 
     # GET FULL GRAPH INTO DICTIONARY

@@ -1,11 +1,11 @@
 import os
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Union
 
 from scripts.greedy_bfs_traditional import main
 
-from utils.classes import Colors, SimpleDictGraph
+from utils.classes import Colors, SimpleDictGraph, StandardBlock
 from utils.utils_greedy_bfs import build_newly_indexed_path_dict
 from utils.utils_zx_graphs import strip_boundaries_from_zx_graph
 from utils.grapher import visualise_3d_graph
@@ -21,7 +21,36 @@ def runner(
     strip_boundaries: bool = False,
     hide_boundaries: bool = False,
     **kwargs,
-):
+) -> Tuple[
+    SimpleDictGraph,
+    Union[None, dict],
+    Union[None, dict[int, StandardBlock]],
+    Union[None, dict[Tuple[int, int], str]],
+]:
+    """Runs the algorithm on any circuit given to it
+
+    Args:
+        - circuit_graph_dict: a ZX circuit as a simple dictionary of nodes and edges.
+        - circuit_name: name of ZX circuit.
+        - strip_boundaries:
+            - true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
+            - false: nodes are factored into the process and shown on visualisation.
+        - hide_boundaries:
+            - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
+            - false: boundary nodes are factored into the process and shown on visualisation.
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - circuit_graph_dict: original circuit given to function returns for easy traceability
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - lattice_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
+        - lattice_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+
+    """
 
     # START TIMER
     t1 = time.time()
@@ -30,9 +59,14 @@ def runner(
     if strip_boundaries:
         circuit_graph_dict = strip_boundaries_from_zx_graph(circuit_graph_dict)
 
+    # VARS TO HOLD RESULTS
+    edge_paths: Union[None, dict] = None
+    lattice_nodes: Union[None, dict[int, StandardBlock]] = None
+    lattice_edges: Union[None, dict[Tuple[int, int], str]] = None
+
     # LOOP UNTIL SUCCESS OR LIMIT
-    i: int = 0
     errors_in_result: bool = False
+    i: int = 0
     while i < 10:
 
         print(
@@ -64,7 +98,7 @@ def runner(
             # Last computations
             duration_total = (time.time() - t1) / 60
             lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
-            
+
             # Print update and save results
             print(
                 Colors.GREEN,
@@ -85,7 +119,7 @@ def runner(
             lines.append(
                 '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
             )
-            
+
             for key, edge_path in edge_paths.items():
                 lines.append(
                     f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
@@ -154,3 +188,6 @@ def runner(
 
         # Reset errors flag for next loop (if there is one)
         errors_in_result = False
+
+    # RETURN: original ZX graph, edge_paths, nodes and edges of result
+    return circuit_graph_dict, edge_paths, lattice_nodes, lattice_edges
