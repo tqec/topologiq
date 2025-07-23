@@ -71,6 +71,7 @@ All examples except the random circuit have been validated manually: check the [
 python -m run --pyzx:cnot
 
 # Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
+# Ps. This one is not actually validated. I just realised I changed the circuit after validating a different combination of CNOTs. Will change back soon.
 python -m run --pyzx:cnots
 
 # A medium-size circuit with three interconnected lines.

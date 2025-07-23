@@ -155,7 +155,7 @@ def runner(
                 filename_prefix=circuit_name,
                 restart_delay=5000,
                 duration=2500,
-                video=True,
+                video=False,
             )
 
             # End loop
