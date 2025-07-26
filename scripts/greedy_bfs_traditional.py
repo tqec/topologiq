@@ -37,6 +37,7 @@ def main(
     graph: SimpleDictGraph,
     circuit_name: str = "circuit",
     hide_boundaries: bool = False,
+    visualise: str = "outer",
     **kwargs,
 ) -> Tuple[nx.Graph, dict, nx.Graph, int]:
     """Manages the generalities of the BFS process.
@@ -47,6 +48,10 @@ def main(
         - hide_boundaries:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
+        - visualise:
+            - detail: visualises each iteration by outer/general BFS loop,
+            - final: visualises only the final result,
+            - all: visualises each iteration step by outer/general BFS loop and final result.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -159,7 +164,10 @@ def main(
                                 new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                                 # Create visualisation
-                                # visualise_3d_graph(new_nx_graph, hide_boundaries=hide_boundaries)
+                                if visualise == "detail" or visualise == "all":
+                                    visualise_3d_graph(
+                                        new_nx_graph, hide_boundaries=hide_boundaries
+                                    )
                                 visualise_3d_graph(
                                     new_nx_graph,
                                     hide_boundaries=hide_boundaries,
@@ -182,7 +190,13 @@ def main(
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
     edge_paths, c = second_pass(
-        nx_graph, occupied_coords, edge_paths, circuit_name, c, **kwargs
+        nx_graph,
+        occupied_coords,
+        edge_paths,
+        circuit_name,
+        c,
+        visualise=visualise,
+        **kwargs,
     )
 
     # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
@@ -196,8 +210,9 @@ def second_pass(
     nx_graph: nx.Graph,
     occupied_coords: List[StandardCoord],
     edge_paths: dict,
-    circuit_name,
+    circuit_name: str,
     c: int,
+    visualise: str = "outer",
     **kwargs,
 ) -> Tuple[dict, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
@@ -211,6 +226,10 @@ def second_pass(
         - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
         - circuit_name: name of ZX circuit.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations)
+        - visualise:
+            - detail: visualises each iteration by outer/general BFS loop,
+            - final: visualises only the final result,
+            - all: visualises each iteration step by outer/general BFS loop and final result.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -302,7 +321,8 @@ def second_pass(
                     new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                     # VISUALISE NEW EDGE
-                    # visualise_3d_graph(new_nx_graph)
+                    if visualise == "detail" or visualise == "all":
+                        visualise_3d_graph(new_nx_graph)
                     visualise_3d_graph(
                         new_nx_graph,
                         save_to_file=True,
@@ -442,9 +462,9 @@ def place_next_block(
     stage: float = 0.5,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
-    """Takes care of positioning nodes in the 3D space as part of the main BFS flow. The function does not explicitly create the paths, 
-    this is the responsibility of the inner *pathfinder* algorithm. However, the function generates a number of tentative positions 
-    and calls the pathfinder for each of these positions, to be able to return a best path from many. 
+    """Takes care of positioning nodes in the 3D space as part of the main BFS flow. The function does not explicitly create the paths,
+    this is the responsibility of the inner *pathfinder* algorithm. However, the function generates a number of tentative positions
+    and calls the pathfinder for each of these positions, to be able to return a best path from many.
 
     Args:
         - source_node_id: the ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
@@ -659,11 +679,11 @@ def run_pathfinder(
             which can be overriden by the optional parameter *target_node_info*.
         - initial_step: intended (Manhattan) distance between source and target blocks.
         - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
-        - target_node_info: optional parameter to send the information of a node that has already been placed in the 3D space, 
+        - target_node_info: optional parameter to send the information of a node that has already been placed in the 3D space,
             which overrides *next_neigh_zx_type* and tells the inner pathfinder algorithm that it is finding a path between existing blocks
-            as opposed to creating a path between an existing block a new one to be placed at a tentative position. 
+            as opposed to creating a path between an existing block a new one to be placed at a tentative position.
         - hadamard_flag: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
-            which gets handled differently depending on the characteristics of the edge. 
+            which gets handled differently depending on the characteristics of the edge.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.

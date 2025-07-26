@@ -1,5 +1,5 @@
-import os
 import time
+import shutil
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -20,6 +20,8 @@ def runner(
     circuit_name: str,
     strip_boundaries: bool = False,
     hide_boundaries: bool = False,
+    max_attempts: int = 10,
+    visualise: str = "final",
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -38,6 +40,10 @@ def runner(
         - hide_boundaries:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
+        - visualise:
+            - detail: visualises each iteration by outer/general BFS loop,
+            - final: visualises only the final result,
+            - all: visualises each iteration step by outer/general BFS loop and final result.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -52,8 +58,12 @@ def runner(
 
     """
 
-    # START TIMER
+    # PRELIMINARIES
     t1 = time.time()
+    repository_root: Path = Path(__file__).resolve().parent.parent
+    output_folder_path = repository_root / "outputs/txt"
+    temp_folder_path = repository_root / "outputs/temp"
+    Path(output_folder_path).mkdir(parents=True, exist_ok=True)
 
     # APPLICABLE GRAPH TRANSFORMATIONS
     if strip_boundaries:
@@ -67,7 +77,7 @@ def runner(
     # LOOP UNTIL SUCCESS OR LIMIT
     errors_in_result: bool = False
     i: int = 0
-    while i < 10:
+    while i < max_attempts:
 
         print(
             "\n\n####################################################",
@@ -85,6 +95,7 @@ def runner(
             circuit_graph_dict,
             circuit_name=circuit_name,
             hide_boundaries=hide_boundaries,
+            visualise=visualise,
             **kwargs,
         )
 
@@ -133,8 +144,6 @@ def runner(
             for key, edge_type in lattice_edges.items():
                 lines.append(f"Edge ID: {key}. Info: {edge_type} \n")
 
-            output_folder_path = "./outputs/txt"
-            Path(output_folder_path).mkdir(parents=True, exist_ok=True)
             with open(f"{output_folder_path}/{circuit_name}.txt", "w") as f:
                 f.writelines(lines)
                 f.close()
@@ -142,12 +151,13 @@ def runner(
             print(f"Result saved to: {output_folder_path}/{circuit_name}.txt")
 
             # Visualise result
-            visualise_3d_graph(new_nx_graph, hide_boundaries=hide_boundaries)
+            if visualise == "final" or visualise == "all":
+                visualise_3d_graph(new_nx_graph, hide_boundaries=hide_boundaries)
             visualise_3d_graph(
                 new_nx_graph,
                 hide_boundaries=hide_boundaries,
                 save_to_file=True,
-                filename=f"steane{c}",
+                filename=f"{circuit_name}{c:03d}",
             )
 
             # Create GIF or result
@@ -176,15 +186,11 @@ def runner(
             )
 
             # Delete temporary files
-            temp_images_folder_path = "./outputs/temp"
             try:
-                for filename in os.listdir(temp_images_folder_path):
-                    os.remove(f"./{temp_images_folder_path}/{filename}")
-                os.rmdir(f"./{temp_images_folder_path}/")
+                if temp_folder_path.exists():
+                    shutil.rmtree(temp_folder_path)
             except (ValueError, FileNotFoundError) as e:
-                print(
-                    "Unable to delete temporary files or temp folder does not exist", e
-                )
+                print("Unable to delete temp files or temp folder does not exist", e)
 
         # Reset errors flag for next loop (if there is one)
         errors_in_result = False

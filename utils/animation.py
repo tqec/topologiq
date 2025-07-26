@@ -1,4 +1,5 @@
 import os
+import shutil
 import imageio.v2 as iio
 from pathlib import Path
 
@@ -10,7 +11,7 @@ def create_animation(
     remove_temp_images: bool = True,
     video: bool = False,
 ):
-    """ Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `.outputs/temp/`).
+    """Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `.outputs/temp/`).
 
     Args:
         - filename_prefix: filename to use for animation.
@@ -19,34 +20,34 @@ def create_animation(
         - remove_temp_images:
             - True: delete the temp snapshots used to create the animation.
             - False: do NOT delete the temp snapshots used to create the animation.
-        - video: 
-            - False: save animation as GIF 
+        - video:
+            - False: save animation as GIF
             - True: save the animation as MP4 (requires FFmpeg)
 
     Returns
-        - n/a. The animation is not returned but saved to `.outputs/media/` folder.
+        - n/a. The animation is not returned but saved to `./outputs/media/` folder.
 
     """
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
     images = []
-    temp_images_folder_path = "./outputs/temp"
-    image_filenames = os.listdir(temp_images_folder_path)
+    repository_root: Path = Path(__file__).resolve().parent.parent
+    output_folder_path = repository_root / "outputs/media"
+    temp_folder_path = repository_root / "outputs/temp"
+
+    image_filenames = os.listdir(temp_folder_path)
     image_filenames = [img for img in image_filenames if img.endswith(".png")]
 
     # APPEND IMAGES TO AN IMAGES ARRAY
     for filename in image_filenames:
         try:
-            image = iio.imread(f"{temp_images_folder_path}/{filename}")
+            image = iio.imread(f"{temp_folder_path}/{filename}")
             images.append(image)
         except FileNotFoundError:
-            print(
-                f"Error: Image file not found: ./{temp_images_folder_path}/{filename}"
-            )
+            print(f"Error: Image file not found: ./{temp_folder_path}/{filename}")
             return
 
     # BUILD THE GIF
-    output_folder_path = "./outputs/media"
     if images:
         Path(output_folder_path).mkdir(parents=True, exist_ok=True)
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
@@ -68,6 +69,5 @@ def create_animation(
 
     # CLEAN UP TEMPORARY IMAGES
     if remove_temp_images:
-        for filename in os.listdir(temp_images_folder_path):
-            os.remove(f"./{temp_images_folder_path}/{filename}")
-        os.rmdir(f"./{temp_images_folder_path}/")
+        if temp_folder_path.exists():
+            shutil.rmtree(temp_folder_path)

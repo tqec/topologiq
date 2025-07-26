@@ -225,8 +225,9 @@ def visualise_3d_graph(
     ax.set_zlabel("Z")
 
     # Pop visualisation or save to file
-    if save_to_file:
-        temp_folder_path = "./outputs/temp"
+    repository_root: Path = Path(__file__).resolve().parent.parent
+    temp_folder_path = repository_root / "outputs/temp"  
+    if save_to_file: 
         Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_path}/{filename}.png")
         plt.close()

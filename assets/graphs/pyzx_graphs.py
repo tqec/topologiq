@@ -1,9 +1,8 @@
 import pyzx as zx
-from typing import Union
 
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
-from pyzx.generate import CNOT_HAD_PHASE_circuit, cliffords
+from typing import Union
 
 
 def cnot(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
