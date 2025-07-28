@@ -27,7 +27,7 @@ def runner(
     SimpleDictGraph,
     Union[None, dict],
     Union[None, dict[int, StandardBlock]],
-    Union[None, dict[Tuple[int, int], str]],
+    Union[None, dict[Tuple[int, int], List[str]]],
 ]:
     """Runs the algorithm on any circuit given to it
 
@@ -72,7 +72,7 @@ def runner(
     # VARS TO HOLD RESULTS
     edge_paths: Union[None, dict] = None
     lattice_nodes: Union[None, dict[int, StandardBlock]] = None
-    lattice_edges: Union[None, dict[Tuple[int, int], str]] = None
+    lattice_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # LOOP UNTIL SUCCESS OR LIMIT
     errors_in_result: bool = False
@@ -137,18 +137,18 @@ def runner(
                 )
 
             lines.append(
-                "\n__________________________\nLATTICE SURGERY (Given as graph)\n"
+                "\n__________________________\nLATTICE SURGERY (Graph)\n"
             )
             for key, node in lattice_nodes.items():
                 lines.append(f"Node ID: {key}. Info: {node}\n")
-            for key, edge_type in lattice_edges.items():
-                lines.append(f"Edge ID: {key}. Info: {edge_type} \n")
+            for key, edge_info in lattice_edges.items():
+                lines.append(f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n")
 
             with open(f"{output_folder_path}/{circuit_name}.txt", "w") as f:
                 f.writelines(lines)
                 f.close()
 
-            print(f"Result saved to: {output_folder_path}/{circuit_name}.txt")
+            print(f"Result saved to: <...>/{circuit_name}.txt")
 
             # Visualise result
             if visualise == "final" or visualise == "all":

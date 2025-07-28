@@ -317,7 +317,7 @@ def prune_all_beams(
 
 def build_newly_indexed_path_dict(
     edge_paths: dict,
-) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], str]]:
+) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], List[str]]]:
     """Distils an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
 
     Args:
@@ -353,13 +353,12 @@ def build_newly_indexed_path_dict(
 
         indexed_paths[(start_key, end_key)] = indexed_path
 
-    final_edges = []
+    final_edges = {}
     for original_edge_key, path_id_value_map in indexed_paths.items():
-
         node_ids = list(path_id_value_map.keys())
-
         block_ids = []
         edge_ids = []
+
         for i in range(len(node_ids)):
             if i % 2 == 0:
                 block_ids.append(node_ids[i])
@@ -372,14 +371,12 @@ def build_newly_indexed_path_dict(
                 node2 = block_ids[i + 1]
                 edge_type = path_id_value_map[edge_ids[i]][1]
 
-                final_edges.append({(node1, node2): edge_type})
+                final_edges[(node1, node2)] = [edge_type, original_edge_key]
 
     latice_nodes: dict[int, StandardBlock] = {}
-    latice_edges: dict[Tuple[int, int], str] = {}
+    latice_edges: dict[Tuple[int, int], List[str]] = {}
     for item in indexed_paths.values():
-
         keys = list(item.keys())
-
         i = 0
         for node_key, node_info in item.items():
             if i % 2 == 0:
@@ -387,7 +384,7 @@ def build_newly_indexed_path_dict(
             else:
                 edge_key = (keys[i - 1], keys[i + 1])
                 edge_type = node_info[1]
-                latice_edges[edge_key] = edge_type
+                latice_edges[edge_key] = [edge_type, final_edges[edge_key][1]]
             i += 1
 
     return latice_nodes, latice_edges
@@ -437,15 +434,15 @@ def rotate_o_types(pipe_type: str) -> str:
 
 
 def adjust_hadamards_direction(pipe_type: str) -> str:
-    """ Quickly flips a Hadamard for the opposite Hadamard with length on the same axis. 
-    
+    """Quickly flips a Hadamard for the opposite Hadamard with length on the same axis.
+
     Args:
         - pipe_type: the type/kind/name of the Hadamard that needs inverting.
-    
+
     Returns:
         - pipe_type: the type/kind/name of the corresponding/inverted Hadamard.
-    
-    
+
+
     """
     # List of hadamard equivalences
     hdm_equivalences = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
