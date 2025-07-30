@@ -8,7 +8,7 @@ from scripts.greedy_bfs_traditional import main
 from utils.classes import Colors, SimpleDictGraph, StandardBlock
 from utils.utils_greedy_bfs import build_newly_indexed_path_dict
 from utils.utils_zx_graphs import strip_boundaries_from_zx_graph
-from utils.grapher import visualise_3d_graph
+from utils.grapher import visualise_3d_graph, make_graph_from_final_lattice
 from utils.animation import create_animation
 
 
@@ -151,8 +151,9 @@ def runner(
             print(f"Result saved to: <...>/{circuit_name}.txt")
 
             # Visualise result
+            final_nx_graph, _ = make_graph_from_final_lattice(lattice_nodes, lattice_edges)
             if visualise == "final" or visualise == "all":
-                visualise_3d_graph(new_nx_graph, hide_boundaries=hide_boundaries)
+                visualise_3d_graph(final_nx_graph, hide_boundaries=hide_boundaries)
             visualise_3d_graph(
                 new_nx_graph,
                 hide_boundaries=hide_boundaries,

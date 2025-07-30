@@ -6,10 +6,11 @@ import networkx as nx
 from pathlib import Path
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from typing import Annotated, Literal, Any, Tuple
+from typing import Annotated, Literal, Any, Tuple, List, Union
 from numpy.typing import NDArray
 
 from utils.utils_greedy_bfs import rotate_o_types
+from utils.classes import StandardBlock
 
 # CONSTANTS
 node_hex_map = {
@@ -34,16 +35,20 @@ node_hex_map = {
     "xxx": ["red", "red", "red"],
     "yyy": ["green", "green", "green"],
     "zzz": ["blue", "blue", "blue"],
+    "X": ["red", "red", "red"],
+    "Y": ["green", "green", "green"],
+    "Z": ["blue", "blue", "blue"],
 }
 
 
-# MAIN WORKFLOW FUNCTIONS
+# MAIN VISUALISATION FUNCTION
 def visualise_3d_graph(
     graph: nx.Graph,
     hide_boundaries: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
     save_to_file: bool = False,
     filename: str | None = None,
+    pauli_webs_graph: nx.Graph | None = None,
 ):
     """Manages the process of visualising a graph with many nodes/blocks and edges/pipes.
 
@@ -57,6 +62,7 @@ def visualise_3d_graph(
             - True: saves visualisation to file and does NOT show it on screen,
             - False: shows visualisation on screen and does NOT save it to file.
         - filename: filename to use if saving a visualisation.
+        - pauli_webs_graph: additional optional graph containing a single Pauli web.
 
     """
 
@@ -85,16 +91,16 @@ def visualise_3d_graph(
             if position:
                 size = [1.0, 1.0, 1.0]
                 edge_col = "black"
-                alpha = 1.0
+                alpha = 1.0 if not pauli_webs_graph else 0.7
 
                 if node_type == "ooo":
                     size = [0.9, 0.9, 0.9]
                     edge_col = "white"
-                    alpha = 0.5
+                    alpha = 0.7
 
                 if "*" in node_type:
                     edge_col = "white"
-                    alpha = 0.7
+                    alpha = 0.3
 
                 elif "_visited" in node_type:
                     size = [0.5, 0.5, 0.5]
@@ -110,6 +116,7 @@ def visualise_3d_graph(
                         node_hex_map,
                         alpha=alpha,
                         edge_col=edge_col,
+                        border_width=0.5 if not pauli_webs_graph else 0.1,
                     )
 
     # RENDER PIPES (EDGES)
@@ -133,8 +140,7 @@ def visualise_3d_graph(
                 face_cols = [gray_hex] * 6
 
                 if pipe_type:
-
-                    alpha = 0.7 if "*" in pipe_type else 1
+                    alpha = 1 if not pauli_webs_graph else 0.4
                     edge_col = "white" if "*" in pipe_type else "black"
 
                     col = node_hex_map.get(pipe_type.replace("*", ""), ["gray"] * 3)
@@ -190,7 +196,13 @@ def visualise_3d_graph(
                             face_cols_2[1] = col[2]  # top (+z)
 
                             render_edge(
-                                ax, centre1, size_col, face_cols_1, edge_col, alpha
+                                ax,
+                                centre1,
+                                size_col,
+                                face_cols_1,
+                                edge_col,
+                                alpha,
+                                border_width=0.5 if not pauli_webs_graph else 0,
                             )
                             render_edge(
                                 ax,
@@ -199,12 +211,55 @@ def visualise_3d_graph(
                                 face_cols_yellow,
                                 edge_col,
                                 alpha,
+                                border_width=0.5 if not pauli_webs_graph else 0,
                             )
                             render_edge(
-                                ax, centre3, size_col, face_cols_2, edge_col, alpha
+                                ax,
+                                centre3,
+                                size_col,
+                                face_cols_2,
+                                edge_col,
+                                alpha,
+                                border_width=0.5 if not pauli_webs_graph else 0,
                             )
                     else:
-                        render_edge(ax, midpoint, size, face_cols, edge_col, alpha)
+                        render_edge(
+                            ax,
+                            midpoint,
+                            size,
+                            face_cols,
+                            edge_col,
+                            alpha,
+                            border_width=0.5 if not pauli_webs_graph else 0,
+                        )
+
+    # RENDER PAULI WEBS
+    if pauli_webs_graph:
+
+        for node_id in pauli_webs_graph.nodes:
+            pos = node_positions[node_id]
+            ax.scatter(
+                pos[0],
+                pos[1],
+                pos[2],
+                c="black",
+                s=0,
+                edgecolors="white",
+                depthshade=True,
+            )
+
+        # RENDER PIPES (EDGES)
+        for (u, v), node_info in pauli_webs_graph.edges().items():
+            pos_u = node_positions[u]
+            pos_v = node_positions[v]
+            col = node_hex_map[node_info["pipe_type"]][0]
+            ax.plot(
+                [pos_u[0], pos_v[0]],
+                [pos_u[1], pos_v[1]],
+                [pos_u[2], pos_v[2]],
+                c=col,
+                linewidth=3,
+            )
 
     # Adjust plot limits
     all_positions = np.array(list(node_positions.values()))
@@ -226,8 +281,8 @@ def visualise_3d_graph(
 
     # Pop visualisation or save to file
     repository_root: Path = Path(__file__).resolve().parent.parent
-    temp_folder_path = repository_root / "outputs/temp"  
-    if save_to_file: 
+    temp_folder_path = repository_root / "outputs/temp"
+    if save_to_file:
         Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_path}/{filename}.png")
         plt.close()
@@ -235,6 +290,7 @@ def visualise_3d_graph(
         plt.show()
 
 
+# TOP LEVEL FUNCTIONS TO PREPARE OBJECTS FOR VISUALISATION
 def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
     """Converts an edge_paths object into an nx.Graph that can be visualised with `visualise_3d_graph`. It is worth noting
     that the function will create a graph with potentially redundant blocks, which is irrelevant for visualisation purposes
@@ -299,6 +355,46 @@ def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
                         )
 
     return final_graph
+
+
+def make_graph_from_final_lattice(
+    lattice_nodes: dict[int, StandardBlock],
+    lattice_edges: dict[Tuple[int, int], List[str]],
+    pauli_webs: dict[Tuple[int, int], str] = {},
+) -> Tuple[nx.Graph, nx.Graph]:
+    """Converts an set of lattice nodes and edges into an nx.Graph that can be visualised with `visualise_3d_graph`.
+
+    Args:
+        - lattice_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
+        - lattice_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+
+    Returns:
+        - final_graph: an nx.Graph with all the information in the lattice nodes and edges but in a format amicable for visualisation
+
+    """
+
+    final_graph = nx.Graph()
+    pauli_webs_graph = nx.Graph()
+
+    for key, node_info in lattice_nodes.items():
+        final_graph.add_node(key, pos=node_info[0], type=node_info[1])
+
+    for key, edge_info in lattice_edges.items():
+        final_graph.add_edge(key[0], key[1], pipe_type=edge_info[0])
+    print()
+    if pauli_webs:
+        nodes_in_web = []
+        for key, edge_info in pauli_webs.items():
+            pauli_webs_graph.add_edge(key[0], key[1], pipe_type=edge_info)
+            nodes_in_web += [key[0], key[1]]
+        nodes_in_web = list(set(nodes_in_web))
+
+        for node_id in nodes_in_web:
+            pauli_webs_graph.add_node(
+                node_id, pos=lattice_nodes[node_id][0], type=lattice_nodes[node_id][1]
+            )
+    print()
+    return final_graph, pauli_webs_graph
 
 
 # MISC FUNCTIONS
@@ -367,6 +463,7 @@ def render_block(
     node_hex_map: dict[str, list[str]],
     alpha: float = 1.0,
     edge_col: None | str = None,
+    border_width: float = 0.5,
 ):
     """Renders a regular (non-'h') block.
 
@@ -377,6 +474,7 @@ def render_block(
         - node_type: block's kind.
         - node_hex_map: map of (HEX) colours for block.
         - edge_col: color for the edges of blocks.
+        - border_width: width for borders of block.
     """
 
     x, y, z = position
@@ -393,7 +491,7 @@ def render_block(
     poly_collection = Poly3DCollection(
         faces,
         facecolors=face_cols if "_visited" not in node_type else "red",
-        linewidths=1,
+        linewidths=border_width,
         edgecolors=edge_col,
         alpha=alpha,
     )
@@ -409,6 +507,7 @@ def render_edge(
     face_cols: list[str],
     edge_col: str,
     alpha: float | int,
+    border_width: float = 0.5,
 ):
     """Renders edges/pipes.
 
@@ -419,6 +518,7 @@ def render_edge(
         - face_cols: colour pattern for the edge/pipe.
         - edge_col: color of the edges for the edge/pipe.
         - alpha: any desired value for alpha (transparency)
+        - border_width: width for borders of edge.
     """
 
     # ESTABLISH CUBOID'S CENTRE & SIZE
@@ -455,7 +555,7 @@ def render_edge(
         face_list,
         facecolors=face_cols,
         edgecolors=edge_col,
-        linewidths=1,
+        linewidths=border_width,
         alpha=alpha,
     )
 
