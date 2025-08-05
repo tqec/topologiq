@@ -2,10 +2,13 @@
 .vscode/
 .archive/
 .admin/
+stats_checks.py
 
 # Outputs
 outputs/
+assets/stats/
 
 # Python 
 .venv/
 **/__pycache__/
+
