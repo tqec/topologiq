@@ -80,10 +80,9 @@ def runner(
     while i < max_attempts:
 
         print(
-            "\n\n####################################################",
-            "\nSTARTING ALGORITHM FROM CLEAN SLATE",
+            "\n\n################",
             f"\nAttempt {i + 1}",
-            "\n####################################################",
+            "\n##################",
         )
 
         # Update counters
@@ -107,16 +106,20 @@ def runner(
         if not errors_in_result:
 
             # Last computations
-            duration_total = (time.time() - t1) / 60
             lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
-
-            # Print update and save results
+            
+            # User updates and write outputs
+            duration_total = time.time() - t1
+            duration_this_run = time.time() - t1_inner
             print(
                 Colors.GREEN,
-                f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
+                "\nSUCCESFUL RUN.",
                 Colors.RESET,
+                f"\n- This iteration took: {duration_this_run:.2f} secs",
+                f"\n- Total run time: {duration_total:.2f} secs.",
             )
 
+            
             lines: List[str] = []
 
             lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
@@ -136,13 +139,13 @@ def runner(
                     f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
                 )
 
-            lines.append(
-                "\n__________________________\nLATTICE SURGERY (Graph)\n"
-            )
+            lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
             for key, node in lattice_nodes.items():
                 lines.append(f"Node ID: {key}. Info: {node}\n")
             for key, edge_info in lattice_edges.items():
-                lines.append(f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n")
+                lines.append(
+                    f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
+                )
 
             with open(f"{output_folder_path}/{circuit_name}.txt", "w") as f:
                 f.writelines(lines)
@@ -151,7 +154,9 @@ def runner(
             print(f"Result saved to: <...>/{circuit_name}.txt")
 
             # Visualise result
-            final_nx_graph, _ = make_graph_from_final_lattice(lattice_nodes, lattice_edges)
+            final_nx_graph, _ = make_graph_from_final_lattice(
+                lattice_nodes, lattice_edges
+            )
             if visualise == "final" or visualise == "all":
                 visualise_3d_graph(final_nx_graph, hide_boundaries=hide_boundaries)
             visualise_3d_graph(
@@ -176,14 +181,12 @@ def runner(
         else:
 
             # Update user
-            duration_this_run = (time.time() - t1_inner) / 60
-            duration_thus_far = (time.time() - t1) / 60
+            duration_this_run = time.time() - t1_inner
             print(
                 Colors.RED,
-                "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
+                "\nUNSUCCESFUL RUN.",
                 Colors.RESET,
-                f"\n- This iteration took: {duration_this_run:.2f} min",
-                f"\n- Total run time thus far: {duration_thus_far:.2f} min",
+                f"\n- This iteration took: {duration_this_run:.2f} secs",
             )
 
             # Delete temporary files

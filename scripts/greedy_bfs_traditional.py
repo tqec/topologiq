@@ -1,7 +1,7 @@
 import random
 import networkx as nx
 from collections import deque
-from typing import Tuple, List, Optional, Any, cast
+from typing import Tuple, List, Optional, Any, Union, cast
 
 from utils.utils_greedy_bfs import (
     check_for_exits,
@@ -97,7 +97,7 @@ def main(
 
     # Place start node at origin
     else:
-        print(Colors.BLUE + "\nPlacing first node." + Colors.RESET)
+
         # Get kind from type family
         possible_kinds: Optional[List[str]] = nx_graph.nodes[start_node].get(
             "type_family"
@@ -118,7 +118,6 @@ def main(
             kwargs["length_of_beams"],
         )
         all_beams.append(start_node_beams)
-        print(f"{start_node}: ((0, 0, 0) '{randomly_chosen_kind}').")
 
     # LOOP FOR ALL OTHER NODES
     c = 0  # Visualiser counter (needed to save snapshots to file)
@@ -265,24 +264,17 @@ def second_pass(
             # Format adjustments to match existing operations
             u_kind = nx_graph.nodes[u].get("kind")
             v_zx_type = nx_graph.nodes[v].get("type")
-            v_kind = nx_graph.nodes[v].get("kind")
             edge = tuple(sorted((u, v)))
 
             # Call pathfinder on any graph edge that does not have an entry in edge_paths
             if edge not in edge_paths:
-
-                print(
-                    Colors.BLUE + "\nFinding path between placed nodes." + Colors.RESET,
-                    f"Node ID: {u} ({(u_pos, u_kind)}) <--> Node ID: {v} {v_pos, v_kind}",
-                )
 
                 # Check if edge is hadamard
                 original_zx_edge_type = nx_graph.get_edge_data(u, v).get("type")
                 hadamard_flag: bool = (
                     True if original_zx_edge_type == "HADAMARD" else False
                 )
-                print("Original ZX type for edge:", original_zx_edge_type)
-
+                
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
                 clean_paths = run_pathfinder(
@@ -299,7 +291,7 @@ def second_pass(
                 if clean_paths:
 
                     # Update user
-                    print("\rPath found:", clean_paths[0])
+                    print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
                     # Update edge paths
                     coords_in_path = [
@@ -331,7 +323,7 @@ def second_pass(
 
                 # Write an error to edge_paths if edge not found
                 else:
-                    print("Path not found.")
+                    print(f"Path discovery: {u} -> {v}. FAIL.")
                     edge_paths[edge] = {
                         "src_tgt_ids": "error",
                         "path_coordinates": "error",
@@ -512,17 +504,12 @@ def place_next_block(
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if next_neigh_pos is None:
-        print(
-            Colors.BLUE + "\nCreating path." + Colors.RESET,
-            f"Node ID (source): {source_node_id} {source_node} --> Node ID (target): {neigh_node_id} ((?, ?, ?), ???) (ZX type: {next_neigh_zx_type})",
-        )
-
+        
         # Current edge data
         original_zx_edge_type = nx_graph.get_edge_data(
             source_node_id, neigh_node_id
         ).get("type")
         hadamard_flag: bool = True if original_zx_edge_type == "HADAMARD" else False
-        print("Original ZX type for edge:", original_zx_edge_type)
 
         # Remove source coordinate from occupied coords
         occupied_coords_redux = occupied_coords[:]
@@ -538,11 +525,11 @@ def place_next_block(
             hadamard_flag=hadamard_flag,
             **kwargs,
         )
+        
 
         # Assemble a preliminary dictionary of viable paths
         viable_paths = []
         for clean_path in clean_paths:
-
             target_coords, target_kind = clean_path[-1]
             target_unobstructed_exits_n, target_node_beams = check_for_exits(
                 target_coords,
@@ -583,10 +570,6 @@ def place_next_block(
 
                 viable_paths.append(PathBetweenNodes(**path_data))
 
-        print(
-            f"\r{len(viable_paths)} viable paths created. {'Algorithm picks best' if len(clean_paths)>1 else ''}."
-        )
-
         winner_path: Optional[PathBetweenNodes] = None
         if viable_paths:
             winner_path = max(
@@ -609,7 +592,7 @@ def place_next_block(
                 )
                 for block in readable_chosen_path
             ]
-            print("Chosen path:", readable_chosen_path)
+            print(f"Path creation: {source_node_id} -> {neigh_node_id}. SUCCESS.")
 
             # Update node information
             nx_graph.nodes[neigh_node_id]["pos"] = winner_path.target_pos
@@ -643,7 +626,7 @@ def place_next_block(
         if not winner_path:
 
             # Explicit warning
-            print(Colors.RED + "Could not find path." + Colors.RESET)
+            print(f"Path creation: {source_node_id} -> {neigh_node_id}. FAIL.")
 
             # Fill edge_path with error (allows process to move on but error is easy to spot)
             edge = tuple(sorted((source_node_id, neigh_node_id)))
@@ -696,8 +679,7 @@ def run_pathfinder(
     """
 
     # ARRAYS TO HOLD TEMPORARY PATHS
-    path = []
-    valid_paths = []
+    valid_paths: Union[dict[StandardBlock, List[StandardBlock]], None] = None
     clean_paths = []
 
     # STEP, START, & TARGET COORDS
@@ -717,11 +699,12 @@ def run_pathfinder(
         occupied_coords_copy.remove(target_coords)
 
     # FIND VIABLE PATHS
-    # One step at a time, call separate path finding (in a 4D space) BFS algorithm
-    while step <= 18:
+    # Pathfinder BFS loop
+    max_step = 2*initial_step if target_node_info else 18
+    while step <= max_step:
 
         # Generate tentative positions for current step or use target node
-        if target_node_info:
+        if target_coords:
             tentative_positions = [target_coords]
         else:
             tentative_positions = generate_tentative_target_positions(
@@ -731,58 +714,31 @@ def run_pathfinder(
             )
 
         # Try finding path to each tentative positions
-        for position in tentative_positions:
-            path_found, _, path, all_paths_from_round = (
-                run_bfs_for_all_potential_target_nodes(
-                    previous_node_info,
-                    next_neigh_zx_type,
-                    step,
-                    attempts_per_distance=1,
-                    occupied_coords=occupied_coords_copy,
-                    overwrite_target_node=(position, target_type),
-                    hadamard_flag=hadamard_flag,
-                )
-            )
-
-            # Append any found paths to valid_paths
-            if path_found:
-                valid_paths.append(all_paths_from_round)
-
+        valid_paths = run_bfs_for_all_potential_target_nodes(
+            previous_node_info,
+            tentative_positions,
+            next_neigh_zx_type,
+            occupied_coords=occupied_coords_copy,
+            overwrite_tgt=(tentative_positions[0], target_type),
+            hadamard_flag=hadamard_flag,
+        )
+        
+        # Append usable paths to clean paths
+        if valid_paths:
+            for path in valid_paths.values():
+                path_checks = True
+                for node in path:
+                    if node[0] in occupied_coords_copy:
+                        path_checks = False
+                if path_checks:
+                    clean_paths.append(path)
+        
         # Break if valid paths generated at step
-
-        if valid_paths and step >= kwargs["max_search_space"]:
+        if clean_paths and step >= kwargs["max_search_space"]:
             break
 
         # Increase distance if no valid paths found at current step
         step += 3
-
-    # REMOVE PATHS THAT INTERSECT WITH EXISTING CUBES/PIPES
-    if target_node_info:
-        if valid_paths and valid_paths[0]:
-            clean_path = valid_paths[0][0]
-            if occupied_coords_copy:
-                for node in clean_path:
-                    if (
-                        node[0] in occupied_coords_copy
-                    ):  # Needs the full occupied coords: path *will* contain source
-                        return []
-            return [clean_path]
-        else:
-            return []
-
-    else:
-        if valid_paths:
-            for all_paths in valid_paths:
-                remove_flag = False
-                for path in all_paths:
-                    if occupied_coords_copy:
-                        for node in path:
-                            if (
-                                node[0] in occupied_coords_copy
-                            ):  # Copy occupied coords: path *will* contain source
-                                remove_flag = True
-                    if remove_flag == False:
-                        clean_paths.append(path)
 
     # RETURN CLEAN PATHS OR EMPTY LIST IF NO VIABLE PATHS FOUND
     return clean_paths
@@ -850,6 +806,7 @@ def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
         start_node: Optional[int] = None
 
     # RETURN START NODE
+    start_node = 1
     return start_node
 
 

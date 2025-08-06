@@ -94,7 +94,7 @@ def check_cube_match(
     return True
 
 
-def get_valid_next_kinds(
+def get_valid_nxt_kinds(
     current_pos: StandardCoord,
     current_kind: str,
     next_pos: StandardCoord,
