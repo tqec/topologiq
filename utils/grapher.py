@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from typing import Annotated, Literal, Any, Tuple, List, Union
 from numpy.typing import NDArray
 
-from utils.utils_greedy_bfs import rotate_o_types
+from utils.utils_greedy_bfs import rot_o_kind
 from utils.classes import StandardBlock
 
 # CONSTANTS
@@ -186,7 +186,7 @@ def visualise_3d_graph(
                             # Note. Keeping track of the correct rotations proved tricky
                             # Keep this bit spread out across lines – easier
                             face_cols_2 = [gray_hex] * 6
-                            rotated_pipe_type = rotate_o_types(pipe_type[:3]) + "h"
+                            rotated_pipe_type = rot_o_kind(pipe_type[:3]) + "h"
                             col = node_hex_map.get(rotated_pipe_type, ["gray"] * 3)
                             face_cols_2[4] = col[0]  # right (+x)
                             face_cols_2[5] = col[0]  # left (-x)

@@ -6,14 +6,14 @@ from utils.classes import StandardCoord, StandardBeam, NodeBeams, StandardBlock
 
 
 def check_is_exit(
-    source_coord: StandardCoord, source_kind: Optional[str], target_coord: StandardCoord
+    src_coord: StandardCoord, src_kind: Optional[str], target_coord: StandardCoord
 ) -> bool:
     """Checks if a face is an exit by matching exit markers in the block/pipe's symbolic name
     and an displacement array symbolising the direction of the target block/pipe.
 
     Args:
-        - source_coord: (x, y, z) coordinates for the current block/pipe.
-        - source_kind: current block's/pipe's kind.
+        - src_coord: (x, y, z) coordinates for the current block/pipe.
+        - src_kind: current block's/pipe's kind.
         - target_coord: coordinates for the target block/pipe.
 
     Returns:
@@ -23,8 +23,8 @@ def check_is_exit(
 
     """
 
-    source_kind = source_kind.lower()[:3] if isinstance(source_kind, str) else ""
-    kind_3D = [source_kind[0], source_kind[1], source_kind[2]]
+    src_kind = src_kind.lower()[:3] if isinstance(src_kind, str) else ""
+    kind_3D = [src_kind[0], src_kind[1], src_kind[2]]
 
     if "o" in kind_3D:
         exit_marker = "o"
@@ -32,9 +32,7 @@ def check_is_exit(
         exit_marker = [i for i in set(kind_3D) if kind_3D.count(i) == 2][0]
 
     valid_exit_indices = [i for i, char in enumerate(kind_3D) if char == exit_marker]
-    displacements = [
-        target - source for source, target in zip(source_coord, target_coord)
-    ]
+    displacements = [target - source for source, target in zip(src_coord, target_coord)]
 
     displacement_axis_index = -1
     for i, disp in enumerate(displacements):
@@ -49,7 +47,7 @@ def check_is_exit(
 
 
 def check_unobstructed(
-    source_coord: StandardCoord,
+    src_coord: StandardCoord,
     target_coord: StandardCoord,
     occupied: List[StandardCoord],
     all_beams: List[NodeBeams],
@@ -58,7 +56,7 @@ def check_unobstructed(
     """Checks if a face (typically an exit: call after verifying face is exit) is unobstructed.
 
     Args:
-        - source_coord: (x, y, z) coordinates for the current block/pipe.
+        - src_coord: (x, y, z) coordinates for the current block/pipe.
         - target_coord: coordinates for the target block/pipe.
         - occupied: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph
@@ -73,13 +71,13 @@ def check_unobstructed(
 
     single_beam_for_exit: StandardBeam = []
 
-    directions = [target - source for source, target in zip(source_coord, target_coord)]
+    directions = [target - source for source, target in zip(src_coord, target_coord)]
     directions = [1 if d > 0 else -1 if d < 0 else 0 for d in directions]
 
     for i in range(1, length_of_beams):
         dx, dy, dz = (directions[0] * i, directions[1] * i, directions[2] * i)
         single_beam_for_exit.append(
-            (source_coord[0] + dx, source_coord[1] + dy, source_coord[2] + dz)
+            (src_coord[0] + dx, src_coord[1] + dy, src_coord[2] + dz)
         )
 
     if not occupied:
@@ -146,12 +144,12 @@ def check_for_exits(
     return unobstructed_exits_n, node_beams
 
 
-def is_move_allowed(source_coords: StandardCoord, next_coords: StandardCoord) -> bool:
+def is_move_allowed(src_coords: StandardCoord, next_coords: StandardCoord) -> bool:
     """Uses a Manhattan distance to quickly checks if a potential (source, target) combination
     is possible given the standard size of a block and pipe and that all blocks are followed by a pipe.
 
     Args:
-        - source_coords: (x, y, z) coordinates for the originating block.
+        - src_coords: (x, y, z) coordinates for the originating block.
         - next_coords: (x, y, z) coordinates for the potential placement of the target block.
 
     Returns:
@@ -161,139 +159,112 @@ def is_move_allowed(source_coords: StandardCoord, next_coords: StandardCoord) ->
 
     """
 
-    sx, sy, sz = source_coords
+    sx, sy, sz = src_coords
     nx, ny, nz = next_coords
     manhattan_distance = abs(nx - sx) + abs(ny - sy) + abs(nz - sz)
     return manhattan_distance % 3 == 0
 
 
-def generate_tentative_target_positions(
-    source_coords: StandardCoord,
-    step: int = 3,
-    occupied_coords: List[StandardCoord] = [],
+def gen_tent_tgt_coords(
+    src_coords: StandardCoord,
+    max_manhattan: int = 3,
+    taken_coords: List[StandardCoord] = [],
 ) -> List[StandardCoord]:
     """Generates a number of potential placement positions for target node.
 
     Args:
-        - source_coords: (x, y, z) coordinates for the originating block.
-        - step: intended (Manhattan) distance between origin and target blocks.
-        - occupied_coords: a list of coordinates already occupied by previous operations.
+        - src_coords: (x, y, z) coordinates for the originating block.
+        - max_manhattan: Max. (Manhattan) distance between origin and target blocks.
+        - taken_coords: a list of coordinates already occupied by previous operations.
 
     Returns:
-        - potential_targets: a list of coordinates that make good candidates for placing the target block.
+        - tent_coords: a list of tentative target coordinates that make good candidates for placing the target block.
 
     """
 
     # EXTRACT SOURCE COORDS
-    sx, sy, sz = source_coords
-    potential_targets: List[StandardCoord] = []
+    sx, sy, sz = src_coords
+    tent_coords = {}
 
     # SINGLE MOVES
-    if step == 3:
-        targets = [
-            (sx + 3, sy, sz),
-            (sx - 3, sy, sz),
-            (sx, sy + 3, sz),
-            (sx, sy - 3, sz),
-            (sx, sy, sz + 3),
-            (sx, sy, sz - 3),
-        ]
-        potential_targets = [
-            coords for coords in targets if coords not in occupied_coords
-        ]
-
-    # DOUBLE MOVES (Manhattan distance 6)
-    elif step == 6:
-        targets = set()
-        for dx in [-3, 3]:
-            for dy in [-3, 3]:
-                targets.add((sx + dx, sy + dy, sz))
-            for dx in [-3, 3]:
-                for dz in [-3, 3]:
-                    targets.add((sx + dx, sy, sz + dz))
-            for dy in [-3, 3]:
-                for dz in [-3, 3]:
-                    targets.add((sx, sy + dy, sz + dz))
-        potential_targets = [
-            coords for coords in targets if coords not in occupied_coords
-        ]
-
-    # TRIPLE MOVES (Manhattan distance 9)
-    elif step == 9:
-        targets = set()
-        for dx in [-3, 3]:
-            for dy in [-3, 3]:
-                for dz in [-3, 3]:
-                    if abs(dx) + abs(dy) + abs(dz) == 9:
-                        targets.add((sx + dx, sy + dy, sz + dz))
-        potential_targets = [
-            coords for coords in targets if coords not in occupied_coords
-        ]
-
-    # ANY STEP HIGHER THAN 9 (step is Manhattan distance, multiple of 3)
-    elif step > 9 and step % 3 == 0:
-        valid_targets = set()
-        attempts = 0
-        max_attempts = 500  # Limit attempts to avoid infinite loops in dense spaces
-        while len(valid_targets) < 12 and attempts < max_attempts:
-            remaining_steps = step
-            current_x = sx
-            current_y = sy
-            current_z = sz
-
-            # Move along x
-            move_x = random.choice(range(-remaining_steps, remaining_steps + 1, 3))
-            current_x += move_x
-            remaining_steps -= abs(move_x)
-
-            # Move along y
-            move_y = random.choice(range(-remaining_steps, remaining_steps + 1, 3))
-            current_y += move_y
-            remaining_steps -= abs(move_y)
-
-            # Move along z (remaining distance)
-            move_z = remaining_steps
-            current_z += move_z
-
-            if (
-                abs(move_x) + abs(move_y) + abs(move_z) == step
-                and (current_x, current_y, current_z) not in occupied_coords
-            ):
-                valid_targets.add((current_x, current_y, current_z))
-
-            # Try other permutations
-            permutations = [
-                (move_x, move_y, move_z),
-                (move_x, move_z, move_y),
-                (move_y, move_x, move_z),
-                (move_y, move_z, move_x),
-                (move_z, move_x, move_y),
-                (move_z, move_y, move_x),
+    targets = [
+        (sx + 3, sy, sz),
+        (sx - 3, sy, sz),
+        (sx, sy + 3, sz),
+        (sx, sy - 3, sz),
+        (sx, sy, sz + 3),
+        (sx, sy, sz - 3),
+    ]
+    tent_coords[3] = [t for t in targets if t not in taken_coords]
+    
+    # MANHATTAN 6
+    if max_manhattan > 3:
+        tent_coords[6] = []
+        for dx, dy, dz in [c for c in tent_coords[3]]:
+            targets = [
+                (dx + 3, dy, dz),
+                (dx - 3, dy, dz),
+                (dx, dy + 3, dz),
+                (dx, dy - 3, dz),
+                (dx, dy, dz + 3),
+                (dx, dy, dz - 3),
             ]
 
-            for mx, my, mz in permutations:
-                cx, cy, cz = sx + mx, sy + my, sz + mz
-                if (
-                    abs(mx) + abs(my) + abs(mz) == step
-                    and (cx, cy, cz) not in occupied_coords
-                ):
-                    valid_targets.add((cx, cy, cz))
+            tent_coords[6].extend([
+                t
+                for t in targets
+                if all(
+                    [
+                        abs(t[0]) - abs(sx) != 6,
+                        abs(t[1]) - abs(sy) != 6,
+                        abs(t[2]) - abs(sz) != 6,
+                    ]
+                )
+                and sum([abs(t[0]) - abs(sx), abs(t[1]) - abs(sy), abs(t[2]) - abs(sz)])
+                == 6
+                and t not in taken_coords
+            ])
+    
+    # MANHATTAN 9
+    if max_manhattan > 6:
+        tent_coords[9] = []
+        for dx, dy, dz in [c for c in tent_coords[6]]:
+            targets = [
+                (dx + 3, dy, dz),
+                (dx - 3, dy, dz),
+                (dx, dy + 3, dz),
+                (dx, dy - 3, dz),
+                (dx, dy, dz + 3),
+                (dx, dy, dz - 3),
+            ]
 
-            attempts += 1
+            tent_coords[9].extend([
+                t
+                for t in targets
+                if all(
+                    [
+                        abs(t[0]) - abs(sx) != 9,
+                        abs(t[1]) - abs(sy) != 9,
+                        abs(t[2]) - abs(sz) != 9,
+                    ]
+                )
+                and sum([abs(t[0]) - abs(sx), abs(t[1]) - abs(sy), abs(t[2]) - abs(sz)])
+                == 9
+                and t not in taken_coords
+            ])
 
-        potential_targets = list(valid_targets)
-
-    return potential_targets
+    # RETURN ALL COORDS WITHIN DISTANCE
+    return tent_coords[max_manhattan]
 
 
 def prune_all_beams(
-    all_beams: List[NodeBeams], occupied_coords: List[StandardCoord]
+    all_beams: List[NodeBeams], taken_coords: List[StandardCoord]
 ) -> List[NodeBeams]:
     """Removes beams that have already been broken, as these are no longer indicative of anything.
 
     Args:
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph
-        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - taken_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
 
     Returns:
         - new_all_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with occupied coords.
@@ -305,7 +276,7 @@ def prune_all_beams(
         for node_beams in all_beams:
             new_node_beams = []
             for single_beam in node_beams:
-                if all([coord not in occupied_coords for coord in single_beam]):
+                if all([coord not in taken_coords for coord in single_beam]):
                     new_node_beams.append(single_beam)
             if new_node_beams:
                 new_all_beams.append(new_node_beams)
@@ -390,7 +361,7 @@ def build_newly_indexed_path_dict(
     return latice_nodes, latice_edges
 
 
-def rotate_o_types(pipe_type: str) -> str:
+def rot_o_kind(pipe_type: str) -> str:
     """Rotates a pipe around its length by using the exit marker in its symbolic name to create a rotational matrix,
     which is then used to rotate the original name with a symbolic multiplication.
 
@@ -433,7 +404,7 @@ def rotate_o_types(pipe_type: str) -> str:
     return rotated_name
 
 
-def adjust_hadamards_direction(pipe_type: str) -> str:
+def flip_hdm(pipe_type: str) -> str:
     """Quickly flips a Hadamard for the opposite Hadamard with length on the same axis.
 
     Args:

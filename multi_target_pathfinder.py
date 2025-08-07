@@ -1,13 +1,11 @@
 import time
-from typing import List
 from scripts.greedy_bfs_traditional import run_pathfinder
-from scripts.pathfinder import bfs_extended_3d, run_bfs_for_all_potential_target_nodes
-from utils.classes import StandardBlock, StandardCoord
+from scripts.pathfinder import core_pathfinder_bfs, pathfinder
+from utils.classes import StandardBlock
 
 from run_hyperparams import (
     VALUE_FUNCTION_HYPERPARAMS,
-    LENGTH_OF_BEAMS,
-    MAX_PATHFINDER_SEARCH_SPACE,
+    LENGTH_OF_BEAMS
 )
 
 test_to_run = "run_pathfinder"
@@ -28,11 +26,11 @@ if test_to_run == "core_pathfinder":
     for step, tentative_positions in tentative_positions_by_step.items():
         for fam in target_families:
             t1 = time.time()
-            valid_paths = bfs_extended_3d(
+            valid_paths = core_pathfinder_bfs(
                 source_node,
                 tentative_positions,
                 fam,
-                completion_target=100,
+                min_completion_rate=100,
             )
             duration = time.time() - t1
 
@@ -47,12 +45,12 @@ if test_to_run == "core_pathfinder":
 # TEST run_bfs_for_all_potential_target_nodes
 if test_to_run == "run_core_pathfinder":
 
-    target_node_zx_types = ["X", "Z", "O"]
+    tgt_zx_types = ["X", "Z", "O"]
 
     for step, tentative_positions in tentative_positions_by_step.items():
-        for zx_type in target_node_zx_types:
+        for zx_type in tgt_zx_types:
             t1 = time.time()
-            valid_paths = run_bfs_for_all_potential_target_nodes(
+            valid_paths = pathfinder(
                 source_node,
                 tentative_positions,
                 tgt_zx_type=zx_type,
@@ -71,16 +69,15 @@ if test_to_run == "run_core_pathfinder":
 # TEST run_bfs_for_all_potential_target_nodes
 if test_to_run == "run_pathfinder":
 
-    target_node_zx_types = ["X", "Z", "O"]
+    tgt_zx_types = ["X", "Z", "O"]
 
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
-        "max_search_space": MAX_PATHFINDER_SEARCH_SPACE,
+        "length_of_beams": LENGTH_OF_BEAMS
     }
 
     for step, tentative_positions in tentative_positions_by_step.items():
-        for zx_type in target_node_zx_types:
+        for zx_type in tgt_zx_types:
 
             t1 = time.time()
 

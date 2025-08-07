@@ -13,11 +13,7 @@ from assets.graphs import simple_graphs
 from utils.interop_pyzx import get_simple_graph_from_pyzx
 from assets.graphs import pyzx_graphs
 from utils.classes import SimpleDictGraph
-from run_hyperparams import (
-    VALUE_FUNCTION_HYPERPARAMS,
-    LENGTH_OF_BEAMS,
-    MAX_PATHFINDER_SEARCH_SPACE,
-)
+from run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
 
 
 ####################
@@ -47,7 +43,6 @@ def run():
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "length_of_beams": LENGTH_OF_BEAMS,
-        "max_search_space": MAX_PATHFINDER_SEARCH_SPACE,
     }
 
     # GET CIRCUIT
@@ -85,6 +80,7 @@ def run():
             circuit_name,
             strip_boundaries=strip_boundaries,
             hide_boundaries=hide_boundaries,
+            visualise=("final", "MP4"),
             **kwargs
         )
 

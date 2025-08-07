@@ -21,7 +21,7 @@ def runner(
     strip_boundaries: bool = False,
     hide_boundaries: bool = False,
     max_attempts: int = 10,
-    visualise: str = "final",
+    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -40,15 +40,19 @@ def runner(
         - hide_boundaries:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
-        - visualise:
-            - detail: visualises each iteration by outer/general BFS loop,
-            - final: visualises only the final result,
-            - all: visualises each iteration step by outer/general BFS loop and final result.
+        - visualise: a tuple with visualisation settings:
+            - visualise[0]:
+                - None: no visualisation whatsoever,
+                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
+            - visualise[1]:
+                - None: no animation whatsoever,
+                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
         - length_of_beams: length of each of the beams coming out of open nodes.
-        - max_search_space: maximum size of 3D space to generate paths for.
 
     Returns:
         - circuit_graph_dict: original circuit given to function returns for easy traceability
@@ -107,19 +111,23 @@ def runner(
 
             # Last computations
             lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
-            
-            # User updates and write outputs
-            duration_total = time.time() - t1
+
+            # User updates
             duration_this_run = time.time() - t1_inner
+            duration_total = time.time() - t1
+            
             print(
                 Colors.GREEN,
-                "\nSUCCESFUL RUN.",
+                "\nSUCCESS!!!",
                 Colors.RESET,
                 f"\n- This iteration took: {duration_this_run:.2f} secs",
                 f"\n- Total run time: {duration_total:.2f} secs.",
             )
-
             
+            if visualise[0] is not None or visualise[1] is not None:
+                print("You have visualisations enabled. For faster runtimes, please disable visualisations.")
+
+            # Write outputs
             lines: List[str] = []
 
             lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
@@ -151,28 +159,30 @@ def runner(
                 f.writelines(lines)
                 f.close()
 
-            print(f"Result saved to: <...>/{circuit_name}.txt")
+            print(f"\nResults saved to outputs folder.")
 
             # Visualise result
-            final_nx_graph, _ = make_graph_from_final_lattice(
-                lattice_nodes, lattice_edges
-            )
-            if visualise == "final" or visualise == "all":
+            if visualise[0] == "final" or visualise[0] == "detail":
+                final_nx_graph, _ = make_graph_from_final_lattice(
+                    lattice_nodes, lattice_edges
+                )
                 visualise_3d_graph(final_nx_graph, hide_boundaries=hide_boundaries)
-            visualise_3d_graph(
-                new_nx_graph,
-                hide_boundaries=hide_boundaries,
-                save_to_file=True,
-                filename=f"{circuit_name}{c:03d}",
-            )
 
-            # Create GIF or result
-            create_animation(
-                filename_prefix=circuit_name,
-                restart_delay=5000,
-                duration=2500,
-                video=False,
-            )
+            # Animate
+            if visualise[1] == "GIF" or visualise[1] == "MP4":
+                visualise_3d_graph(
+                    new_nx_graph,
+                    hide_boundaries=hide_boundaries,
+                    save_to_file=True,
+                    filename=f"{circuit_name}{c:03d}",
+                )
+
+                create_animation(
+                    filename_prefix=circuit_name,
+                    restart_delay=5000,
+                    duration=2500,
+                    video=True if visualise[1] == "MP4" else False,
+                )
 
             # End loop
             break
@@ -182,12 +192,18 @@ def runner(
 
             # Update user
             duration_this_run = time.time() - t1_inner
+            duration_total = time.time() - t1
+            
             print(
                 Colors.RED,
-                "\nUNSUCCESFUL RUN.",
+                "\nITERATION FAILED.",
                 Colors.RESET,
                 f"\n- This iteration took: {duration_this_run:.2f} secs",
+                f"\n- Total run time: {duration_total:.2f} secs.",
             )
+            
+            if visualise[0] is not None or visualise[1] is not None:
+                print("You have visualisations enabled. For faster runtimes, please disable visualisations.")
 
             # Delete temporary files
             try:

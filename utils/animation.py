@@ -63,9 +63,6 @@ def create_animation(
                 duration=iter_duration,
                 loop=0,
             )
-        print(
-            f"Animation saved to <...>/{filename_prefix}.{"mp4" if video else "gif"}"
-        )
 
     # CLEAN UP TEMPORARY IMAGES
     if remove_temp_images:

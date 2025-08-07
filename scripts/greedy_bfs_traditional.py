@@ -1,3 +1,4 @@
+import timeit
 import random
 import networkx as nx
 from collections import deque
@@ -5,7 +6,7 @@ from typing import Tuple, List, Optional, Any, Union, cast
 
 from utils.utils_greedy_bfs import (
     check_for_exits,
-    generate_tentative_target_positions,
+    gen_tent_tgt_coords,
     prune_all_beams,
 )
 
@@ -24,8 +25,8 @@ from utils.classes import (
     Colors,
 )
 from scripts.pathfinder import (
-    run_bfs_for_all_potential_target_nodes,
-    get_coords_occupied_by_blocks,
+    pathfinder,
+    get_taken_coords,
 )
 from utils.grapher import visualise_3d_graph, make_graph_from_edge_paths
 
@@ -37,7 +38,7 @@ def main(
     graph: SimpleDictGraph,
     circuit_name: str = "circuit",
     hide_boundaries: bool = False,
-    visualise: str = "outer",
+    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     **kwargs,
 ) -> Tuple[nx.Graph, dict, nx.Graph, int]:
     """Manages the generalities of the BFS process.
@@ -48,10 +49,15 @@ def main(
         - hide_boundaries:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
-        - visualise:
-            - detail: visualises each iteration by outer/general BFS loop,
-            - final: visualises only the final result,
-            - all: visualises each iteration step by outer/general BFS loop and final result.
+        - visualise: a tuple with visualisation settings:
+            - visualise[0]:
+                - None: no visualisation whatsoever,
+                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
+            - visualise[1]:
+                - None: no animation whatsoever,
+                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -75,7 +81,7 @@ def main(
     nx_graph = prepare_graph(graph)
 
     # Arrays/dicts to track coordinates
-    occupied_coords: List[StandardCoord] = []
+    taken_coords: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
     edge_paths: dict = {}
 
@@ -108,12 +114,12 @@ def main(
         nx_graph.nodes[start_node]["pos"] = (0, 0, 0)
         nx_graph.nodes[start_node]["kind"] = randomly_chosen_kind
 
-        # Update occupied_coords and all_beams with node's position & beams
-        occupied_coords.append((0, 0, 0))
+        # Update taken_coords and all_beams with node's position & beams
+        taken_coords.append((0, 0, 0))
         _, start_node_beams = check_for_exits(
             (0, 0, 0),
             randomly_chosen_kind,
-            occupied_coords,
+            taken_coords,
             all_beams,
             kwargs["length_of_beams"],
         )
@@ -134,21 +140,21 @@ def main(
                 visited.add(neigh_node_id)
                 queue.append(neigh_node_id)
 
-                # Ensure occupied_coords has unique entries each run
-                occupied_coords = list(set(occupied_coords))
+                # Ensure taken_coords has unique entries each run
+                taken_coords = list(set(taken_coords))
 
                 # Try to place blocks as close to one another as as possible
                 step: int = 3
                 while step <= 18:
-                    occupied_coords, all_beams, edge_paths, successful_placement = (
+                    taken_coords, all_beams, edge_paths, successful_placement = (
                         place_next_block(
                             current_parent_node,
                             neigh_node_id,
                             nx_graph,
-                            occupied_coords,
+                            taken_coords,
                             all_beams,
                             edge_paths,
-                            step=step,
+                            init_step=step,
                             **kwargs,
                         )
                     )
@@ -163,16 +169,19 @@ def main(
                                 new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
                                 # Create visualisation
-                                if visualise == "detail" or visualise == "all":
+                                if visualise[0] == "detail":
                                     visualise_3d_graph(
                                         new_nx_graph, hide_boundaries=hide_boundaries
                                     )
-                                visualise_3d_graph(
-                                    new_nx_graph,
-                                    hide_boundaries=hide_boundaries,
-                                    save_to_file=True,
-                                    filename=f"{circuit_name}{c:03d}",
-                                )
+
+                                # Save visualisation for later animation
+                                if visualise[1] == "GIF" or visualise[1] == "MP4":
+                                    visualise_3d_graph(
+                                        new_nx_graph,
+                                        hide_boundaries=hide_boundaries,
+                                        save_to_file=True,
+                                        filename=f"{circuit_name}{c:03d}",
+                                    )
 
                                 c = len(edge_paths)
 
@@ -185,15 +194,16 @@ def main(
 
     # SINCE IT WAS USED EXTENSIVELY DURING LOOP
     # ENSURE OCCUPIED COORDS ARE UNIQUE
-    occupied_coords = list(set(occupied_coords))
+    taken_coords = list(set(taken_coords))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
     edge_paths, c = second_pass(
         nx_graph,
-        occupied_coords,
+        taken_coords,
         edge_paths,
         circuit_name,
         c,
+        hide_boundaries=hide_boundaries,
         visualise=visualise,
         **kwargs,
     )
@@ -207,11 +217,12 @@ def main(
 
 def second_pass(
     nx_graph: nx.Graph,
-    occupied_coords: List[StandardCoord],
+    taken_coords: List[StandardCoord],
     edge_paths: dict,
     circuit_name: str,
     c: int,
-    visualise: str = "outer",
+    hide_boundaries: bool = False,
+    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     **kwargs,
 ) -> Tuple[dict, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
@@ -221,14 +232,19 @@ def second_pass(
         - nx_graph: a nx_graph containing all nodes and edges in incoming ZX graph,
             formatted to facilitate positioning of 3D blocks and pipes,
             and updated regularly over the course of the process.
-        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - taken_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
         - circuit_name: name of ZX circuit.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations)
-        - visualise:
-            - detail: visualises each iteration by outer/general BFS loop,
-            - final: visualises only the final result,
-            - all: visualises each iteration step by outer/general BFS loop and final result.
+        - visualise: a tuple with visualisation settings:
+            - visualise[0]:
+                - None: no visualisation whatsoever,
+                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
+            - visualise[1]:
+                - None: no animation whatsoever,
+                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -245,7 +261,7 @@ def second_pass(
     for u, v, data in nx_graph.edges(data=True):
 
         # Ensure occupied coords do not have duplicates
-        occupied_coords = list(set(occupied_coords))
+        taken_coords = list(set(taken_coords))
 
         # Get source and target node for specific edge
         u_pos = nx_graph.nodes[u].get("pos")
@@ -258,6 +274,7 @@ def second_pass(
             edge = tuple(sorted((u, v)))
 
         if u_pos is not None and v_pos is not None:
+
             # Update visualiser counter
             c += 1
 
@@ -271,19 +288,17 @@ def second_pass(
 
                 # Check if edge is hadamard
                 original_zx_edge_type = nx_graph.get_edge_data(u, v).get("type")
-                hadamard_flag: bool = (
-                    True if original_zx_edge_type == "HADAMARD" else False
-                )
-                
+                hdm: bool = True if original_zx_edge_type == "HADAMARD" else False
+
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
                 clean_paths = run_pathfinder(
                     (u_pos, u_kind),
                     v_zx_type,
                     3,
-                    occupied_coords[:],
+                    taken_coords[:],
                     target_node_info=(v_pos, nx_graph.nodes[v].get("kind")),
-                    hadamard_flag=hadamard_flag,
+                    hdm=hdm,
                     **kwargs,
                 )
 
@@ -306,20 +321,25 @@ def second_pass(
                     }
 
                     # Add path to position to list of graphs' occupied positions
-                    full_coords_to_add = get_coords_occupied_by_blocks(clean_paths[0])
-                    occupied_coords.extend(full_coords_to_add)
+                    full_coords_to_add = get_taken_coords(clean_paths[0])
+                    taken_coords.extend(full_coords_to_add)
 
-                    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ABOVE
+                    # Create graph from existing edges
                     new_nx_graph = make_graph_from_edge_paths(edge_paths)
 
-                    # VISUALISE NEW EDGE
-                    if visualise == "detail" or visualise == "all":
-                        visualise_3d_graph(new_nx_graph)
-                    visualise_3d_graph(
-                        new_nx_graph,
-                        save_to_file=True,
-                        filename=f"{circuit_name}{c:03d}",
-                    )
+                    # Create visualisation
+                    if visualise[0] == "detail":
+                        visualise_3d_graph(
+                            new_nx_graph, hide_boundaries=hide_boundaries
+                        )
+                    # Save visualisation for later animation
+                    if visualise[1] == "GIF" or visualise[1] == "MP4":
+                        visualise_3d_graph(
+                            new_nx_graph,
+                            hide_boundaries=hide_boundaries,
+                            save_to_file=True,
+                            filename=f"{circuit_name}{c:03d}",
+                        )
 
                 # Write an error to edge_paths if edge not found
                 else:
@@ -447,10 +467,10 @@ def place_next_block(
     source_node_id: int,
     neigh_node_id: int,
     nx_graph: nx.Graph,
-    occupied_coords: List[StandardCoord],
+    taken_coords: List[StandardCoord],
     all_beams: List[NodeBeams],
     edge_paths: dict,
-    step: int = 3,
+    init_step: int = 3,
     stage: float = 0.5,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
@@ -463,10 +483,10 @@ def place_next_block(
         - neigh_node_id: the ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
         - nx_graph: a nx_graph containing the nodes and edges in the incoming ZX graph formatted to facilitate placements in the 3D space,
             updated regularly over the course of the process.
-        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - taken_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX-graph.
         - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
-        - step: intended (Manhattan) distance between origin and target blocks.
+        - init_step: intended (Manhattan) distance between origin and target blocks.
         - stage (not in use): may eventually be used to determine if algorithm is at the start, middle, or end of a given circuit.
 
     Keyword arguments (**kwargs):
@@ -475,7 +495,7 @@ def place_next_block(
         - max_search_space: maximum size of 3D space to generate paths for.
 
     Returns:
-        - occupied_coords: updated list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - taken_coords: updated list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - all_beams: updated list of coordinates occupied by the beams of all blocks in original ZX-graph.
         - edge_paths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - bool:
@@ -485,7 +505,7 @@ def place_next_block(
     """
 
     # PRUNE BEAMS TO CONSIDER RECENT NODE PLACEMENTS
-    all_beams = prune_all_beams(all_beams, occupied_coords)
+    all_beams = prune_all_beams(all_beams, taken_coords)
 
     # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
     # Previous node data
@@ -493,7 +513,7 @@ def place_next_block(
     source_kind: Optional[str] = nx_graph.nodes[source_node_id].get("kind")
 
     if source_pos is None or source_kind is None:
-        return occupied_coords, all_beams, edge_paths, False
+        return taken_coords, all_beams, edge_paths, False
     source_node: StandardBlock = (source_pos, source_kind)
 
     # Current node data
@@ -504,28 +524,27 @@ def place_next_block(
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if next_neigh_pos is None:
-        
+
         # Current edge data
         original_zx_edge_type = nx_graph.get_edge_data(
             source_node_id, neigh_node_id
         ).get("type")
-        hadamard_flag: bool = True if original_zx_edge_type == "HADAMARD" else False
+        hdm: bool = True if original_zx_edge_type == "HADAMARD" else False
 
         # Remove source coordinate from occupied coords
-        occupied_coords_redux = occupied_coords[:]
-        if source_pos in occupied_coords_redux:
-            occupied_coords_redux.remove(source_pos)
+        taken_coords_redux = taken_coords[:]
+        if source_pos in taken_coords_redux:
+            taken_coords_redux.remove(source_pos)
 
         # Get clean candidate paths
         clean_paths = run_pathfinder(
             source_node,
             next_neigh_zx_type,
-            step,
-            occupied_coords_redux if occupied_coords else [],
-            hadamard_flag=hadamard_flag,
+            init_step,
+            taken_coords_redux if taken_coords else [],
+            hdm=hdm,
             **kwargs,
         )
-        
 
         # Assemble a preliminary dictionary of viable paths
         viable_paths = []
@@ -534,7 +553,7 @@ def place_next_block(
             target_unobstructed_exits_n, target_node_beams = check_for_exits(
                 target_coords,
                 target_kind,
-                occupied_coords_redux,
+                taken_coords_redux,
                 all_beams,
                 length_of_beams=kwargs["length_of_beams"],
             )
@@ -611,16 +630,14 @@ def place_next_block(
             }
 
             # Add path to position to list of graphs' occupied positions
-            full_coords_to_add = get_coords_occupied_by_blocks(
-                winner_path.all_nodes_in_path
-            )
-            occupied_coords.extend(full_coords_to_add)
+            full_coords_to_add = get_taken_coords(winner_path.all_nodes_in_path)
+            taken_coords.extend(full_coords_to_add)
 
             # Add beams of winner's target node to list of graphs' all_beams
             all_beams.append(winner_path.target_beams)
 
-            # Return updated occupied_coords and all_beams, with success code
-            return occupied_coords, all_beams, edge_paths, True
+            # Return updated taken_coords and all_beams, with success code
+            return taken_coords, all_beams, edge_paths, True
 
         # Handle cases where no winner is found
         if not winner_path:
@@ -637,20 +654,20 @@ def place_next_block(
                 "edge_type": "error",
             }
 
-            # Return unchanged occupied_coords and all_beams, with failure boolean
-            return occupied_coords, all_beams, edge_paths, False
+            # Return unchanged taken_coords and all_beams, with failure boolean
+            return taken_coords, all_beams, edge_paths, False
 
     # FAIL SAFE RETURN TO AVOID TYPE ERRORS
-    return occupied_coords, all_beams, edge_paths, False
+    return taken_coords, all_beams, edge_paths, False
 
 
 def run_pathfinder(
     previous_node_info: StandardBlock,
     next_neigh_zx_type: str,
     initial_step: int,
-    occupied_coords: List[StandardCoord],
+    taken_coords: List[StandardCoord],
     target_node_info: Optional[StandardBlock] = None,
-    hadamard_flag: bool = False,
+    hdm: bool = False,
     **kwargs,
 ) -> List[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
@@ -661,11 +678,11 @@ def run_pathfinder(
         - next_neigh_zx_type: the ZX type of the block that needs to be connected to the node already in the 3D space,
             which can be overriden by the optional parameter *target_node_info*.
         - initial_step: intended (Manhattan) distance between source and target blocks.
-        - occupied_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - taken_coords: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - target_node_info: optional parameter to send the information of a node that has already been placed in the 3D space,
             which overrides *next_neigh_zx_type* and tells the inner pathfinder algorithm that it is finding a path between existing blocks
             as opposed to creating a path between an existing block a new one to be placed at a tentative position.
-        - hadamard_flag: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
+        - hdm: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
             which gets handled differently depending on the characteristics of the edge.
 
     Keyword arguments (**kwargs):
@@ -692,49 +709,49 @@ def run_pathfinder(
         target_coords, target_type = target_node_info
 
     # COPY OCCUPIED COORDS TO AVOID OVERWRITES BY EXTERNAL FUNCTIONS
-    occupied_coords_copy = occupied_coords[:]
-    if start_coords in occupied_coords_copy:
-        occupied_coords_copy.remove(start_coords)
+    taken_coords_cc = taken_coords[:]
+    if start_coords in taken_coords_cc:
+        taken_coords_cc.remove(start_coords)
     if target_coords:
-        occupied_coords_copy.remove(target_coords)
+        taken_coords_cc.remove(target_coords)
 
     # FIND VIABLE PATHS
     # Pathfinder BFS loop
-    max_step = 2*initial_step if target_node_info else 18
+    max_step = 2 * initial_step if target_node_info else 18
     while step <= max_step:
 
         # Generate tentative positions for current step or use target node
         if target_coords:
-            tentative_positions = [target_coords]
+            tent_coords = [target_coords]
         else:
-            tentative_positions = generate_tentative_target_positions(
+            tent_coords = gen_tent_tgt_coords(
                 start_coords,
                 step,
-                occupied_coords,  # Real occupied coords: position cannot overlap start node
+                taken_coords,  # Real occupied coords: position cannot overlap start node
             )
 
         # Try finding path to each tentative positions
-        valid_paths = run_bfs_for_all_potential_target_nodes(
+        valid_paths = pathfinder(
             previous_node_info,
-            tentative_positions,
+            tent_coords,
             next_neigh_zx_type,
-            occupied_coords=occupied_coords_copy,
-            overwrite_tgt=(tentative_positions[0], target_type),
-            hadamard_flag=hadamard_flag,
+            taken_coords=taken_coords_cc,
+            overwrite_tgt=(tent_coords[0], target_type),
+            hdm=hdm,
         )
-        
+
         # Append usable paths to clean paths
         if valid_paths:
             for path in valid_paths.values():
                 path_checks = True
                 for node in path:
-                    if node[0] in occupied_coords_copy:
+                    if node[0] in taken_coords_cc:
                         path_checks = False
                 if path_checks:
                     clean_paths.append(path)
-        
+
         # Break if valid paths generated at step
-        if clean_paths and step >= kwargs["max_search_space"]:
+        if clean_paths:
             break
 
         # Increase distance if no valid paths found at current step
@@ -806,7 +823,6 @@ def _find_start_node_id(nx_graph: nx.Graph) -> Optional[int]:
         start_node: Optional[int] = None
 
     # RETURN START NODE
-    start_node = 1
     return start_node
 
 

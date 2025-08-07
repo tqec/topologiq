@@ -98,7 +98,7 @@ def get_valid_nxt_kinds(
     current_pos: StandardCoord,
     current_kind: str,
     next_pos: StandardCoord,
-    hadamard_flag: bool = False,
+    hdm: bool = False,
 ) -> List[str]:
     """Reduces the number of possible types for next block/pipe by quickly running the current kind by a pre-match operations.
 
