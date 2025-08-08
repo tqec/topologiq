@@ -1,13 +1,13 @@
 import time
 import shutil
+
 from pathlib import Path
 from typing import List, Tuple, Union
 
 from scripts.graph_manager import graph_manager_bfs
-
 from utils.classes import Colors, SimpleDictGraph, StandardBlock
-from utils.utils_greedy_bfs import reindex_pth_dict
-from utils.utils_zx_graphs import strip_zx_g_boundaries
+from utils.utils_misc import write_outputs
+from utils.utils_zx_graphs import strip_boundaries
 from utils.grapher import vis_3d_g, lattice_to_g
 from utils.animation import create_animation
 
@@ -59,10 +59,10 @@ def runner(
         - length_of_beams: length of each of the beams coming out of open nodes.
 
     Returns:
-        - c_g_dict: original circuit given to function returns for easy traceability
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
-        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
-        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+        - c_g_dict: original circuit given to function returns for easy traceability.
+        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
+        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
 
     """
 
@@ -75,7 +75,7 @@ def runner(
 
     # APPLICABLE GRAPH TRANSFORMATIONS
     if strip_ports:
-        c_g_dict = strip_zx_g_boundaries(c_g_dict)
+        c_g_dict = strip_boundaries(c_g_dict)
 
     # VARS TO HOLD RESULTS
     edge_pths: Union[None, dict] = None
@@ -83,116 +83,94 @@ def runner(
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # LOOP UNTIL SUCCESS OR LIMIT
-    errors_in_result: bool = False
     i: int = 0
     while i < max_attempts:
 
+        # Update counters
+        t1_inner = time.time()
+        i += 1
+        
+        # Update user
         print(f"\nAttempt {i + 1} of {max_attempts}:")
 
-        # Update counters
-        i += 1
-        t1_inner = time.time()
-
         # Call algorithm
-        _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
-            c_g_dict,
-            c_name=c_name,
-            hide_ports=hide_ports,
-            visualise=visualise,
-            log_stats=log_stats,
-            **kwargs,
-        )
+        try:
+            _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
+                c_g_dict,
+                c_name=c_name,
+                hide_ports=hide_ports,
+                visualise=visualise,
+                log_stats=log_stats,
+                **kwargs,
+            )
 
-        # Return result is there are no errors
-        if lat_nodes is not None and lat_edges is not None:
+            # Return result if any
+            if lat_nodes is not None and lat_edges is not None:
 
-            # User updates
+                # Stop timer
+                duration_iter = time.time() - t1_inner
+                duration_all = time.time() - t1
+
+                # Update user
+                print(
+                    Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
+                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
+                )
+
+                if visualise[0] is not None or visualise[1] is not None:
+                    print(
+                        "Visualisations enabled. For faster runtimes, disable visualisations."
+                    )
+
+                # Write outputs
+                write_outputs(
+                    c_g_dict, c_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
+                )
+
+                # Visualise result
+                if visualise[0]:
+                    if (
+                        visualise[0].lower() == "final"
+                        or visualise[0].lower() == "detail"
+                    ):
+                        final_nx_graph, _ = lattice_to_g(lat_nodes, lat_edges)
+                        vis_3d_g(final_nx_graph, hide_ports=hide_ports)
+
+                # Animate
+                if visualise[1]:
+                    if visualise[1].lower() == "GIF" or visualise[1].lower() == "MP4":
+                        vis_3d_g(
+                            new_nx_g,
+                            hide_ports=hide_ports,
+                            save_to_file=True,
+                            filename=f"{c_name}{c:03d}",
+                        )
+
+                        create_animation(
+                            filename_prefix=c_name,
+                            restart_delay=5000,
+                            duration=2500,
+                            video=True if visualise[1] == "MP4" else False,
+                        )
+
+                # End loop
+                break
+
+        except ValueError as e:
+
+            # Stop timer
             duration_iter = time.time() - t1_inner
             duration_all = time.time() - t1
-
-            print(
-                Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
-                f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
-            )
-
-            if visualise[0] is not None or visualise[1] is not None:
-                print(
-                    "You have visualisations enabled. For faster runtimes, please disable visualisations."
-                )
-
-            # Write outputs
-            lines: List[str] = []
-
-            lines.append(f"RESULT SHEET. CIRCUIT NAME: {c_name}\n")
-            lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
-            for node in c_g_dict["nodes"]:
-                lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
-            lines.append("\n")
-            for edge in c_g_dict["edges"]:
-                lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
-
-            lines.append(
-                '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
-            )
-
-            for key, edge_pth in edge_pths.items():
-                lines.append(
-                    f"Edge {edge_pth['src_tgt_ids']}: {edge_pth['pth_nodes']}\n"
-                )
-
-            lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
-            for key, node in lat_nodes.items():
-                lines.append(f"Node ID: {key}. Info: {node}\n")
-            for key, edge_info in lat_edges.items():
-                lines.append(
-                    f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
-                )
-
-            with open(f"{out_dir_pth}/{c_name}.txt", "w") as f:
-                f.writelines(lines)
-                f.close()
-
-            # Visualise result
-            if visualise[0]:
-                if visualise[0].lower() == "final" or visualise[0].lower() == "detail":
-                    final_nx_graph, _ = lattice_to_g(lat_nodes, lat_edges)
-                    vis_3d_g(final_nx_graph, hide_ports=hide_ports)
-
-            # Animate
-            if visualise[1]:
-                if visualise[1].lower() == "GIF" or visualise[1].lower() == "MP4":
-                    vis_3d_g(
-                        new_nx_g,
-                        hide_ports=hide_ports,
-                        save_to_file=True,
-                        filename=f"{c_name}{c:03d}",
-                    )
-
-                    create_animation(
-                        filename_prefix=c_name,
-                        restart_delay=5000,
-                        duration=2500,
-                        video=True if visualise[1] == "MP4" else False,
-                    )
-
-            # End loop
-            break
-
-        # If there are errors in result, continue loop
-        else:
 
             # Update user
-            duration_iter = time.time() - t1_inner
-            duration_all = time.time() - t1
-
             print(
-                Colors.RED + "ATTEMPT FAILED." + Colors.RESET,
+                Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
                 f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
             )
 
             if visualise[0] is not None or visualise[1] is not None:
                 print(
-                    "You have visualisations enabled. For faster runtimes, please disable visualisations."
+                    "Visualisations enabled. For faster runtimes, disable visualisations."
                 )
 
             # Delete temporary files

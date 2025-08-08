@@ -1,73 +1,64 @@
 from typing import List
 from utils.classes import StandardCoord
-from utils.utils_greedy_bfs import check_is_exit
+from utils.utils_greedy_bfs import is_exit
 
 
-def check_face_match(
-    src_coord: StandardCoord,
-    src_kind: str,
-    tgt_coord: StandardCoord,
-    tgt_kind: str,
+def face_match(
+    src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: str
 ) -> bool:
-    """Checks if a block or pipe has an available exit pointing towards a target coordinate
+    """Checks if block or pipe has an available exit pointing towards a target coordinate
     by matching exit marker in the block's or pipe's symbolic name to the direction of target coordinate.
 
-    ! Note. Function does not test if target coordinate is available.
-    ! Note. Function does not test if exit is unobstructed.
-    ! Note. To check if two cubes match, run this function twice: current to target, target to current.
+    ! Function does not test if target coordinate is available.
+    ! Function does not test if exit is unobstructed.
+    ! To check if two cubes match, run this function twice: current to target, target to current.
 
     Args:
-        - src_coord: (x, y, z) coordinates for source node.
-        - src_kind: kind for the source node.
-        - tgt_coord: (x, y, z) coordinates for target node.
+        - src_c: (x, y, z) coords for source node.
+        - src_k: kind for the source node.
+        - tgt_c: (x, y, z) coords for target node.
 
     Returns:
-        - boolean:
+        - (boolean):
             - True: available exit towards target coordinate,
             - False: NO available exit towards target coordinate.
-
     """
 
     # Sanitise kind in case of mixed case inputs
-    src_kind = src_kind.lower()
-    if "h" in src_kind:
-        src_kind = src_kind.replace("h", "")
-    tgt_kind = tgt_kind.lower()
+    src_k = src_k.lower()
+    if "h" in src_k:
+        src_k = src_k.replace("h", "")
+    tgt_k = tgt_k.lower()
 
     # Extract axis of displacement from kinds
-    diffs = [p[1] - p[0] for p in list(zip(src_coord, tgt_coord))]
-    axes_diffs = [True if axis != 0 else False for axis in diffs]
+    diffs = [p[1] - p[0] for p in list(zip(src_c, tgt_c))]
+    ax_diffs = [True if ax != 0 else False for ax in diffs]
 
-    idx = axes_diffs.index(True)
+    idx = ax_diffs.index(True)
 
-    new_src_kind = src_kind[:idx] + src_kind[idx + 1 :]
-    new_tgt_kind = tgt_kind[:idx] + tgt_kind[idx + 1 :]
+    src_k_new = src_k[:idx] + src_k[idx + 1 :]
+    tgt_k_new = tgt_k[:idx] + tgt_k[idx + 1 :]
 
-    # Fail if two other dimensions do not match
-    if not new_src_kind == new_tgt_kind:
+    if not src_k_new == tgt_k_new:
         return False
 
-    # Pass otherwise
     return True
 
 
-def check_cube_match(
-    src_coords: StandardCoord,
-    src_kind: str,
-    tgt_pos: StandardCoord,
-    tgt_kind: str,
+def cube_match(
+    src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str
 ) -> bool:
     """Checks if two cubes match by comparing the symbols of their colours.
 
     ! Note. Function does not handle HADAMARDS.
     ! Note. To handle hadamards in "tgt_pos", strip the "h" from name, run as a regular pipe, add "h" back after match is found.
-    ! Note. To handle hadamards in "src_coords", rotate it, then run as regular pipe.
+    ! Note. To handle hadamards in "src_c", rotate it, then run as regular pipe.
 
     Args:
-        - src_coords: (x, y, z) coordinates for the current node.
-        - src_kind: current node's kind.
+        - src_c: (x, y, z) coordinates for the current node.
+        - src_k: current node's kind.
         - tgt_pos: (x, y, z) coordinates for the next node.
-        - tgt_kind: target node's kind.
+        - tgt_k: target node's kind.
 
     Returns:
         - bool:
@@ -76,31 +67,23 @@ def check_cube_match(
 
     """
 
-    # SANITISE
-    src_kind = src_kind.lower()
-    tgt_kind = tgt_kind.lower()
-
     # CHECK SOURCE TO TARGET
-    # Connection takes place on a valid exit of source
-    if not check_is_exit(src_coords, src_kind, tgt_pos):
+    if not is_exit(src_c, src_k.lower(), tgt_pos):
         return False
 
     # CHECK TARGET TO SOURCE
-    # Connection takes place on a valid exit of target
-    if not check_is_exit(tgt_pos, tgt_kind, src_coords):
+    if not is_exit(tgt_pos, tgt_k.lower(), src_c):
         return False
 
     return True
 
 
-def get_valid_nxt_kinds(
-    src_coords: StandardCoord, src_kind: str, tgt_pos: StandardCoord
-) -> List[str]:
+def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[str]:
     """Reduces the number of possible types for next block/pipe by quickly running the current kind by a pre-match operations.
 
     Args:
-        - src_coords: (x, y, z) coordinates for the current node.
-        - src_kind: current node's kind.
+        - src_c: (x, y, z) coordinates for the current node.
+        - src_k: current node's kind.
         - tgt_pos: (x, y, z) coordinates for the next node.
 
     Returns:
@@ -109,30 +92,17 @@ def get_valid_nxt_kinds(
     """
 
     # HELPER VARIABLES
-    valid_kinds = []
-    cube_kinds = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
-    pipe_kinds = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
+    c_ks = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
+    p_ks = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
     # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
     # If current kind has an "o", the next kind is a cube
-    if "o" in src_kind:
-        for tgt_kind in cube_kinds:
-            cube_match = check_cube_match(src_coords, src_kind, tgt_pos, tgt_kind)
-            if cube_match:
-                valid_kinds.append(tgt_kind)
-
+    if "o" in src_k:                
+        ok = [tgt_k for tgt_k in c_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]            
     # If current kind does not have an "o", then current kind is cube and the next kind is a pipe
     else:
-        for tgt_kind in pipe_kinds:
-            cube_match = check_cube_match(src_coords, src_kind, tgt_pos, tgt_kind)
-            if cube_match:
-                valid_kinds.append(tgt_kind)
+        ok = [tgt_k for tgt_k in p_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]
 
-    # Now discard possible kinds where there is no colour match for all non-connection faces
-    valid_kinds_min = []
-    for tgt_kind in valid_kinds:
-        if check_face_match(src_coords, src_kind, tgt_pos, tgt_kind):
-            valid_kinds_min.append(tgt_kind)
-
-    # RETURN ARRAY OF POSSIBLE NEXT KINDS
-    return valid_kinds_min
+    # Discard kinds where there is no colour match, and return
+    ok_min = [tgt_k for tgt_k in ok if face_match(src_c, src_k, tgt_pos, tgt_k)]
+    return ok_min

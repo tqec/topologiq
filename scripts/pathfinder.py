@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional, Union
 
 from utils.classes import StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import flip_hdm, rot_o_kind
-from utils.constraints import get_valid_nxt_kinds
+from utils.constraints import nxt_kinds
 from utils.utils_misc import get_max_manhattan, log_stats_to_file
 
 
@@ -144,7 +144,7 @@ def core_pthfinder_bfs(
 
     # KEY BFS VARS
     queue = deque([src])
-    visited: dict[Tuple[StandardBlock, Tuple[int, int, int]], int] = {
+    visited: dict[Tuple[StandardBlock, StandardCoord], int] = {
         (src, (0, 0, 0)): 0
     }
 
@@ -154,8 +154,8 @@ def core_pthfinder_bfs(
     moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
     # EXIT CONDITIONS
-    num_tgts_filled = 0
-    num_tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
+    tgts_filled = 0
+    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
     if len(tent_coords) > 1:
         max_manhattan = get_max_manhattan(s_coords, tent_coords) * 2
     else:
@@ -166,27 +166,27 @@ def core_pthfinder_bfs(
 
     # CORE PATHFINDER BFS LOOP
     while queue:
-        curr_b_info: StandardBlock = queue.popleft()
-        curr_coords, curr_kind = curr_b_info
-        x, y, z = [x for x in curr_coords]
+        curr: StandardBlock = queue.popleft()
+        curr_coords, curr_kind = curr
+        x, y, z = curr_coords
 
-        current_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
-        if current_manhattan > max_manhattan:
+        curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
+        if curr_manhattan > max_manhattan:
             break
 
         if curr_coords in end_coords and (
             tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds
         ):
-            valid_pths[curr_b_info] = pth[curr_b_info]
-            num_tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
-            if num_tgts_filled >= num_tgts_to_fill:
+            valid_pths[curr] = pth[curr]
+            tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
+            if tgts_filled >= tgts_to_fill:
                 break
 
         scale = 2 if "o" in curr_kind else 1
         for dx, dy, dz in moves:
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
-            curr_pth_coords = [n[0] for n in pth[curr_b_info]]
+            curr_pth_coords = [n[0] for n in pth[curr]]
 
             mid_pos = None
             if "o" in curr_kind and scale == 2:
@@ -216,7 +216,7 @@ def core_pthfinder_bfs(
 
                 curr_kind = curr_kind[:3]
 
-            possible_nxt_types = get_valid_nxt_kinds(curr_coords, curr_kind, nxt_coords)
+            possible_nxt_types = nxt_kinds(curr_coords, curr_kind, nxt_coords)
 
             for nxt_type in possible_nxt_types:
 
@@ -239,7 +239,7 @@ def core_pthfinder_bfs(
                     and nxt_coords not in taken
                     and (mid_pos is None or nxt_coords != mid_pos)
                 ):
-                    new_pth_len = pth_len[curr_b_info] + 1
+                    new_pth_len = pth_len[curr] + 1
                     nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
 
                     if (
@@ -250,7 +250,7 @@ def core_pthfinder_bfs(
                         visited[(nxt_b_info, (dx, dy, dz))] = new_pth_len
                         queue.append(nxt_b_info)
                         pth_len[nxt_b_info] = new_pth_len
-                        pth[nxt_b_info] = pth[curr_b_info] + [nxt_b_info]
+                        pth[nxt_b_info] = pth[curr] + [nxt_b_info]
 
     return valid_pths
 
@@ -276,25 +276,16 @@ def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List
     if tgt_kind:
         return [tgt_kind]
 
-    # TYPE/KIND FAMILIES
-    X = ["xxz", "xzx", "zxx"]
-    Z = ["xzz", "zzx", "zxz"]
-    B = ["ooo"]
-    S = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
-    HDM = ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
-
     if tgt_zx_type in ["X", "Z"]:
-        fam = X if tgt_zx_type == "X" else Z
+        return ["xxz", "xzx", "zxx"] if tgt_zx_type == "X" else ["xzz", "zzx", "zxz"]
     elif tgt_zx_type == "O":
-        fam = B
+        return ["ooo"]
     elif tgt_zx_type == "SIMPLE":
-        fam = S
+        return ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
     elif tgt_zx_type == "HADAMARD":
-        fam = HDM
+        return ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
     else:
         return [tgt_zx_type]
-
-    return fam
 
 
 def get_taken_coords(all_blocks: List[StandardBlock]):
@@ -314,45 +305,45 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
         return []
 
     # Add first block's coordinates
-    b_1 = all_blocks[0]
-    if b_1:
-        b_1_coords = b_1[0]
+    b_1st = all_blocks[0]
+    if b_1st:
+        b_1_coords = b_1st[0]
         taken.add(b_1_coords)
 
     # Iterate from the second node
-    for i, b in enumerate(all_blocks):
+    for i, _ in enumerate(all_blocks):
 
         if i > 0:
 
-            curr_b = all_blocks[i]
-            prev_b = all_blocks[i - 1]
+            curr = all_blocks[i]
+            prev = all_blocks[i - 1]
 
-            if curr_b and prev_b:
-                curr_b_coords, curr_b_kind = curr_b
-                prev_b_coords, _ = prev_b
+            if curr and prev:
+                curr_c, curr_k = curr
+                prev_c, _ = prev
 
                 # Add current node's coordinates
-                taken.add(curr_b_coords)
+                taken.add(curr_c)
 
-                if "o" in curr_b_kind:
-                    cx, cy, cz = curr_b_coords
-                    px, py, pz = prev_b_coords
-                    ext_coords = None
+                if "o" in curr_k:
+                    cx, cy, cz = curr_c
+                    px, py, pz = prev_c
+                    ext_cs = None
 
                     if cx == px + 1:
-                        ext_coords = (cx + 1, cy, cz)
+                        ext_cs = (cx + 1, cy, cz)
                     elif cx == px - 1:
-                        ext_coords = (cx - 1, cy, cz)
+                        ext_cs = (cx - 1, cy, cz)
                     elif cy == py + 1:
-                        ext_coords = (cx, cy + 1, cz)
+                        ext_cs = (cx, cy + 1, cz)
                     elif cy == py - 1:
-                        ext_coords = (cx, cy - 1, cz)
+                        ext_cs = (cx, cy - 1, cz)
                     elif cz == pz + 1:
-                        ext_coords = (cx, cy, cz + 1)
+                        ext_cs = (cx, cy, cz + 1)
                     elif cz == pz - 1:
-                        ext_coords = (cx, cy, cz - 1)
+                        ext_cs = (cx, cy, cz - 1)
 
-                    if ext_coords:
-                        taken.add(ext_coords)
+                    if ext_cs:
+                        taken.add(ext_cs)
 
     return list(taken)

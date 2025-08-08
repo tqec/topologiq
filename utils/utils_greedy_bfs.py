@@ -4,16 +4,14 @@ from typing import Tuple, List, Optional
 from utils.classes import StandardCoord, StandardBeam, NodeBeams, StandardBlock
 
 
-def check_is_exit(
-    src_coord: StandardCoord, src_kind: Optional[str], tgt_coord: StandardCoord
-) -> bool:
+def is_exit(src_c: StandardCoord, src_k: Optional[str], tgt_c: StandardCoord) -> bool:
     """Checks if a face is an exit by matching exit markers in the block/pipe's symbolic name
     and an displacement array symbolising the direction of the target block/pipe.
 
     Args:
-        - src_coord: (x, y, z) coordinates for the current block/pipe.
-        - src_kind: current block's/pipe's kind.
-        - tgt_coord: coordinates for the target block/pipe.
+        - src_c: (x, y, z) coordinates for the current block/pipe.
+        - src_k: current block's/pipe's kind.
+        - tgt_c: coordinates for the target block/pipe.
 
     Returns:
         - bool:
@@ -22,8 +20,8 @@ def check_is_exit(
 
     """
 
-    src_kind = src_kind.lower()[:3] if isinstance(src_kind, str) else ""
-    kind_3D = [src_kind[0], src_kind[1], src_kind[2]]
+    src_k = src_k.lower()[:3] if isinstance(src_k, str) else ""
+    kind_3D = [src_k[0], src_k[1], src_k[2]]
 
     if "o" in kind_3D:
         marker = "o"
@@ -31,7 +29,7 @@ def check_is_exit(
         marker = [i for i in set(kind_3D) if kind_3D.count(i) == 2][0]
 
     exit_idxs = [i for i, char in enumerate(kind_3D) if char == marker]
-    diffs = [tgt - src for src, tgt in zip(src_coord, tgt_coord)]
+    diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]
 
     diff_idx = -1
     for i, diff in enumerate(diffs):
@@ -46,8 +44,8 @@ def check_is_exit(
 
 
 def check_unobstr(
-    src_coord: StandardCoord,
-    tgt_coord: StandardCoord,
+    src_c: StandardCoord,
+    tgt_c: StandardCoord,
     taken: List[StandardCoord],
     all_beams: List[NodeBeams],
     beams_len: int,
@@ -55,8 +53,8 @@ def check_unobstr(
     """Checks if a face (typically an exit: call after verifying face is exit) is unobstructed.
 
     Args:
-        - src_coord: (x, y, z) coordinates for the current block/pipe.
-        - tgt_coord: coordinates for the target block/pipe.
+        - src_c: (x, y, z) coordinates for the current block/pipe.
+        - tgt_c: coordinates for the target block/pipe.
         - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
         - beams_len: int representing how long does each beam spans from its originating block.
@@ -68,28 +66,28 @@ def check_unobstr(
 
     """
 
-    single_beam: StandardBeam = []
+    beam: StandardBeam = []
 
-    diffs = [target - source for source, target in zip(src_coord, tgt_coord)]
+    diffs = [target - source for source, target in zip(src_c, tgt_c)]
     diffs = [1 if d > 0 else -1 if d < 0 else 0 for d in diffs]
 
     for i in range(1, beams_len):
         dx, dy, dz = (diffs[0] * i, diffs[1] * i, diffs[2] * i)
-        single_beam.append((src_coord[0] + dx, src_coord[1] + dy, src_coord[2] + dz))
+        beam.append((src_c[0] + dx, src_c[1] + dy, src_c[2] + dz))
 
     if not taken:
-        return True, single_beam
+        return True, beam
 
-    for coord in single_beam:
-        if coord in taken or coord in all_beams:
-            return False, single_beam
+    for c in beam:
+        if c in taken or c in all_beams:
+            return False, beam
 
-    return True, single_beam
+    return True, beam
 
 
-def check_for_exits(
-    src_coords: StandardCoord,
-    src_kind: str | None,
+def check_exits(
+    src_c: StandardCoord,
+    src_k: str | None,
     taken: List[StandardCoord],
     all_beams: List[NodeBeams],
     beams_len: int,
@@ -99,20 +97,20 @@ def check_for_exits(
     and whether the said exit is unobstructed.
 
     Args:
-        - src_coords: (x, y, z) coordinates for the block/pipe of interest.
-        - src_kind: kind/type of the block/pipe of interest.
+        - src_c: (x, y, z) coordinates for the block/pipe of interest.
+        - src_k: kind/type of the block/pipe of interest.
         - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
         - beams_len: int representing how long does each beam spans from its originating block.
 
     Returns:
         - unobstrexits_n: the number of unobstructed exist for the block/pipe of interest.
-        - node_beams: the beams emanating from the block/pipe of interest.
+        - n_beams: the beams emanating from the block/pipe of interest.
 
     """
 
     unobstr_exits_n = 0
-    node_beams: NodeBeams = []
+    n_beams: NodeBeams = []
 
     diffs = [
         (1, 0, 0),
@@ -124,30 +122,30 @@ def check_for_exits(
     ]
 
     for d in diffs:
-        tgt_coords = (
-            src_coords[0] + d[0],
-            src_coords[1] + d[1],
-            src_coords[2] + d[2],
+        tgt_c = (
+            src_c[0] + d[0],
+            src_c[1] + d[1],
+            src_c[2] + d[2],
         )
 
-        if check_is_exit(src_coords, src_kind, tgt_coords):
+        if is_exit(src_c, src_k, tgt_c):
             is_unobstr, exit_beam = check_unobstr(
-                src_coords, tgt_coords, taken, all_beams, beams_len
+                src_c, tgt_c, taken, all_beams, beams_len
             )
             if is_unobstr:
                 unobstr_exits_n += 1
-                node_beams.append(exit_beam)
+                n_beams.append(exit_beam)
 
-    return unobstr_exits_n, node_beams
+    return unobstr_exits_n, n_beams
 
 
-def is_move_allowed(src_coords: StandardCoord, tgt_coords: StandardCoord) -> bool:
+def is_move_allowed(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
     """Uses a Manhattan distance to quickly checks if a potential (source, target) combination
     is possible given the standard size of a block and pipe and that all blocks are followed by a pipe.
 
     Args:
-        - src_coords: (x, y, z) coordinates for the originating block.
-        - tgt_coords: (x, y, z) coordinates for the potential placement of the target block.
+        - src_c: (x, y, z) coordinates for the originating block.
+        - tgt_c: (x, y, z) coordinates for the potential placement of the target block.
 
     Returns:
         - bool:
@@ -156,21 +154,21 @@ def is_move_allowed(src_coords: StandardCoord, tgt_coords: StandardCoord) -> boo
 
     """
 
-    sx, sy, sz = src_coords
-    nx, ny, nz = tgt_coords
+    sx, sy, sz = src_c
+    nx, ny, nz = tgt_c
     manhattan = abs(nx - sx) + abs(ny - sy) + abs(nz - sz)
     return manhattan % 3 == 0
 
 
 def gen_tent_tgt_coords(
-    src_coords: StandardCoord,
+    src_c: StandardCoord,
     max_manhattan: int = 3,
     taken: List[StandardCoord] = [],
 ) -> List[StandardCoord]:
     """Generates a number of potential placement positions for target node.
 
     Args:
-        - src_coords: (x, y, z) coordinates for the originating block.
+        - src_c: (x, y, z) coordinates for the originating block.
         - max_manhattan: Max. (Manhattan) distance between origin and target blocks.
         - taken: a list of coordinates already taken by previous operations.
 
@@ -180,11 +178,11 @@ def gen_tent_tgt_coords(
     """
 
     # EXTRACT SOURCE COORDS
-    sx, sy, sz = src_coords
+    sx, sy, sz = src_c
     tent_coords = {}
 
     # SINGLE MOVES
-    targets = [
+    tgts = [
         (sx + 3, sy, sz),
         (sx - 3, sy, sz),
         (sx, sy + 3, sz),
@@ -192,13 +190,13 @@ def gen_tent_tgt_coords(
         (sx, sy, sz + 3),
         (sx, sy, sz - 3),
     ]
-    tent_coords[3] = [t for t in targets if t not in taken]
+    tent_coords[3] = [t for t in tgts if t not in taken]
 
     # MANHATTAN 6
     if max_manhattan > 3:
         tent_coords[6] = []
         for dx, dy, dz in [c for c in tent_coords[3]]:
-            targets = [
+            tgts = [
                 (dx + 3, dy, dz),
                 (dx - 3, dy, dz),
                 (dx, dy + 3, dz),
@@ -210,7 +208,7 @@ def gen_tent_tgt_coords(
             tent_coords[6].extend(
                 [
                     t
-                    for t in targets
+                    for t in tgts
                     if all(
                         [
                             abs(t[0]) - abs(sx) != 6,
@@ -230,7 +228,7 @@ def gen_tent_tgt_coords(
     if max_manhattan > 6:
         tent_coords[9] = []
         for dx, dy, dz in [c for c in tent_coords[6]]:
-            targets = [
+            tgts = [
                 (dx + 3, dy, dz),
                 (dx - 3, dy, dz),
                 (dx, dy + 3, dz),
@@ -242,7 +240,7 @@ def gen_tent_tgt_coords(
             tent_coords[9].extend(
                 [
                     t
-                    for t in targets
+                    for t in tgts
                     if all(
                         [
                             abs(t[0]) - abs(sx) != 9,
@@ -266,29 +264,25 @@ def prune_beams(
     all_beams: List[NodeBeams], taken: List[StandardCoord]
 ) -> List[NodeBeams]:
     """Removes beams that have already been broken, as these are no longer indicative of anything.
-
     Args:
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
         - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-
     Returns:
-        - new_all_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with taken coords.
-
+        - new_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with taken coords.
     """
 
     try:
-        new_all_beams = []
-        for node_beams in all_beams:
-            new_node_beams = []
-            for single_beam in node_beams:
-                if all([coord not in taken for coord in single_beam]):
-                    new_node_beams.append(single_beam)
-            if new_node_beams:
-                new_all_beams.append(new_node_beams)
+        new_beams = []
+        for beams in all_beams:
+            iter_beams = [
+                beam for beam in beams if all([coord not in taken for coord in beam])
+            ]
+            if iter_beams:
+                new_beams.append(iter_beams)
     except:
-        new_all_beams = all_beams
+        new_beams = all_beams
 
-    return new_all_beams
+    return new_beams
 
 
 def reindex_pth_dict(
@@ -307,47 +301,47 @@ def reindex_pth_dict(
 
     max_id = 0
     idx_pths = {}
-    for edge_pth in edge_pths.values():
-        max_id = max(max_id, edge_pth["src_tgt_ids"][0], edge_pth["src_tgt_ids"][1])
-    next_id = max_id + 1
+    for pth in edge_pths.values():
+        max_id = max(max_id, pth["src_tgt_ids"][0], pth["src_tgt_ids"][1])
+    nxt_id = max_id + 1
 
-    for edge_pth in edge_pths.values():
+    for pth in edge_pths.values():
 
-        indexed_pth = {}
-        start_key, end_key = edge_pth["src_tgt_ids"]
-        nodes_in_pth = edge_pth["pth_nodes"]
+        idxd_pth = {}
+        key_1, key_2 = pth["src_tgt_ids"]
+        pth_nodes = pth["pth_nodes"]
 
-        indexed_pth[start_key] = nodes_in_pth[0]
+        idxd_pth[key_1] = pth_nodes[0]
 
-        for i in range(1, len(nodes_in_pth) - 1):
-            intermediate_node = nodes_in_pth[i]
-            indexed_pth[next_id] = intermediate_node
-            next_id += 1
+        for i in range(1, len(pth_nodes) - 1):
+            mid_node = pth_nodes[i]
+            idxd_pth[nxt_id] = mid_node
+            nxt_id += 1
 
-        if len(nodes_in_pth) > 1:
-            indexed_pth[end_key] = nodes_in_pth[-1]
+        if len(pth_nodes) > 1:
+            idxd_pth[key_2] = pth_nodes[-1]
 
-        idx_pths[(start_key, end_key)] = indexed_pth
+        idx_pths[(key_1, key_2)] = idxd_pth
 
     final_edges = {}
-    for original_edge_key, pth_id_value_map in idx_pths.items():
-        node_ids = list(pth_id_value_map.keys())
-        block_ids = []
-        edge_ids = []
+    for orig_key, pth_id_value_map in idx_pths.items():
+        n_ids = list(pth_id_value_map.keys())
+        b_ids = []
+        e_ids = []
 
-        for i in range(len(node_ids)):
+        for i in range(len(n_ids)):
             if i % 2 == 0:
-                block_ids.append(node_ids[i])
+                b_ids.append(n_ids[i])
             else:
-                edge_ids.append(node_ids[i])
+                e_ids.append(n_ids[i])
 
-        if len(block_ids) >= 2:
-            for i in range(len(block_ids) - 1):
-                node1 = block_ids[i]
-                node2 = block_ids[i + 1]
-                edge_type = pth_id_value_map[edge_ids[i]][1]
+        if len(b_ids) >= 2:
+            for i in range(len(b_ids) - 1):
+                n1 = b_ids[i]
+                n2 = b_ids[i + 1]
+                e_type = pth_id_value_map[e_ids[i]][1]
 
-                final_edges[(node1, node2)] = [edge_type, original_edge_key]
+                final_edges[(n1, n2)] = [e_type, orig_key]
 
     lat_nodes: dict[int, StandardBlock] = {}
     lat_edges: dict[Tuple[int, int], List[str]] = {}
@@ -358,77 +352,77 @@ def reindex_pth_dict(
             if i % 2 == 0:
                 lat_nodes[key] = info
             else:
-                edge_key = (keys[i - 1], keys[i + 1])
-                edge_type = info[1]
-                lat_edges[edge_key] = [edge_type, final_edges[edge_key][1]]
+                e_key = (keys[i - 1], keys[i + 1])
+                e_type = info[1]
+                lat_edges[e_key] = [e_type, final_edges[e_key][1]]
             i += 1
 
     return lat_nodes, lat_edges
 
 
-def rot_o_kind(kind: str) -> str:
+def rot_o_kind(k: str) -> str:
     """Rotates a pipe around its length by using the exit marker in its symbolic name to create a rotational matrix,
     which is then used to rotate the original name with a symbolic multiplication.
 
     Args:
-        - kind: the type/kind/name of the pipe that needs rotation.
+        - k: the kind of the pipe that needs rotation.
 
     Returns:
-        - rot_kind: a new type/kind/name with the rotation incorporated into the new name.
+        - rot_k: a kind with the rotation incorporated into the new name.
 
     """
 
     h_flag = False
-    if "h" in kind:
+    if "h" in k:
         h_flag = True
-        kind.replace("h", "")
+        k.replace("h", "")
 
     # Build rotation matrix based on placement of "o" node
-    available_idxs = [0, 1, 2]
-    available_idxs.remove(kind.index("o"))
+    idxs = [0, 1, 2]
+    idxs.remove(k.index("o"))
 
     new_matrix = {
-        kind.index("o"): np.eye(3, dtype=int)[kind.index("o")],
-        available_idxs[0]: np.eye(3, dtype=int)[available_idxs[1]],
-        available_idxs[1]: np.eye(3, dtype=int)[available_idxs[0]],
+        k.index("o"): np.eye(3, dtype=int)[k.index("o")],
+        idxs[0]: np.eye(3, dtype=int)[idxs[1]],
+        idxs[1]: np.eye(3, dtype=int)[idxs[0]],
     }
 
     rot_matrix = np.array([new_matrix[0], new_matrix[1], new_matrix[2]])
 
     # Rotate kind
-    rot_kind = ""
-    for row in rot_matrix:
+    rot_k = ""
+    for r in rot_matrix:
         entry = ""
-        for j, element in enumerate(row):
-            entry += abs(int(element)) * kind[j]
-        rot_kind += entry
+        for j, ele in enumerate(r):
+            entry += abs(int(ele)) * k[j]
+        rot_k += entry
 
     if h_flag:
-        rot_kind += "h"
+        rot_k += "h"
 
-    return rot_kind
+    return rot_k
 
 
-def flip_hdm(kind: str) -> str:
+def flip_hdm(k: str) -> str:
     """Quickly flips a Hadamard for the opposite Hadamard with length on the same axis.
 
     Args:
-        - kind: the type/kind/name of the Hadamard that needs inverting.
+        - k: the kind of the Hadamard that needs inverting.
 
     Returns:
-        - kind: the type/kind/name of the corresponding/inverted Hadamard.
+        - k_2: the kind of the corresponding/inverted Hadamard.
 
 
     """
     # List of hadamard equivalences
-    hdm_equivs = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
+    equivs = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
 
     # Match to equivalent block given direction
-    if kind in hdm_equivs.keys():
-        kind = hdm_equivs[kind]
+    if k in equivs.keys():
+        new_k = equivs[k]
     else:
-        inv_equivs = {value: key for key, value in hdm_equivs.items()}
-        kind = inv_equivs[kind]
+        inv_equivs = {v: k for k, v in equivs.items()}
+        new_k = inv_equivs[k]
 
     # Return revised kind
-    return kind
+    return new_k

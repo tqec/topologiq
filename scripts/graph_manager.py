@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Tuple, List, Optional, Any, Union, cast
 
 from utils.utils_greedy_bfs import (
-    check_for_exits,
+    check_exits,
     gen_tent_tgt_coords,
     prune_beams,
     reindex_pth_dict,
 )
-from utils.utils_zx_graphs import validate_zx_types, get_zx_type_fam, kind_to_zx_type
+from utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
 from utils.classes import (
     PathBetweenNodes,
     StandardBlock,
@@ -105,7 +105,7 @@ def graph_manager_bfs(
     visited: set = {src}
 
     # VALIDITY CHECKS
-    if not validate_zx_types(g):
+    if not check_zx_types(g):
         print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
         return (nx_g, edge_pths, nx.Graph(), 0, lat_nodes, lat_edges)
 
@@ -128,7 +128,7 @@ def graph_manager_bfs(
 
         # Update list of taken coords and all_beams with node's position & beams
         taken.append((0, 0, 0))
-        _, src_beams = check_for_exits(
+        _, src_beams = check_exits(
             (0, 0, 0),
             random_kind,
             taken,
@@ -157,7 +157,7 @@ def graph_manager_bfs(
 
                 # Try to place blocks as close to one another as as possible
                 step: int = 3
-                while step <= 18:
+                while step <= 9:
                     taken, all_beams, edge_pths, edge_success = place_nxt_block(
                         curr_parent,
                         neigh_id,
@@ -199,6 +199,11 @@ def graph_manager_bfs(
                     # Move to next if there is a succesful placement
                     if edge_success:
                         break
+                    else:
+                        if step == 9:
+                            raise ValueError(
+                                f"Path creation. Error with edge: {curr_parent} -> {neigh_id}"
+                            )
 
                     # Increase distance between nodes if placement not possible
                     step += 3
@@ -221,18 +226,10 @@ def graph_manager_bfs(
         log_stats_id=unique_run_id,
     )
 
-    # ASSEMBLE FINAL LATTICE SURGERY IF NO ERRORS
-    errors_in_result = False
-    for _, edge_pth in edge_pths.items():
-        if edge_pth["edge_type"] == "error":
-            errors_in_result = True
-            break
-
-    if errors_in_result is False:
-        lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
-        new_nx_g = edge_pths_to_g(edge_pths)
-    else:
-        new_nx_g = nx.Graph()
+    # IF WE MADE IT HERE, ALL EDGES CLEARED
+    # ASSEMBLE FINAL LATTICE SURGERY
+    lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
+    new_nx_g = edge_pths_to_g(edge_pths)
 
     # LOG STATS TO FILE IF NEEDED
     if log_stats:
@@ -314,6 +311,7 @@ def second_pass(
 
     # BASE ALL OPERATIONS ON EDGES FROM GRAPH
     num_2n_pass_edges = 0
+    pass_success = True
     for u, v, data in nx_g.edges(data=True):
 
         # Ensure occupied coords do not have duplicates
@@ -394,15 +392,7 @@ def second_pass(
 
                 # Write an error to edge_pths if edge not found
                 else:
-                    edge_pths[edge] = {
-                        "src_tgt_ids": "error",
-                        "pth_coordinates": "error",
-                        "pth_nodes": "error",
-                        "edge_type": "error",
-                    }
-
-                    if log_stats_id:
-                        print(f"Path discovery: {u} -> {v}. FAIL.")
+                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}")
 
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
     return edge_pths, c, num_2n_pass_edges
@@ -566,13 +556,14 @@ def place_nxt_block(
     src: StandardBlock = (src_coords, src_kind)
 
     # Current node data
-    nxt_neigh_node_data = nx_g.nodes[neigh_id]
-    nxt_neigh_zx_type: str = nxt_neigh_node_data.get("type")
-    nxt_neigh_neigh_n = int(_get_node_degree(nx_g, neigh_id))
     nxt_neigh_coords: Optional[StandardCoord] = nx_g.nodes[neigh_id].get("pos")
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if nxt_neigh_coords is None:
+
+        # More current node data
+        nxt_neigh_node_data = nx_g.nodes[neigh_id]
+        nxt_neigh_zx_type: str = nxt_neigh_node_data.get("type")
 
         # Current edge data
         zx_edge_type = nx_g.get_edge_data(src_id, neigh_id).get("type")
@@ -595,9 +586,10 @@ def place_nxt_block(
 
         # Assemble a preliminary dictionary of viable paths
         viable_pths = []
+        nxt_neigh_neigh_n = int(_get_node_degree(nx_g, neigh_id))
         for clean_pth in clean_pths:
             tgt_coords, tgt_kind = clean_pth[-1]
-            tgt_unobstr_exit_n, tgt_beams = check_for_exits(
+            tgt_unobstr_exit_n, tgt_beams = check_exits(
                 tgt_coords,
                 tgt_kind,
                 taken_coords_c,
@@ -610,14 +602,14 @@ def place_nxt_block(
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
             if tgt_unobstr_exit_n >= nxt_neigh_neigh_n:
-                coords_in_pth = [entry[0] for entry in clean_pth]
+                coords_in_pth = [p[0] for p in clean_pth]
                 beams_broken_by_pth = 0
                 for beam in all_beams:
                     for coord in beam:
                         if coord in coords_in_pth:
                             beams_broken_by_pth += 1
 
-                all_nodes_in_pth = [entry for entry in clean_pth]
+                all_nodes_in_pth = [p for p in clean_pth]
                 if nxt_neigh_zx_type == "O":
                     tgt_kind = "ooo"
 
