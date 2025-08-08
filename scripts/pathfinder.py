@@ -31,6 +31,7 @@ def pthfinder(
             used to override placement when target block has already been placed in 3D space in previous operations.
         - taken: list of coordinates already taken in previous operations.
         - hdm: flag to highlights current operation corresponds to a Hadamard edge.
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Returns:
         - valid_pths: all paths found in round, covering some or all tent_coords.

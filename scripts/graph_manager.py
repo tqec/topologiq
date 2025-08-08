@@ -60,6 +60,9 @@ def graph_manager_bfs(
                 - None: no animation whatsoever,
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
+        - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
+            - True: log stats to file
+            - False: do NOT log stats to file
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -296,9 +299,7 @@ def second_pass(
                 - None: no animation whatsoever,
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
-        - log_stats:
-            - True: Print edge-by-edge updates to screen and log stats to file,
-            - False: Do NOT print edge-by-edge updates and do NOT log stats to file.
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -535,9 +536,7 @@ def place_nxt_block(
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX graph.
         - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - init_step: intended (Manhattan) distance between origin and target blocks.
-        - log_stats:
-            - True: Print edge-by-edge updates to screen and log stats to file,
-            - False: Do NOT print edge-by-edge updates and do NOT log stats to file.
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -733,6 +732,7 @@ def run_pthfinder(
             as opposed to creating a path between an existing block a new one to be placed at a tentative position.
         - hdm: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
             which gets handled differently depending on the characteristics of the edge.
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Returns:
         - clean_pths: a list of 3D blocks and pipes needed to connect source and target node in the 3D space in a topologically-correct manner

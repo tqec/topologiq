@@ -50,6 +50,9 @@ def runner(
                 - None: no animation whatsoever,
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
+        - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
+            - True: log stats to file
+            - False: do NOT log stats to file
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
