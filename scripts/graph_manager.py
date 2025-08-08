@@ -1,9 +1,16 @@
 import random
 import networkx as nx
+
 from collections import deque
+from datetime import datetime
 from typing import Tuple, List, Optional, Any, Union, cast
 
-from utils.utils_greedy_bfs import check_for_exits, gen_tent_tgt_coords, prune_beams
+from utils.utils_greedy_bfs import (
+    check_for_exits,
+    gen_tent_tgt_coords,
+    prune_beams,
+    reindex_pth_dict,
+)
 from utils.utils_zx_graphs import validate_zx_types, get_zx_type_fam, kind_to_zx_type
 from utils.classes import (
     PathBetweenNodes,
@@ -15,6 +22,7 @@ from utils.classes import (
 )
 from scripts.pathfinder import pthfinder, get_taken_coords
 from utils.grapher import vis_3d_g, edge_pths_to_g
+from utils.utils_misc import log_stats_to_file
 
 
 ####################
@@ -25,8 +33,16 @@ def graph_manager_bfs(
     c_name: str = "circuit",
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    log_stats: bool = False,
     **kwargs,
-) -> Tuple[nx.Graph, dict, nx.Graph, int]:
+) -> Tuple[
+    nx.Graph,
+    dict,
+    nx.Graph,
+    int,
+    Union[None, dict[int, StandardBlock]],
+    Union[None, dict[Tuple[int, int], List[str]]],
+]:
     """Manages the generalities of the BFS process.
 
     Args:
@@ -62,30 +78,39 @@ def graph_manager_bfs(
 
     """
 
-    # KEY VARIABLES
-    # Take a ZX graph and prepare a fresh 3D graph with positions set to None
-    nx_g = prep_3d_g(g)
+    # PRELIMS
+    # Turn on logging of stats if needed
+    t1 = None
+    t2 = None
+    unique_run_id = None
+    if log_stats:
+        t1 = datetime.now()
+        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
 
-    # Arrays/dicts to track coordinates
+    # Variables to hold results
+    nx_g = prep_3d_g(g)
+    lat_nodes: Union[None, dict[int, StandardBlock]] = None
+    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
+
+    # BFS management
+    src: Optional[int] = _find_src_id(nx_g)
     taken: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
     edge_pths: dict = {}
 
+    queue: deque = deque([src])
+    visited: set = {src}
+
     # VALIDITY CHECKS
     if not validate_zx_types(g):
         print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
-        return (nx_g, edge_pths, nx.Graph(), 0)
-
-    # BFS management
-    src: Optional[int] = _find_src_id(nx_g)
-    queue: deque = deque([src])
-    visited: set = {src}
+        return (nx_g, edge_pths, nx.Graph(), 0, lat_nodes, lat_edges)
 
     # SPECIAL PROCESS FOR CENTRAL NODE
     # Terminate if there is no start node
     if src is None:
         print(Colors.RED + "Graph has no nodes." + Colors.RESET)
-        return nx_g, edge_pths, nx.Graph(), 0
+        return nx_g, edge_pths, nx.Graph(), 0, lat_nodes, lat_edges
 
     # Place start node at origin
     else:
@@ -138,6 +163,7 @@ def graph_manager_bfs(
                         all_beams,
                         edge_pths,
                         init_step=step,
+                        log_stats_id=unique_run_id,
                         **kwargs,
                     )
 
@@ -179,7 +205,9 @@ def graph_manager_bfs(
     taken = list(set(taken))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    edge_pths, c = second_pass(
+    if log_stats:
+        t2 = datetime.now()
+    edge_pths, c, num_2n_pass_edges = second_pass(
         nx_g,
         taken,
         edge_pths,
@@ -187,13 +215,55 @@ def graph_manager_bfs(
         c,
         hide_ports=hide_ports,
         visualise=visualise,
+        log_stats_id=unique_run_id,
     )
 
-    # CREATE A NEW GRAPH FROM FINAL EDGE PATHS RETURNS FROM ALL THE BOVE
-    new_nx_g = edge_pths_to_g(edge_pths)
+    # ASSEMBLE FINAL LATTICE SURGERY IF NO ERRORS
+    errors_in_result = False
+    for _, edge_pth in edge_pths.items():
+        if edge_pth["edge_type"] == "error":
+            errors_in_result = True
+            break
+
+    if errors_in_result is False:
+        lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
+        new_nx_g = edge_pths_to_g(edge_pths)
+    else:
+        new_nx_g = nx.Graph()
+
+    # LOG STATS TO FILE IF NEEDED
+    if log_stats:
+        if t1 and t2:
+            t_end = datetime.now()
+            duration_first_pass = (t2 - t1).total_seconds()
+            duration_second_pass = (t_end - t1).total_seconds()
+            duration_total = (t_end - t1).total_seconds()
+
+            nodes_in_input = len(nx_g.nodes)
+            edges_in_input = len(nx_g.edges)
+            blocks_in_output = len(lat_nodes.keys()) if lat_nodes else 0
+            edges_in_output = len(lat_edges.keys()) if lat_edges else 0
+            num_normal_edges = edges_in_input - num_2n_pass_edges
+
+            bfs_manager_stats = [
+                unique_run_id,
+                c_name,
+                lat_nodes is not None and lat_edges is not None,
+                nodes_in_input,
+                edges_in_input,
+                num_normal_edges,
+                num_2n_pass_edges,
+                blocks_in_output,
+                edges_in_output,
+                duration_first_pass,
+                duration_second_pass,
+                duration_total,
+            ]
+
+            log_stats_to_file(bfs_manager_stats, f"bfs_manager")
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
-    return nx_g, edge_pths, new_nx_g, c
+    return nx_g, edge_pths, new_nx_g, c, lat_nodes, lat_edges
 
 
 def second_pass(
@@ -204,8 +274,8 @@ def second_pass(
     c: int,
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats: bool = False,
-) -> Tuple[dict, int]:
+    log_stats_id: Union[str, None] = None,
+) -> Tuple[dict, int, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
     which typically happens when there are multiple interconnected nodes.
 
@@ -242,6 +312,7 @@ def second_pass(
     """
 
     # BASE ALL OPERATIONS ON EDGES FROM GRAPH
+    num_2n_pass_edges = 0
     for u, v, data in nx_g.edges(data=True):
 
         # Ensure occupied coords do not have duplicates
@@ -263,6 +334,9 @@ def second_pass(
 
             # Call pathfinder on any graph edge that does not have an entry in edge_pths
             if edge not in edge_pths:
+
+                # Update edge counter
+                num_2n_pass_edges += 1
 
                 # Check if edge is hadamard
                 zx_edge_type = nx_g.get_edge_data(u, v).get("type")
@@ -299,7 +373,7 @@ def second_pass(
                     # Create graph from existing edges
                     new_nx_g = edge_pths_to_g(edge_pths)
 
-                    if log_stats:
+                    if log_stats_id:
                         print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
                     # Create visualisation
@@ -326,11 +400,11 @@ def second_pass(
                         "edge_type": "error",
                     }
 
-                    if log_stats:
+                    if log_stats_id:
                         print(f"Path discovery: {u} -> {v}. FAIL.")
 
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
-    return edge_pths, c
+    return edge_pths, c, num_2n_pass_edges
 
 
 #######################
@@ -445,7 +519,7 @@ def place_nxt_block(
     all_beams: List[NodeBeams],
     edge_pths: dict,
     init_step: int = 3,
-    log_stats: bool = False,
+    log_stats_id: Union[str, None] = None,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
     """Takes care of positioning nodes in the 3D space as part of the outer (graph manager) BFS flow. The function does not explicitly create the paths,
@@ -517,6 +591,7 @@ def place_nxt_block(
             init_step,
             taken_coords_c if taken else [],
             hdm=hdm,
+            log_stats_id=log_stats_id,
         )
 
         # Assemble a preliminary dictionary of viable paths
@@ -606,7 +681,7 @@ def place_nxt_block(
             # Add beams of winner's target node to list of graphs' all_beams
             all_beams.append(winner_pth.tgt_beams)
 
-            if log_stats:
+            if log_stats_id:
                 print(f"Path creation: {src_id} -> {neigh_id}. SUCCESS.")
 
             # Return updated list of taken coords and all_beams, with success code
@@ -625,7 +700,7 @@ def place_nxt_block(
             }
 
             # Explicit warning
-            if log_stats:
+            if log_stats_id:
                 print(f"Path creation: {src_id} -> {neigh_id}. FAIL.")
 
             # Return unchanged list of taken coords and all_beams, with failure boolean
@@ -642,6 +717,7 @@ def run_pthfinder(
     taken: List[StandardCoord],
     tgt: Optional[StandardBlock] = None,
     hdm: bool = False,
+    log_stats_id: Union[str, None] = None,
 ) -> List[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
     with optional parameters to send the information of a target node that was already placed as part of previous operations.
@@ -681,7 +757,7 @@ def run_pthfinder(
 
     # FIND VIABLE PATHS
     # Pathfinder BFS loop
-    max_step = 2 * init_step if tgt else 18
+    max_step = 2 * init_step if tgt else 9
     while step <= max_step:
 
         # Generate tentative positions for current step or use target node
@@ -702,6 +778,7 @@ def run_pthfinder(
             taken=taken_cc,
             tgt=(tent_coords[0], tgt_type),
             hdm=hdm,
+            log_stats_id=log_stats_id,
         )
 
         # Append usable paths to clean paths

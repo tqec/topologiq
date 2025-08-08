@@ -1,10 +1,11 @@
+from datetime import datetime
 from collections import deque
 from typing import List, Tuple, Optional, Union
 
 from utils.classes import StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import flip_hdm, rot_o_kind
 from utils.constraints import get_valid_nxt_kinds
-from utils.utils_misc import get_max_manhattan
+from utils.utils_misc import get_max_manhattan, log_stats_to_file
 
 
 #########################
@@ -17,6 +18,7 @@ def pthfinder(
     tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     taken: List[StandardCoord] = [],
     hdm: bool = False,
+    log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
     Runs core pathfinder on a loop until path is found within predetermined distance of source node or max distance is reached.
@@ -34,6 +36,11 @@ def pthfinder(
         - valid_pths: all paths found in round, covering some or all tent_coords.
 
     """
+
+    # PRELIMS
+    t1 = None
+    if log_stats_id is not None:
+        t1 = datetime.now()
 
     # UNPACK INCOMING DATA
     s_coords, _ = src
@@ -59,7 +66,42 @@ def pthfinder(
         hdm=hdm,
     )
 
-    # Return boolean for success of path finding, lenght of winner path, and winner path
+    if log_stats_id is not None:
+        if t1 is not None:
+            max_len = 0
+            num_tent_coords = 0
+            num_tent_coords_filled = 0
+            max_manhattan = get_max_manhattan(s_coords, tent_coords)
+
+            pth_found = False
+            if valid_pths:
+                pth_found = True
+                num_tent_coords = len(tent_coords)
+                num_tent_coords_filled = len(set([p[0] for p in valid_pths.keys()]))
+                for pth in valid_pths.values():
+                    if pth:
+                        len_pth = sum([2 if "o" in b[1] else 1 for b in pth]) - 1
+                        max_len = max(max_len, len_pth)
+
+            iter_stats = [
+                log_stats_id,
+                "creation" if not tgt[1] else "discovery",
+                pth_found,
+                src[0],
+                src[1],
+                tgt[0],
+                tgt_zx_type,
+                tgt[1] if tgt[1] else "TBD",
+                num_tent_coords,
+                num_tent_coords_filled,
+                max_manhattan,
+                max_len if max_len > 0 else "n/a",
+                (datetime.now() - t1).total_seconds(),
+            ]
+
+            log_stats_to_file(iter_stats, f"pathfinder_iterations")
+
+    # Return valid paths
     return valid_pths
 
 
@@ -96,11 +138,7 @@ def core_pthfinder_bfs(
 
     if s_coords in taken:
         taken.remove(s_coords)
-    if (
-        len(end_coords) == 1
-        and len(tent_tgt_kinds) == 1
-        and end_coords[0] in taken
-    ):
+    if len(end_coords) == 1 and len(tent_tgt_kinds) == 1 and end_coords[0] in taken:
         taken.remove(end_coords[0])
 
     # KEY BFS VARS

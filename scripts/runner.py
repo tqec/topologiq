@@ -22,6 +22,7 @@ def runner(
     hide_ports: bool = False,
     max_attempts: int = 10,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    log_stats: bool = False,
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -90,23 +91,17 @@ def runner(
         t1_inner = time.time()
 
         # Call algorithm
-        _, edge_pths, new_nx_g, c = graph_manager_bfs(
+        _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
             c_g_dict,
             c_name=c_name,
             hide_ports=hide_ports,
             visualise=visualise,
+            log_stats=log_stats,
             **kwargs,
         )
 
-        for key, edge_pth in edge_pths.items():
-            if edge_pth["edge_type"] == "error":
-                errors_in_result = True
-
         # Return result is there are no errors
-        if not errors_in_result:
-
-            # Last computations
-            lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
+        if lat_nodes is not None and lat_edges is not None:
 
             # User updates
             duration_iter = time.time() - t1_inner
@@ -203,9 +198,6 @@ def runner(
                     shutil.rmtree(temp_dir_pth)
             except (ValueError, FileNotFoundError) as e:
                 print("Unable to delete temp files or temp folder does not exist", e)
-
-        # Reset errors flag for next loop (if there is one)
-        errors_in_result = False
 
     # RETURN: original ZX graph, edge_pths, nodes and edges of result
     return c_g_dict, edge_pths, lat_nodes, lat_edges

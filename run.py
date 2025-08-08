@@ -53,6 +53,7 @@ def run():
     vis_0, vis_1 = (None, None)
     strip_ports: bool = False
     hide_ports: bool = False
+    log_stats: bool = False
     for arg in sys.argv:
 
         # Visualisation settings
@@ -81,6 +82,10 @@ def run():
         # Look for animation options
         if arg.startswith("--animate:"):
             vis_1 = arg.replace("--animate:", "")
+        
+        # Look for log_stats to file flag
+        if arg.startswith("--log_stats"):
+            log_stats = True
 
     # CALL ALGORITHM ON CIRCUIT
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
@@ -90,6 +95,7 @@ def run():
             strip_ports=strip_ports,
             hide_ports=hide_ports,
             visualise=(vis_0, vis_1),
+            log_stats=log_stats,
             **kwargs
         )
 

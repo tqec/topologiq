@@ -259,7 +259,7 @@ def gen_tent_tgt_coords(
             )
 
     # RETURN ALL COORDS WITHIN DISTANCE
-    return tent_coords[max_manhattan]
+    return tent_coords[min(max_manhattan, 9)]
 
 
 def prune_beams(
