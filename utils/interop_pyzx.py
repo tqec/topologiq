@@ -59,7 +59,7 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
     return g_dict
 
 
-def get_simple_graph_from_pyzx(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
+def pyzx_g_to_simple_g(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
     """Extracts circuit information from a PyZX graph and dumps it into a simple graph.
 
     Args:

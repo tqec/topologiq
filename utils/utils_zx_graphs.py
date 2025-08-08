@@ -1,9 +1,8 @@
 from typing import Dict, List, Optional, Tuple
-
 from utils.classes import SimpleDictGraph
 
 
-def strip_boundaries_from_zx_graph(
+def strip_zx_g_boundaries(
     circuit_graph_dict: SimpleDictGraph,
 ) -> SimpleDictGraph:
     """Strips an incoming ZX graph from "O" (boundaries) nodes and their corresponding edges.
@@ -32,7 +31,7 @@ def strip_boundaries_from_zx_graph(
     return new_circuit_graph
 
 
-def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
+def validate_zx_types(graph: SimpleDictGraph) -> bool:
     """Checks that all nodes in an incoming ZX graph have valid types.
 
     Args:
@@ -56,7 +55,7 @@ def zx_types_validity_checks(graph: SimpleDictGraph) -> bool:
     return True
 
 
-def get_type_family(node_type: str) -> Optional[List[str]]:
+def get_zx_type_fam(node_type: str) -> Optional[List[str]]:
     """Gets the family of block or pipe types/kinds that correspond to a given ZX type.
 
     Args:
@@ -83,7 +82,7 @@ def get_type_family(node_type: str) -> Optional[List[str]]:
     return families[node_type]
 
 
-def get_zx_type_from_kind(kind: str) -> str:
+def kind_to_zx_type(kind: str) -> str:
     """Gets the ZX type corresponding to a given block or pipe type/kind.
 
     Args:

@@ -6,7 +6,7 @@ import networkx as nx
 from pathlib import Path
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from typing import Annotated, Literal, Any, Tuple, List, Union
+from typing import Annotated, Literal, Any, Tuple, List
 from numpy.typing import NDArray
 
 from utils.utils_greedy_bfs import rot_o_kind
@@ -42,9 +42,9 @@ node_hex_map = {
 
 
 # MAIN VISUALISATION FUNCTION
-def visualise_3d_graph(
+def vis_3d_g(
     graph: nx.Graph,
-    hide_boundaries: bool = False,
+    hide_ports: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
     save_to_file: bool = False,
     filename: str | None = None,
@@ -54,8 +54,8 @@ def visualise_3d_graph(
 
     Args:
         - graph: An incoming graph formatted as an nx.Graph,
-        - hide_boundaries:
-            - True: do not display boundaries nodes even if present in the incoming graph,
+        - hide_ports:
+            - True: do not display boundary nodes even if present in the incoming graph,
             - False: display boundary nodes if present.
         - node_hex_map: a hex map of colours covering all possible blocks and pipes.
         - save_to_file:
@@ -85,7 +85,7 @@ def visualise_3d_graph(
         if (
             node_type
             and "o" not in node_type
-            or (not hide_boundaries and node_type == "ooo")
+            or (not hide_ports and node_type == "ooo")
         ):
             position = node_positions.get(node_id)
             if position:
@@ -281,38 +281,38 @@ def visualise_3d_graph(
 
     # Pop visualisation or save to file
     repository_root: Path = Path(__file__).resolve().parent.parent
-    temp_folder_path = repository_root / "outputs/temp"
+    temp_folder_pth = repository_root / "outputs/temp"
     if save_to_file:
-        Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig(f"{temp_folder_path}/{filename}.png")
+        Path(temp_folder_pth).mkdir(parents=True, exist_ok=True)
+        plt.savefig(f"{temp_folder_pth}/{filename}.png")
         plt.close()
     else:
         plt.show()
 
 
 # TOP LEVEL FUNCTIONS TO PREPARE OBJECTS FOR VISUALISATION
-def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
-    """Converts an edge_paths object into an nx.Graph that can be visualised with `visualise_3d_graph`. It is worth noting
+def edge_pths_to_g(edge_pths: dict[Any, Any]) -> nx.Graph:
+    """Converts an edge_pths object into an nx.Graph that can be visualised with `vis_3d_g`. It is worth noting
     that the function will create a graph with potentially redundant blocks, which is irrelevant for visualisation purposes
     but does mean the function should not be used when producing final results.
 
     Args:
-        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        - edge_pths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
 
     Returns:
-        - final_graph: an nx.Graph with all the information in edge_paths but in a format more amicable for visualisation
+        - final_graph: an nx.Graph with all the information in edge_pths but in a format more amicable for visualisation
 
     """
     final_graph = nx.Graph()
     node_counter = 0
-    for edge, path_data in edge_paths.items():
+    for edge, pth_data in edge_pths.items():
         primary_node_and_edges = []
-        path_nodes = path_data["path_nodes"]
-        if path_nodes == "error":
+        pth_nodes = pth_data["pth_nodes"]
+        if pth_nodes == "error":
             continue
         node_index_map = {}
 
-        for pos, kind in path_nodes:
+        for pos, kind in pth_nodes:
             if (pos, kind) not in node_index_map:
                 node_index_map[(pos, kind)] = node_counter
                 primary_node_and_edges.append([node_counter, pos, kind])
@@ -339,13 +339,13 @@ def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
         for i in range(len(primary_node_and_edges)):
             index, pos, node_type = primary_node_and_edges[i]
             if "o" in node_type:
-                prev_index_path = i - 1
-                next_index_path = i + 1
-                if 0 <= prev_index_path < len(
+                prev_index_pth = i - 1
+                next_index_pth = i + 1
+                if 0 <= prev_index_pth < len(
                     primary_node_and_edges
-                ) and 0 <= next_index_path < len(primary_node_and_edges):
-                    prev_node_index = primary_node_and_edges[prev_index_path][0]
-                    next_node_index = primary_node_and_edges[next_index_path][0]
+                ) and 0 <= next_index_pth < len(primary_node_and_edges):
+                    prev_node_index = primary_node_and_edges[prev_index_pth][0]
+                    next_node_index = primary_node_and_edges[next_index_pth][0]
                     if (
                         prev_node_index in final_graph
                         and next_node_index in final_graph
@@ -357,16 +357,16 @@ def make_graph_from_edge_paths(edge_paths: dict[Any, Any]) -> nx.Graph:
     return final_graph
 
 
-def make_graph_from_final_lattice(
-    lattice_nodes: dict[int, StandardBlock],
-    lattice_edges: dict[Tuple[int, int], List[str]],
+def lattice_to_g(
+    lat_nodes: dict[int, StandardBlock],
+    lat_edges: dict[Tuple[int, int], List[str]],
     pauli_webs: dict[Tuple[int, int], str] = {},
 ) -> Tuple[nx.Graph, nx.Graph]:
-    """Converts an set of lattice nodes and edges into an nx.Graph that can be visualised with `visualise_3d_graph`.
+    """Converts an set of lattice nodes and edges into an nx.Graph that can be visualised with `vis_3d_g`.
 
     Args:
-        - lattice_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
-        - lattice_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
+        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
 
     Returns:
         - final_graph: an nx.Graph with all the information in the lattice nodes and edges but in a format amicable for visualisation
@@ -376,10 +376,10 @@ def make_graph_from_final_lattice(
     final_graph = nx.Graph()
     pauli_webs_graph = nx.Graph()
 
-    for key, node_info in lattice_nodes.items():
+    for key, node_info in lat_nodes.items():
         final_graph.add_node(key, pos=node_info[0], type=node_info[1])
 
-    for key, edge_info in lattice_edges.items():
+    for key, edge_info in lat_edges.items():
         final_graph.add_edge(key[0], key[1], pipe_type=edge_info[0])
     print()
     if pauli_webs:
@@ -391,7 +391,7 @@ def make_graph_from_final_lattice(
 
         for node_id in nodes_in_web:
             pauli_webs_graph.add_node(
-                node_id, pos=lattice_nodes[node_id][0], type=lattice_nodes[node_id][1]
+                node_id, pos=lat_nodes[node_id][0], type=lat_nodes[node_id][1]
             )
     print()
     return final_graph, pauli_webs_graph

@@ -10,12 +10,12 @@ from utils.utils_misc import get_max_manhattan
 #########################
 # MAIN WORKFLOW MANAGER #
 #########################
-def pathfinder(
+def pthfinder(
     src: StandardBlock,
     tent_coords: List[StandardCoord],
     tgt_zx_type: str,
-    overwrite_tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
-    taken_coords: List[StandardCoord] = [],
+    tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
+    taken: List[StandardCoord] = [],
     hdm: bool = False,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -25,9 +25,9 @@ def pathfinder(
         - src: source block coordinates and kind.
         - tent_coords: list of tentative target coords to find paths to.
         - tgt_zx_type: ZX type of the target node, taken from a ZX chart.
-        - overwrite_tgt: the information of a specific block including its position and kind,
+        - tgt: the information of a specific block including its position and kind,
             used to override placement when target block has already been placed in 3D space in previous operations.
-        - taken_coords: list of coordinates already taken in previous operations.
+        - taken: list of coordinates already taken in previous operations.
         - hdm: flag to highlights current operation corresponds to a Hadamard edge.
 
     Returns:
@@ -37,9 +37,9 @@ def pathfinder(
 
     # UNPACK INCOMING DATA
     s_coords, _ = src
-    _, tgt_kind = overwrite_tgt
+    _, tgt_kind = tgt
 
-    taken_cc: List[StandardCoord] = taken_coords[:]
+    taken_cc: List[StandardCoord] = taken[:]
     if taken_cc:
         if s_coords in taken_cc:
             taken_cc.remove(s_coords)
@@ -51,11 +51,11 @@ def pathfinder(
     )
 
     # Find paths to all potential target kinds
-    valid_pths = core_pathfinder_bfs(
+    valid_pths = core_pthfinder_bfs(
         src,
         tent_coords,
         tent_tgt_kinds,
-        taken_coords=taken_cc,
+        taken=taken_cc,
         hdm=hdm,
     )
 
@@ -66,13 +66,13 @@ def pathfinder(
 ##################################
 # CORE PATHFINDER BFS OPERATIONS #
 ##################################
-def core_pathfinder_bfs(
+def core_pthfinder_bfs(
     src: StandardBlock,
     tent_coords: List[StandardCoord],
     tent_tgt_kinds: List[str],
-    taken_coords: List[StandardCoord] = [],
+    taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_completion_rate: int = 50,
+    min_succ_rate: int = 50,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
@@ -80,9 +80,9 @@ def core_pathfinder_bfs(
         - src: source block's coordinates (tuple) and kind (str).
         - tent_coords: list of tentative target coords to find paths to.
         - tent_tgt_kinds: list of kinds matching the zx-type of target block
-        - taken_coords: list of coordinates that have already been occupied as part of previous operations.
+        - taken: list of coordinates that have already been occupied as part of previous operations.
         - hdm: a flag that highlights the current operation corresponds to a Hadamard edge.
-        - min_completion_rate: min % of tent_coords to find a path to, used as exit condition.
+        - min_succ_rate: min % of tent_coords to find a path to, used as exit condition.
 
     Returns:
         - valid_pths: all paths found in round, covering some or all tent_coords.
@@ -94,31 +94,34 @@ def core_pathfinder_bfs(
     sx, sy, sz = s_coords
     end_coords = tent_coords
 
-    if s_coords in taken_coords:
-        taken_coords.remove(s_coords)
+    if s_coords in taken:
+        taken.remove(s_coords)
     if (
         len(end_coords) == 1
         and len(tent_tgt_kinds) == 1
-        and end_coords[0] in taken_coords
+        and end_coords[0] in taken
     ):
-        taken_coords.remove(end_coords[0])
+        taken.remove(end_coords[0])
 
     # KEY BFS VARS
     queue = deque([src])
-    visited = {tuple(src): 0}
-    pth_len = {tuple(src): 0}
-    pth = {tuple(src): [src]}
+    visited: dict[Tuple[StandardBlock, Tuple[int, int, int]], int] = {
+        (src, (0, 0, 0)): 0
+    }
+
+    pth_len = {src: 0}
+    pth = {src: [src]}
     valid_pths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
     moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
     # EXIT CONDITIONS
     num_tgts_filled = 0
-    num_tgts_to_fill = int(len(tent_coords) * min_completion_rate / 100)
+    num_tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
     if len(tent_coords) > 1:
         max_manhattan = get_max_manhattan(s_coords, tent_coords) * 2
     else:
         max_manhattan = max(
-            get_max_manhattan(s_coords, taken_coords) * 2,
+            get_max_manhattan(s_coords, taken) * 2,
             get_max_manhattan(s_coords, tent_coords) * 2,
         )
 
@@ -152,7 +155,7 @@ def core_pathfinder_bfs(
                 mid_y = y + dy * 1
                 mid_z = z + dz * 1
                 mid_pos = (mid_x, mid_y, mid_z)
-                if mid_pos in curr_pth_coords or mid_pos in taken_coords:
+                if mid_pos in curr_pth_coords or mid_pos in taken:
                     continue
 
             if "h" in curr_kind:
@@ -174,9 +177,7 @@ def core_pathfinder_bfs(
 
                 curr_kind = curr_kind[:3]
 
-            possible_nxt_types = get_valid_nxt_kinds(
-                curr_coords, curr_kind, nxt_coords, hdm=hdm
-            )
+            possible_nxt_types = get_valid_nxt_kinds(curr_coords, curr_kind, nxt_coords)
 
             for nxt_type in possible_nxt_types:
 
@@ -194,16 +195,20 @@ def core_pathfinder_bfs(
                     ):
                         nxt_type = rot_o_kind(nxt_type)
 
-                nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
-
                 if (
                     nxt_coords not in curr_pth_coords
-                    and nxt_coords not in taken_coords
+                    and nxt_coords not in taken
                     and (mid_pos is None or nxt_coords != mid_pos)
                 ):
                     new_pth_len = pth_len[curr_b_info] + 1
-                    if nxt_b_info not in visited or new_pth_len < visited[nxt_b_info]:
-                        visited[nxt_b_info] = new_pth_len
+                    nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
+
+                    if (
+                        (nxt_b_info, (dx, dy, dz))
+                    ) not in visited or new_pth_len < visited[
+                        (nxt_b_info, (dx, dy, dz))
+                    ]:
+                        visited[(nxt_b_info, (dx, dy, dz))] = new_pth_len
                         queue.append(nxt_b_info)
                         pth_len[nxt_b_info] = new_pth_len
                         pth[nxt_b_info] = pth[curr_b_info] + [nxt_b_info]
@@ -260,11 +265,11 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
         - all_blocks: a list of blocks and pipes that altogether make a space-time diagram.
 
     Returns:
-        - list(taken_coords): a list of coordinates taken by pre-existing cubes and pipes (blocks).
+        - list(taken): a list of coordinates taken by pre-existing cubes and pipes (blocks).
 
     """
 
-    taken_coords = set()
+    taken = set()
 
     if not all_blocks:
         return []
@@ -273,7 +278,7 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
     b_1 = all_blocks[0]
     if b_1:
         b_1_coords = b_1[0]
-        taken_coords.add(b_1_coords)
+        taken.add(b_1_coords)
 
     # Iterate from the second node
     for i, b in enumerate(all_blocks):
@@ -288,7 +293,7 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
                 prev_b_coords, _ = prev_b
 
                 # Add current node's coordinates
-                taken_coords.add(curr_b_coords)
+                taken.add(curr_b_coords)
 
                 if "o" in curr_b_kind:
                     cx, cy, cz = curr_b_coords
@@ -309,6 +314,6 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
                         ext_coords = (cx, cy, cz - 1)
 
                     if ext_coords:
-                        taken_coords.add(ext_coords)
+                        taken.add(ext_coords)
 
-    return list(taken_coords)
+    return list(taken)
