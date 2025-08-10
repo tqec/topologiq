@@ -1,8 +1,8 @@
+import os
 import csv
 import numpy as np
-
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 
@@ -34,17 +34,23 @@ def get_max_manhattan(src_c: StandardCoord, all_cs: List[StandardCoord]) -> int:
     return 0
 
 
-def log_stats_to_file(stats_line: List, stats_type: str):
+def log_stats_to_file(stats_line: List, stats_type: str, opt_header: List[str] = []):
     """Writes statistics to one of the statistics files in `./assets/stats/`
     Args:
         - stats_line: the line of statistics to be logged to file.
         - stats_type: the type of statistics being logged to file, which also matches the name of recipient file.
+        - init_file: prompts the function to fully erase the destination file and start by writing headers to it.
     Returns:
         - n/a: stats are written to .csv files in `./assets/stats/`
     """
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     stats_dir_path = repo_root / "assets/stats"
+    
+    if not os.path.exists(f"{stats_dir_path}/{stats_type}.csv"):
+        with open(f"{stats_dir_path}/{stats_type}.csv", "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(opt_header)
 
     with open(f"{stats_dir_path}/{stats_type}.csv", "a", newline="") as f:
         writer = csv.writer(f)

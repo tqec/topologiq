@@ -18,6 +18,7 @@ def pthfinder(
     tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     taken: List[StandardCoord] = [],
     hdm: bool = False,
+    min_succ_rate: int = 100,
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -59,12 +60,13 @@ def pthfinder(
     )
 
     # Find paths to all potential target kinds
-    valid_pths = core_pthfinder_bfs(
+    valid_pths, visit_stats = core_pthfinder_bfs(
         src,
         tent_coords,
         tent_tgt_kinds,
         taken=taken_cc,
         hdm=hdm,
+        min_succ_rate=min_succ_rate,
     )
 
     if log_stats_id is not None:
@@ -90,17 +92,41 @@ def pthfinder(
                 pth_found,
                 src[0],
                 src[1],
-                tgt[0],
+                tgt[0] if tgt[0] else "n/a",
                 tgt_zx_type,
                 tgt[1] if tgt[1] else "TBD",
                 num_tent_coords,
                 num_tent_coords_filled,
                 max_manhattan,
                 max_len if max_len > 0 else "n/a",
+                visit_stats[0],
+                visit_stats[1],
                 (datetime.now() - t1).total_seconds(),
             ]
 
-            log_stats_to_file(iter_stats, f"pathfinder_iterations")
+            opt_header = [
+                "unique_run_id",
+                "iter_type",
+                "iter_success",
+                "src_coords",
+                "src_kind",
+                "tgt_coords",
+                "tgt_zx_type",
+                "tgt_kind",
+                "num_tent_coords_received",
+                "num_tent_coords_filled",
+                "max_manhattan_src_to_any_tent_coord",
+                "len_longest_path",
+                "num_visitation_attempts",
+                "num_sites_visited",
+                "iter_duration",
+            ]
+
+            log_stats_to_file(
+                iter_stats,
+                f"pathfinder_iterations{"_tests" if log_stats_id.endswith("*") else ""}",
+                opt_header=opt_header,
+            )
 
     # Return valid paths
     return valid_pths
@@ -115,8 +141,8 @@ def core_pthfinder_bfs(
     tent_tgt_kinds: List[str],
     taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 50,
-) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
+    min_succ_rate: int = 100,
+) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
     Args:
@@ -125,7 +151,7 @@ def core_pthfinder_bfs(
         - tent_tgt_kinds: list of kinds matching the zx-type of target block
         - taken: list of coordinates that have already been occupied as part of previous operations.
         - hdm: a flag that highlights the current operation corresponds to a Hadamard edge.
-        - min_succ_rate: min % of tent_coords to find a path to, used as exit condition.
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
 
     Returns:
         - valid_pths: all paths found in round, covering some or all tent_coords.
@@ -144,9 +170,8 @@ def core_pthfinder_bfs(
 
     # KEY BFS VARS
     queue = deque([src])
-    visited: dict[Tuple[StandardBlock, StandardCoord], int] = {
-        (src, (0, 0, 0)): 0
-    }
+    visited: dict[Tuple[StandardBlock, StandardCoord], int] = {(src, (0, 0, 0)): 0}
+    visit_attempts = 0
 
     pth_len = {src: 0}
     pth = {src: [src]}
@@ -252,7 +277,18 @@ def core_pthfinder_bfs(
                         pth_len[nxt_b_info] = new_pth_len
                         pth[nxt_b_info] = pth[curr] + [nxt_b_info]
 
-    return valid_pths
+                        if nxt_coords in end_coords and (
+                            tent_tgt_kinds == ["ooo"] or nxt_type in tent_tgt_kinds
+                        ):
+                            valid_pths[nxt_b_info] = pth[nxt_b_info]
+                            tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
+                            if tgts_filled >= tgts_to_fill:
+                                break
+
+            # Increase counter of times pathfinder tries visits something new
+            visit_attempts += 1
+
+    return valid_pths, (visit_attempts, len(visited))
 
 
 ##################

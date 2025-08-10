@@ -21,6 +21,7 @@ def runner(
     strip_ports: bool = False,
     hide_ports: bool = False,
     max_attempts: int = 10,
+    stop_on_first_success: bool = True,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
     **kwargs,
@@ -91,7 +92,7 @@ def runner(
         i += 1
         
         # Update user
-        print(f"\nAttempt {i + 1} of {max_attempts}:")
+        print(f"\nAttempt {i} of {max_attempts}:")
 
         # Call algorithm
         try:
@@ -154,7 +155,8 @@ def runner(
                         )
 
                 # End loop
-                break
+                if stop_on_first_success:
+                    break
 
         except ValueError as e:
 

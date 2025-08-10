@@ -112,6 +112,20 @@ python -m run --pyzx:cnot --strip_boundaries
 
 ```
 
+There are also additional options that can be appended to any command.
+
+``` bash
+# Run the Steane code example and log stats for every attempt
+python -m run --graph:steane --log_stats
+
+# Run the Steane code example 1 times only irrespective of outcome
+python -m run --graph:steane --repeat:1
+
+# Run the Steane code example 50 times and log stats for all 50 cycles
+python -m run --graph:steane --log_stats --repeat:50
+
+```
+
 ## Use your own circuits
 It would be great to hear of tests using other circuits.
 - You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `assets/graphs/simple_graphs.py` for examples.

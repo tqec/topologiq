@@ -50,6 +50,8 @@ def run():
     c_g_dict: SimpleDictGraph = {"nodes": [], "edges": []}
 
     # READ AND HANDLE ARGUMENTS
+    num_attempts = 0
+    stop_on_first_success = True
     vis_0, vis_1 = (None, None)
     strip_ports: bool = False
     hide_ports: bool = False
@@ -86,6 +88,13 @@ def run():
         # Look for log_stats to file flag
         if arg.startswith("--log_stats"):
             log_stats = True
+        
+        # Look for number of repetitions parameter
+        if arg.startswith("--repeat:"):
+            num_attempts = int(arg.replace("--repeat:", ""))
+            stop_on_first_success = False
+        else:
+            num_attempts = 10
 
     # CALL ALGORITHM ON CIRCUIT
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
@@ -94,6 +103,8 @@ def run():
             c_name,
             strip_ports=strip_ports,
             hide_ports=hide_ports,
+            max_attempts=num_attempts,
+            stop_on_first_success=stop_on_first_success,
             visualise=(vis_0, vis_1),
             log_stats=log_stats,
             **kwargs

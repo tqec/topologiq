@@ -202,7 +202,7 @@ def graph_manager_bfs(
                     else:
                         if step == 9:
                             raise ValueError(
-                                f"Path creation. Error with edge: {curr_parent} -> {neigh_id}"
+                                f"Path creation. Error with edge: {curr_parent} -> {neigh_id}."
                             )
 
                     # Increase distance between nodes if placement not possible
@@ -236,7 +236,7 @@ def graph_manager_bfs(
         if t1 and t2:
             t_end = datetime.now()
             duration_first_pass = (t2 - t1).total_seconds()
-            duration_second_pass = (t_end - t1).total_seconds()
+            duration_second_pass = (t_end - t2).total_seconds()
             duration_total = (t_end - t1).total_seconds()
 
             nodes_in_input = len(nx_g.nodes)
@@ -350,6 +350,7 @@ def second_pass(
                     taken[:],
                     tgt=(v_coords, nx_g.nodes[v].get("kind")),
                     hdm=hdm,
+                    log_stats_id=log_stats_id,
                 )
 
                 # Write to edge_pths if an edge is found
@@ -392,7 +393,7 @@ def second_pass(
 
                 # Write an error to edge_pths if edge not found
                 else:
-                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}")
+                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
 
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
     return edge_pths, c, num_2n_pass_edges
