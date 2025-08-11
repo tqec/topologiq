@@ -20,9 +20,10 @@ from utils.classes import (
     StandardCoord,
     Colors,
 )
+
 from scripts.pathfinder import pthfinder, get_taken_coords
 from utils.grapher import vis_3d_g, edge_pths_to_g
-from utils.utils_misc import log_stats_to_file
+from utils.utils_misc import log_stats_to_file, header_bfs_stats
 
 
 ####################
@@ -33,7 +34,7 @@ def graph_manager_bfs(
     c_name: str = "circuit",
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats: bool = False,
+    log_stats_id: Union[str, None] = None,
     **kwargs,
 ) -> Tuple[
     nx.Graph,
@@ -83,15 +84,12 @@ def graph_manager_bfs(
 
     # PRELIMS
     # Turn on logging of stats if needed
-    t1 = None
-    t2 = None
-    unique_run_id = None
-    if log_stats:
-        t1 = datetime.now()
-        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
+    t1 = datetime.now()
 
     # Variables to hold results
     nx_g = prep_3d_g(g)
+    num_nodes_input: int = 0
+    num_1st_pass_edges: int = 0
     lat_nodes: Union[None, dict[int, StandardBlock]] = None
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
@@ -136,6 +134,7 @@ def graph_manager_bfs(
             kwargs["length_of_beams"],
         )
         all_beams.append(src_beams)
+        num_nodes_input += 1
 
     # LOOP FOR ALL OTHER NODES
     c = 0  # Visualiser counter (needed to save snapshots to file)
@@ -158,6 +157,7 @@ def graph_manager_bfs(
                 # Try to place blocks as close to one another as as possible
                 step: int = 3
                 while step <= 9:
+
                     taken, all_beams, edge_pths, edge_success = place_nxt_block(
                         curr_parent,
                         neigh_id,
@@ -166,7 +166,7 @@ def graph_manager_bfs(
                         all_beams,
                         edge_pths,
                         init_step=step,
-                        log_stats_id=unique_run_id,
+                        log_stats_id=log_stats_id,
                         **kwargs,
                     )
 
@@ -198,9 +198,39 @@ def graph_manager_bfs(
 
                     # Move to next if there is a succesful placement
                     if edge_success:
+                        num_nodes_input += 1
+                        num_1st_pass_edges += 1
                         break
+
                     else:
                         if step == 9:
+
+                            # LOG STATS TO FILE
+                            if log_stats_id is not None:
+                                t_end = datetime.now()
+                                bfs_manager_stats = [
+                                    log_stats_id,
+                                    c_name,
+                                    kwargs["length_of_beams"],
+                                    lat_nodes is not None and lat_edges is not None,
+                                    "error",
+                                    "error",
+                                    "error",
+                                    "error",
+                                    len(edge_pths),
+                                    "error",
+                                    "error",
+                                    (t_end - t1).total_seconds() if t1 else "error",
+                                    "error",
+                                    (t_end - t1).total_seconds() if t1 else "error",
+                                ]
+
+                                log_stats_to_file(
+                                    bfs_manager_stats,
+                                    f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
+                                    opt_header=header_bfs_stats,
+                                )
+
                             raise ValueError(
                                 f"Path creation. Error with edge: {curr_parent} -> {neigh_id}."
                             )
@@ -213,18 +243,49 @@ def graph_manager_bfs(
     taken = list(set(taken))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    if log_stats:
-        t2 = datetime.now()
-    edge_pths, c, num_2n_pass_edges = second_pass(
-        nx_g,
-        taken,
-        edge_pths,
-        c_name,
-        c,
-        hide_ports=hide_ports,
-        visualise=visualise,
-        log_stats_id=unique_run_id,
-    )
+    t2 = datetime.now()
+    num_2n_pass_edges = 0
+    try:
+        edge_pths, c, num_2n_pass_edges = second_pass(
+            nx_g,
+            taken,
+            edge_pths,
+            c_name,
+            c,
+            hide_ports=hide_ports,
+            visualise=visualise,
+            log_stats_id=log_stats_id,
+        )
+    except ValueError as e:
+
+        # LOG STATS TO FILE
+        if log_stats_id is not None:
+            t_end = datetime.now()
+            bfs_manager_stats = [
+                log_stats_id,
+                c_name,
+                kwargs["length_of_beams"],
+                lat_nodes is not None and lat_edges is not None,
+                "error",
+                "error",
+                "error",
+                "error",
+                len(edge_pths),
+                "error",
+                "error",
+                (t2 - t1).total_seconds() if t2 and t1 else "error",
+                (t_end - t2).total_seconds() if t2 else "error",
+                (t_end - t1).total_seconds() if t1 else "error",
+            ]
+
+            log_stats_to_file(
+                bfs_manager_stats,
+                f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
+                opt_header=header_bfs_stats,
+            )
+
+        # FORCE FAILURE
+        raise ValueError(e)
 
     # IF WE MADE IT HERE, ALL EDGES CLEARED
     # ASSEMBLE FINAL LATTICE SURGERY
@@ -232,35 +293,30 @@ def graph_manager_bfs(
     new_nx_g = edge_pths_to_g(edge_pths)
 
     # LOG STATS TO FILE IF NEEDED
-    if log_stats:
-        if t1 and t2:
-            t_end = datetime.now()
-            duration_first_pass = (t2 - t1).total_seconds()
-            duration_second_pass = (t_end - t2).total_seconds()
-            duration_total = (t_end - t1).total_seconds()
+    if log_stats_id is not None:
+        t_end = datetime.now()
+        bfs_manager_stats = [
+            log_stats_id,
+            c_name,
+            kwargs["length_of_beams"],
+            lat_nodes is not None and lat_edges is not None,
+            num_nodes_input,
+            num_1st_pass_edges + num_2n_pass_edges,
+            num_1st_pass_edges,
+            num_2n_pass_edges,
+            len(edge_pths),
+            len(lat_nodes.keys()) if lat_nodes else 0,
+            len(lat_edges.keys()) if lat_edges else 0,
+            (t2 - t1).total_seconds() if t2 and t1 else "error",
+            (t_end - t2).total_seconds() if t2 else "error",
+            (t_end - t1).total_seconds() if t1 else "error",
+        ]
 
-            nodes_in_input = len(nx_g.nodes)
-            edges_in_input = len(nx_g.edges)
-            blocks_in_output = len(lat_nodes.keys()) if lat_nodes else 0
-            edges_in_output = len(lat_edges.keys()) if lat_edges else 0
-            num_normal_edges = edges_in_input - num_2n_pass_edges
-
-            bfs_manager_stats = [
-                unique_run_id,
-                c_name,
-                lat_nodes is not None and lat_edges is not None,
-                nodes_in_input,
-                edges_in_input,
-                num_normal_edges,
-                num_2n_pass_edges,
-                blocks_in_output,
-                edges_in_output,
-                duration_first_pass,
-                duration_second_pass,
-                duration_total,
-            ]
-
-            log_stats_to_file(bfs_manager_stats, f"bfs_manager")
+        log_stats_to_file(
+            bfs_manager_stats,
+            f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
+            opt_header=header_bfs_stats,
+        )
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
     return nx_g, edge_pths, new_nx_g, c, lat_nodes, lat_edges
@@ -311,7 +367,6 @@ def second_pass(
 
     # BASE ALL OPERATIONS ON EDGES FROM GRAPH
     num_2n_pass_edges = 0
-    pass_success = True
     for u, v, data in nx_g.edges(data=True):
 
         # Ensure occupied coords do not have duplicates

@@ -1,6 +1,6 @@
-import time
 import shutil
 
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -68,7 +68,11 @@ def runner(
     """
 
     # PRELIMINARIES
-    t1 = time.time()
+    unique_run_id = None
+    t1 = datetime.now()
+    if log_stats:
+        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
+
     repo_root: Path = Path(__file__).resolve().parent.parent
     out_dir_pth = repo_root / "outputs/txt"
     temp_dir_pth = repo_root / "outputs/temp"
@@ -88,9 +92,9 @@ def runner(
     while i < max_attempts:
 
         # Update counters
-        t1_inner = time.time()
+        t1_inner = datetime.now()
         i += 1
-        
+
         # Update user
         print(f"\nAttempt {i} of {max_attempts}:")
 
@@ -101,7 +105,7 @@ def runner(
                 c_name=c_name,
                 hide_ports=hide_ports,
                 visualise=visualise,
-                log_stats=log_stats,
+                log_stats_id=unique_run_id,
                 **kwargs,
             )
 
@@ -109,8 +113,8 @@ def runner(
             if lat_nodes is not None and lat_edges is not None:
 
                 # Stop timer
-                duration_iter = time.time() - t1_inner
-                duration_all = time.time() - t1
+                duration_iter = (datetime.now() - t1_inner).total_seconds()
+                duration_all = (datetime.now() - t1).total_seconds()
 
                 # Update user
                 print(
@@ -161,8 +165,8 @@ def runner(
         except ValueError as e:
 
             # Stop timer
-            duration_iter = time.time() - t1_inner
-            duration_all = time.time() - t1
+            duration_iter = (datetime.now() - t1_inner).total_seconds()
+            duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
             print(

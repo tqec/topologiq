@@ -7,7 +7,9 @@ from scripts.pathfinder import pthfinder
 from utils.classes import StandardCoord
 from utils.utils_greedy_bfs import gen_tent_tgt_coords
 
-def test_pthfinder(stats_dir: str, min_succ_rate, max_test_step: int = 3, num_repetitions: int = 1):
+def test_pthfinder(
+    stats_dir: str, min_succ_rate, max_test_step: int = 3, num_repetitions: int = 1
+):
     """Checks runtimes for creation of paths by pathfinder algorithm.
 
     Args:

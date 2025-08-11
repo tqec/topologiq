@@ -5,7 +5,7 @@ from typing import List, Tuple, Optional, Union
 from utils.classes import StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import flip_hdm, rot_o_kind
 from utils.constraints import nxt_kinds
-from utils.utils_misc import get_max_manhattan, log_stats_to_file
+from utils.utils_misc import get_max_manhattan, log_stats_to_file, header_pathfinder_stats
 
 
 #########################
@@ -71,6 +71,7 @@ def pthfinder(
 
     if log_stats_id is not None:
         if t1 is not None:
+            t_end = datetime.now()
             max_len = 0
             num_tent_coords = 0
             num_tent_coords_filled = 0
@@ -92,7 +93,7 @@ def pthfinder(
                 pth_found,
                 src[0],
                 src[1],
-                tgt[0] if tgt[0] else "n/a",
+                tgt[0] if tgt[0] else "TBD",
                 tgt_zx_type,
                 tgt[1] if tgt[1] else "TBD",
                 num_tent_coords,
@@ -101,31 +102,13 @@ def pthfinder(
                 max_len if max_len > 0 else "n/a",
                 visit_stats[0],
                 visit_stats[1],
-                (datetime.now() - t1).total_seconds(),
-            ]
-
-            opt_header = [
-                "unique_run_id",
-                "iter_type",
-                "iter_success",
-                "src_coords",
-                "src_kind",
-                "tgt_coords",
-                "tgt_zx_type",
-                "tgt_kind",
-                "num_tent_coords_received",
-                "num_tent_coords_filled",
-                "max_manhattan_src_to_any_tent_coord",
-                "len_longest_path",
-                "num_visitation_attempts",
-                "num_sites_visited",
-                "iter_duration",
+                (t_end - t1).total_seconds(),
             ]
 
             log_stats_to_file(
                 iter_stats,
                 f"pathfinder_iterations{"_tests" if log_stats_id.endswith("*") else ""}",
-                opt_header=opt_header,
+                opt_header=header_pathfinder_stats,
             )
 
     # Return valid paths

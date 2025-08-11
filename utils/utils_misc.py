@@ -2,11 +2,46 @@ import os
 import csv
 import numpy as np
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 
 
+# CONSTANTS
+header_bfs_stats = [
+    "unique_run_id",
+    "circuit_name",
+    "len_beams",
+    "run_success",
+    "num_nodes_input",
+    "num_edges_input",
+    "num_normal_edges_input",
+    "num_second_pass_edges_input",
+    "num_input_edges_processed",
+    "num_blocks_output",
+    "num_edges_output",
+    "duration_first_pass",
+    "duration_second_pass",
+    "duration_total",
+]
+
+header_pathfinder_stats = [
+    "unique_run_id",
+    "circuit_name",
+    "run_success",
+    "num_nodes_input",
+    "num_edges_input",
+    "num_normal_edges_input",
+    "num_second_pass_edges_input",
+    "num_blocks_output",
+    "num_edges_output",
+    "duration_first_pass",
+    "duration_second_pass",
+    "duration_total",
+]
+
+
+# FUNCTIONS
 def get_manhattan(src_c: StandardCoord, tgt_c: StandardCoord) -> int:
     """Gets the Manhattan distance between any two (x, y, z) coordinates.
     Args:
@@ -46,14 +81,14 @@ def log_stats_to_file(stats_line: List, stats_type: str, opt_header: List[str] =
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     stats_dir_path = repo_root / "assets/stats"
-    
+
     if not os.path.exists(f"{stats_dir_path}/{stats_type}.csv"):
         with open(f"{stats_dir_path}/{stats_type}.csv", "w", newline="") as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=";")
             writer.writerow(opt_header)
 
     with open(f"{stats_dir_path}/{stats_type}.csv", "a", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, delimiter=";")
         writer.writerow(stats_line)
         f.close()
 
