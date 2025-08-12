@@ -1,13 +1,16 @@
 import os
 import csv
 import numpy as np
+
 from pathlib import Path
 from typing import List, Tuple
 
 from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 
 
-# CONSTANTS
+#############
+# CONSTANTS #
+#############
 header_bfs_stats = [
     "unique_run_id",
     "circuit_name",
@@ -40,8 +43,17 @@ header_pathfinder_stats = [
     "duration_total",
 ]
 
+header_edge_pths = [
+    "unique_run_id",
+    "circuit_name",
+    "run_success",
+    "edge_paths",
+]
 
-# FUNCTIONS
+
+#####################
+# SIMPLE SHARED OPS #
+#####################
 def get_manhattan(src_c: StandardCoord, tgt_c: StandardCoord) -> int:
     """Gets the Manhattan distance between any two (x, y, z) coordinates.
     Args:
@@ -68,7 +80,9 @@ def get_max_manhattan(src_c: StandardCoord, all_cs: List[StandardCoord]) -> int:
 
     return 0
 
-
+############
+# LOGGERS  #
+############
 def log_stats_to_file(stats_line: List, stats_type: str, opt_header: List[str] = []):
     """Writes statistics to one of the statistics files in `./assets/stats/`
     Args:
@@ -142,3 +156,4 @@ def write_outputs(
     with open(f"{out_dir_pth}/{c_name}.txt", "w") as f:
         f.writelines(lines)
         f.close()
+        

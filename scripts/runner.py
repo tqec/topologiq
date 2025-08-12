@@ -1,15 +1,15 @@
 import shutil
 
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
 from typing import List, Tuple, Union
 
 from scripts.graph_manager import graph_manager_bfs
-from utils.classes import Colors, SimpleDictGraph, StandardBlock
 from utils.utils_misc import write_outputs
 from utils.utils_zx_graphs import strip_boundaries
 from utils.grapher import vis_3d_g, lattice_to_g
 from utils.animation import create_animation
+from utils.classes import Colors, SimpleDictGraph, StandardBlock
 
 
 ####################
@@ -18,6 +18,7 @@ from utils.animation import create_animation
 def runner(
     c_g_dict: SimpleDictGraph,
     c_name: str,
+    min_succ_rate: int = 50,
     strip_ports: bool = False,
     hide_ports: bool = False,
     max_attempts: int = 10,
@@ -36,6 +37,7 @@ def runner(
     Args:
         - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges.
         - c_name: name of ZX circuit.
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - strip_ports:
             - true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
             - false: nodes are factored into the process and shown on visualisation.
@@ -103,6 +105,7 @@ def runner(
             _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
                 c_g_dict,
                 c_name=c_name,
+                min_succ_rate=min_succ_rate,
                 hide_ports=hide_ports,
                 visualise=visualise,
                 log_stats_id=unique_run_id,

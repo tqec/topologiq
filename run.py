@@ -8,12 +8,13 @@
 #
 
 import sys
-from scripts.runner import runner
-from assets.graphs import simple_graphs
-from utils.interop_pyzx import pyzx_g_to_simple_g
-from assets.graphs import pyzx_graphs
-from utils.classes import SimpleDictGraph
+
+from assets.graphs import simple_graphs, pyzx_graphs
 from run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
+
+from scripts.runner import runner
+from utils.interop_pyzx import pyzx_g_to_simple_g
+from utils.classes import SimpleDictGraph
 
 
 ####################
@@ -49,13 +50,16 @@ def run():
     c_name: str | None = None
     c_g_dict: SimpleDictGraph = {"nodes": [], "edges": []}
 
-    # READ AND HANDLE ARGUMENTS
-    num_attempts = 0
-    stop_on_first_success = True
+    # DEFINE DEFAULT VALUES FOR KEY PARAMS
+    num_attempts: int = 10
+    stop_on_first_success: bool = True
+    min_pthfinder_success_rate: int = 50
     vis_0, vis_1 = (None, None)
     strip_ports: bool = False
     hide_ports: bool = False
     log_stats: bool = False
+    
+    # READ AND HANDLE ANY ARGS GIVEN IN COMMAND
     for arg in sys.argv:
 
         # Visualisation settings
@@ -93,14 +97,14 @@ def run():
         if arg.startswith("--repeat:"):
             num_attempts = int(arg.replace("--repeat:", ""))
             stop_on_first_success = False
-        else:
-            num_attempts = 10
+        
 
-    # CALL ALGORITHM ON CIRCUIT
+    # TRIGGER ALGORITHMIC FLOW
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
         _, _, _, _ = runner(
             c_g_dict,
             c_name,
+            min_succ_rate=min_pthfinder_success_rate,
             strip_ports=strip_ports,
             hide_ports=hide_ports,
             max_attempts=num_attempts,

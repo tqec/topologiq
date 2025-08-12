@@ -1,4 +1,5 @@
 import pyzx as zx
+import random
 
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
@@ -50,12 +51,14 @@ def simple_mess(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
     return g
 
 
-def random(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
+def random_graph(draw_graph: bool = False) -> Union[BaseGraph, GraphS]:
 
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=3, depth=7, clifford=True)
+    qubits = random.randint(2, 5)
+    depth = random.randint(7,15)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubits, depth=depth, clifford=True)
     g = c.to_graph()
-    zx.clifford_simp(g)
-    g.normalize()
+    #zx.clifford_simp(g)
+    #g.normalize()
 
     if draw_graph:
         zx.draw(g)

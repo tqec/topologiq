@@ -2,10 +2,8 @@ from typing import Dict, List, Optional, Tuple
 from utils.classes import SimpleDictGraph
 
 
-def strip_boundaries(
-    c_g: SimpleDictGraph,
-) -> SimpleDictGraph:
-    """ Strips an incoming ZX graph from "O" (boundaries) nodes and their corresponding edges.
+def strip_boundaries(c_g: SimpleDictGraph) -> SimpleDictGraph:
+    """Strips an incoming ZX graph from "O" (boundaries) nodes and their corresponding edges.
     Args:
         - c_g: ZX circuit as a simple dictionary of nodes and edges.
     Returns

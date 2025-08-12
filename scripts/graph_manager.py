@@ -1,17 +1,22 @@
 import random
 import networkx as nx
 
-from collections import deque
 from datetime import datetime
+from collections import deque
 from typing import Tuple, List, Optional, Any, Union, cast
 
+from scripts.pathfinder import pthfinder, get_taken_coords
 from utils.utils_greedy_bfs import (
-    check_exits,
+    find_start_id,
+    get_node_degree,
     gen_tent_tgt_coords,
     prune_beams,
     reindex_pth_dict,
 )
+from utils.utils_pathfinder import check_exits
 from utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
+from utils.grapher import vis_3d_g, edge_pths_to_g
+from utils.utils_misc import log_stats_to_file, header_bfs_stats
 from utils.classes import (
     PathBetweenNodes,
     StandardBlock,
@@ -21,17 +26,14 @@ from utils.classes import (
     Colors,
 )
 
-from scripts.pathfinder import pthfinder, get_taken_coords
-from utils.grapher import vis_3d_g, edge_pths_to_g
-from utils.utils_misc import log_stats_to_file, header_bfs_stats
 
-
-####################
-# WORKFLOW MANAGER #
-####################
+###############################
+# MAIN GRAPH MANAGER WORKFLOW #
+###############################
 def graph_manager_bfs(
     g: SimpleDictGraph,
     c_name: str = "circuit",
+    min_succ_rate: int = 50,
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
@@ -49,6 +51,7 @@ def graph_manager_bfs(
     Args:
         - g: a ZX circuit as a simple dictionary of nodes and edges.
         - c_name: name of ZX circuit.
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - hide_ports:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
@@ -94,7 +97,7 @@ def graph_manager_bfs(
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # BFS management
-    src: Optional[int] = _find_src_id(nx_g)
+    src: Optional[int] = find_start_id(nx_g)
     taken: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
     edge_pths: dict = {}
@@ -166,6 +169,7 @@ def graph_manager_bfs(
                         all_beams,
                         edge_pths,
                         init_step=step,
+                        min_succ_rate=min_succ_rate,
                         log_stats_id=log_stats_id,
                         **kwargs,
                     )
@@ -208,11 +212,15 @@ def graph_manager_bfs(
                             # LOG STATS TO FILE
                             if log_stats_id is not None:
                                 t_end = datetime.now()
+
+                                run_success = (
+                                    lat_nodes is not None and lat_edges is not None
+                                )
                                 bfs_manager_stats = [
                                     log_stats_id,
                                     c_name,
                                     kwargs["length_of_beams"],
-                                    lat_nodes is not None and lat_edges is not None,
+                                    run_success,
                                     "error",
                                     "error",
                                     "error",
@@ -228,6 +236,19 @@ def graph_manager_bfs(
                                 log_stats_to_file(
                                     bfs_manager_stats,
                                     f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
+                                    opt_header=header_bfs_stats,
+                                )
+
+                                outputs_stats = [
+                                    log_stats_id,
+                                    c_name,
+                                    run_success,
+                                    list(edge_pths.keys()),
+                                ]
+
+                                log_stats_to_file(
+                                    outputs_stats,
+                                    f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
                                     opt_header=header_bfs_stats,
                                 )
 
@@ -252,6 +273,7 @@ def graph_manager_bfs(
             edge_pths,
             c_name,
             c,
+            min_succ_rate=min_succ_rate,
             hide_ports=hide_ports,
             visualise=visualise,
             log_stats_id=log_stats_id,
@@ -261,11 +283,13 @@ def graph_manager_bfs(
         # LOG STATS TO FILE
         if log_stats_id is not None:
             t_end = datetime.now()
+
+            run_success = lat_nodes is not None and lat_edges is not None
             bfs_manager_stats = [
                 log_stats_id,
                 c_name,
                 kwargs["length_of_beams"],
-                lat_nodes is not None and lat_edges is not None,
+                run_success,
                 "error",
                 "error",
                 "error",
@@ -284,6 +308,19 @@ def graph_manager_bfs(
                 opt_header=header_bfs_stats,
             )
 
+            outputs_stats = [
+                log_stats_id,
+                c_name,
+                run_success,
+                list(edge_pths.keys()),
+            ]
+
+            log_stats_to_file(
+                outputs_stats,
+                f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
+                opt_header=header_bfs_stats,
+            )
+
         # FORCE FAILURE
         raise ValueError(e)
 
@@ -295,11 +332,13 @@ def graph_manager_bfs(
     # LOG STATS TO FILE IF NEEDED
     if log_stats_id is not None:
         t_end = datetime.now()
+
+        run_success = lat_nodes is not None and lat_edges is not None
         bfs_manager_stats = [
             log_stats_id,
             c_name,
             kwargs["length_of_beams"],
-            lat_nodes is not None and lat_edges is not None,
+            run_success,
             num_nodes_input,
             num_1st_pass_edges + num_2n_pass_edges,
             num_1st_pass_edges,
@@ -318,246 +357,26 @@ def graph_manager_bfs(
             opt_header=header_bfs_stats,
         )
 
+        outputs_stats = [
+            log_stats_id,
+            c_name,
+            run_success,
+            list(edge_pths.keys()),
+        ]
+
+        log_stats_to_file(
+            outputs_stats,
+            f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
+            opt_header=header_bfs_stats,
+        )
+
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
     return nx_g, edge_pths, new_nx_g, c, lat_nodes, lat_edges
 
 
-def second_pass(
-    nx_g: nx.Graph,
-    taken: List[StandardCoord],
-    edge_pths: dict,
-    c_name: str,
-    c: int,
-    hide_ports: bool = False,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats_id: Union[str, None] = None,
-) -> Tuple[dict, int, int]:
-    """Undertakes a second pass of the graph to process any edges missed by the original BFS,
-    which typically happens when there are multiple interconnected nodes.
-
-    Args:
-        - nx_g: a nx_graph containing all nodes and edges in incoming ZX graph,
-            formatted to facilitate positioning of 3D blocks and pipes,
-            and updated regularly over the course of the process.
-        - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
-        - c_name: name of ZX circuit.
-        - c: a counter for the number of top-level iterations by BFS (used to organise visualisations)
-        - visualise: a tuple with visualisation settings:
-            - visualise[0]:
-                - None: no visualisation whatsoever,
-                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
-                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX graph (medium performance trade-off).
-            - visualise[1]:
-                - None: no animation whatsoever,
-                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
-                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
-        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
-
-    Keyword arguments (**kwargs):
-        - weights: weights for the value function to pick best of many paths.
-        - length_of_beams: length of each of the beams coming out of open nodes.
-        - max_search_space: maximum size of 3D space to generate paths for.
-
-    Returns:
-        - edge_pths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
-        - c: updated counter for the number of top-level iterations by BFS (used to organise visualisations)
-
-    """
-
-    # BASE ALL OPERATIONS ON EDGES FROM GRAPH
-    num_2n_pass_edges = 0
-    for u, v, data in nx_g.edges(data=True):
-
-        # Ensure occupied coords do not have duplicates
-        taken = list(set(taken))
-
-        # Get source and target node for specific edge
-        u_coords = nx_g.nodes[u].get("pos")
-        v_coords = nx_g.nodes[v].get("pos")
-
-        if u_coords is not None and v_coords is not None:
-
-            # Update visualiser counter
-            c += 1
-
-            # Format adjustments to match existing operations
-            u_kind = nx_g.nodes[u].get("kind")
-            v_zx_type = nx_g.nodes[v].get("type")
-            edge = tuple(sorted((u, v)))
-
-            # Call pathfinder on any graph edge that does not have an entry in edge_pths
-            if edge not in edge_pths:
-
-                # Update edge counter
-                num_2n_pass_edges += 1
-
-                # Check if edge is hadamard
-                zx_edge_type = nx_g.get_edge_data(u, v).get("type")
-                hdm: bool = True if zx_edge_type == "HADAMARD" else False
-
-                # Call pathfinder using optional parameters to tell the pathfinding algorithm
-                # to work in pure pathfinding (rather than path creation) mode
-                clean_pths = run_pthfinder(
-                    (u_coords, u_kind),
-                    v_zx_type,
-                    3,
-                    taken[:],
-                    tgt=(v_coords, nx_g.nodes[v].get("kind")),
-                    hdm=hdm,
-                    log_stats_id=log_stats_id,
-                )
-
-                # Write to edge_pths if an edge is found
-                if clean_pths:
-
-                    # Update edge paths
-                    coords_in_pth = [p[0] for p in clean_pths[0]]  # Take the first path
-                    edge_type = data.get("type", "SIMPLE")
-                    edge_pths[edge] = {
-                        "src_tgt_ids": (u, v),
-                        "pth_coordinates": coords_in_pth,
-                        "pth_nodes": clean_pths[0],
-                        "edge_type": edge_type,
-                    }
-
-                    # Add path to position to list of graphs' occupied positions
-                    all_coords_in_pth = get_taken_coords(clean_pths[0])
-                    taken.extend(all_coords_in_pth)
-
-                    # Create graph from existing edges
-                    new_nx_g = edge_pths_to_g(edge_pths)
-
-                    if log_stats_id:
-                        print(f"Path discovery: {u} -> {v}. SUCCESS.")
-
-                    # Create visualisation
-                    if visualise[0]:
-                        if visualise[0].lower() == "detail":
-                            vis_3d_g(new_nx_g, hide_ports=hide_ports)
-
-                    # Save visualisation for later animation
-                    if visualise[1]:
-                        if visualise[1] == "GIF" or visualise[1] == "MP4":
-                            vis_3d_g(
-                                new_nx_g,
-                                hide_ports=hide_ports,
-                                save_to_file=True,
-                                filename=f"{c_name}{c:03d}",
-                            )
-
-                # Write an error to edge_pths if edge not found
-                else:
-                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
-
-    # RETURN EDGE PATHS FOR FINAL CONSUMPTION
-    return edge_pths, c, num_2n_pass_edges
-
-
-#######################
-# CORE BFS OPERATIONS #
-#######################
-def prep_3d_g(g: SimpleDictGraph) -> nx.Graph:
-    """Takes a simple dictionary of nodes and edges representing a ZX graph and formats all elements
-    in a way that facilitates subsequent positioning of 3D blocks and pipes, without, in doing so, adding any
-    information to the outgoing graph.
-
-    Args:
-        - g: a ZX circuit as a simple dictionary of nodes and edges.
-
-    Returns:
-        - nx_g: a nx_graph containing all nodes and edges in incoming ZX graph,
-            formatted to facilitate positioning of 3D blocks and pipes.
-
-    """
-
-    # PREPARE EMPTY NETWORKX GRAPH
-    nx_g = nx.Graph()
-
-    # GET NODES AND EDGES FROM INCOMING ZX GRAPH
-    nodes: List[Tuple[int, str]] = g.get("nodes", [])
-    edges: List[Tuple[Tuple[int, int], str]] = g.get("edges", [])
-
-    # ADD NODES TO NETWORKX GRAPH
-    for n_id, n_type in nodes:
-        nx_g.add_node(
-            n_id,
-            type=n_type,
-            type_fam=get_zx_type_fam(n_type),
-            kind=None,
-            pos=None,
-        )
-
-    # ADD EDGES TO NETWORKX GRAPH
-    for (u, v), e_type in edges:
-        nx_g.add_edge(u, v, type=e_type)
-
-    # IDENTIFY THE NODES WITH MORE THAN 4 CONNECTIONS
-    all_nodes = list(nx_g.nodes())
-    centr_nodes = [n for n in all_nodes if _get_node_degree(nx_g, n) > 4]
-
-    # BREAK ANY NODES WITH MORE THAN 4 CONNECTIONS
-    if centr_nodes:
-
-        # Determine max degree
-        centr_node = max(nx_g.nodes) if nx_g.nodes else 0
-
-        # Loop over max nodes and break as appropriate
-        i = 0
-        while i < 100:
-
-            # List of high degree nodes
-            all_nodes_loop = list(nx_g.nodes())
-            centr_nodes = [n for n in all_nodes_loop if _get_node_degree(nx_g, n) > 4]
-
-            # Exit loop when no nodes with more than 4 edges
-            if not centr_nodes:
-                break
-
-            # Pick a high degree node
-            node_to_sanitise = random.choice(centr_nodes)
-            orig_node_type = nx_g.nodes[node_to_sanitise]["type"]
-
-            # Add a twin
-            centr_node += 1
-            twin_node_id = centr_node
-            nx_g.add_node(
-                twin_node_id,
-                type=orig_node_type,
-                type_fam=get_zx_type_fam(orig_node_type),
-                kind=None,
-                pos=None,
-            )
-            nx_g.add_edge(node_to_sanitise, twin_node_id, type="SIMPLE")
-
-            # Distributed edges across twins
-            neighs = list(nx_g.neighbors(node_to_sanitise))
-            neighs = [n for n in neighs if n != twin_node_id]
-
-            degree_to_shuffle = _get_node_degree(nx_g, node_to_sanitise) // 2
-
-            shuffle_c = 0
-            random.shuffle(neighs)
-
-            for neigh in neighs:
-                if (
-                    shuffle_c >= degree_to_shuffle
-                    or _get_node_degree(nx_g, node_to_sanitise) <= 4
-                ):
-                    break
-                if nx_g.has_edge(node_to_sanitise, neigh) and not nx_g.has_edge(
-                    twin_node_id, neigh
-                ):
-                    edge_data = nx_g.get_edge_data(node_to_sanitise, neigh)
-                    edge_type = edge_data.get("type", None)
-                    nx_g.add_edge(twin_node_id, neigh, type=edge_type)
-                    nx_g.remove_edge(node_to_sanitise, neigh)
-                    shuffle_c += 1
-
-    # RETURN THE NETWORKX GRAPH
-    return nx_g
-
-
+##################
+# EDGE RENDERERS #
+##################
 def place_nxt_block(
     src_id: int,
     neigh_id: int,
@@ -566,6 +385,7 @@ def place_nxt_block(
     all_beams: List[NodeBeams],
     edge_pths: dict,
     init_step: int = 3,
+    min_succ_rate: int = 50,
     log_stats_id: Union[str, None] = None,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
@@ -582,6 +402,7 @@ def place_nxt_block(
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX graph.
         - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - init_step: intended (Manhattan) distance between origin and target blocks.
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Keyword arguments (**kwargs):
@@ -637,12 +458,13 @@ def place_nxt_block(
             init_step,
             taken_coords_c if taken else [],
             hdm=hdm,
+            min_succ_rate=min_succ_rate,
             log_stats_id=log_stats_id,
         )
 
         # Assemble a preliminary dictionary of viable paths
         viable_pths = []
-        nxt_neigh_neigh_n = int(_get_node_degree(nx_g, neigh_id))
+        nxt_neigh_neigh_n = int(get_node_degree(nx_g, neigh_id))
         for clean_pth in clean_pths:
             tgt_coords, tgt_kind = clean_pth[-1]
             tgt_unobstr_exit_n, tgt_beams = check_exits(
@@ -757,6 +579,245 @@ def place_nxt_block(
     return taken, all_beams, edge_pths, False
 
 
+def second_pass(
+    nx_g: nx.Graph,
+    taken: List[StandardCoord],
+    edge_pths: dict,
+    c_name: str,
+    c: int,
+    min_succ_rate: int = 50,
+    hide_ports: bool = False,
+    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    log_stats_id: Union[str, None] = None,
+) -> Tuple[dict, int, int]:
+    """Undertakes a second pass of the graph to process any edges missed by the original BFS,
+    which typically happens when there are multiple interconnected nodes.
+
+    Args:
+        - nx_g: a nx_graph containing all nodes and edges in incoming ZX graph,
+            formatted to facilitate positioning of 3D blocks and pipes,
+            and updated regularly over the course of the process.
+        - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - c_name: name of ZX circuit.
+        - c: a counter for the number of top-level iterations by BFS (used to organise visualisations).
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
+        - visualise: a tuple with visualisation settings:
+            - visualise[0]:
+                - None: no visualisation whatsoever,
+                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX graph (medium performance trade-off).
+            - visualise[1]:
+                - None: no animation whatsoever,
+                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
+
+    Keyword arguments (**kwargs):
+        - weights: weights for the value function to pick best of many paths.
+        - length_of_beams: length of each of the beams coming out of open nodes.
+        - max_search_space: maximum size of 3D space to generate paths for.
+
+    Returns:
+        - edge_pths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - c: updated counter for the number of top-level iterations by BFS (used to organise visualisations)
+
+    """
+
+    # BASE ALL OPERATIONS ON EDGES FROM GRAPH
+    num_2n_pass_edges = 0
+    for u, v, data in nx_g.edges(data=True):
+
+        # Ensure occupied coords do not have duplicates
+        taken = list(set(taken))
+
+        # Get source and target node for specific edge
+        u_coords = nx_g.nodes[u].get("pos")
+        v_coords = nx_g.nodes[v].get("pos")
+
+        if u_coords is not None and v_coords is not None:
+
+            # Update visualiser counter
+            c += 1
+
+            # Format adjustments to match existing operations
+            u_kind = nx_g.nodes[u].get("kind")
+            v_zx_type = nx_g.nodes[v].get("type")
+            edge = tuple(sorted((u, v)))
+
+            # Call pathfinder on any graph edge that does not have an entry in edge_pths
+            if edge not in edge_pths:
+
+                # Update edge counter
+                num_2n_pass_edges += 1
+
+                # Check if edge is hadamard
+                zx_edge_type = nx_g.get_edge_data(u, v).get("type")
+                hdm: bool = True if zx_edge_type == "HADAMARD" else False
+
+                # Call pathfinder using optional parameters to tell the pathfinding algorithm
+                # to work in pure pathfinding (rather than path creation) mode
+                clean_pths = run_pthfinder(
+                    (u_coords, u_kind),
+                    v_zx_type,
+                    3,
+                    taken[:],
+                    tgt=(v_coords, nx_g.nodes[v].get("kind")),
+                    hdm=hdm,
+                    min_succ_rate=min_succ_rate,
+                    log_stats_id=log_stats_id,
+                )
+
+                # Write to edge_pths if an edge is found
+                if clean_pths:
+
+                    # Update edge paths
+                    coords_in_pth = [p[0] for p in clean_pths[0]]  # Take the first path
+                    edge_type = data.get("type", "SIMPLE")
+                    edge_pths[edge] = {
+                        "src_tgt_ids": (u, v),
+                        "pth_coordinates": coords_in_pth,
+                        "pth_nodes": clean_pths[0],
+                        "edge_type": edge_type,
+                    }
+
+                    # Add path to position to list of graphs' occupied positions
+                    all_coords_in_pth = get_taken_coords(clean_pths[0])
+                    taken.extend(all_coords_in_pth)
+
+                    # Create graph from existing edges
+                    new_nx_g = edge_pths_to_g(edge_pths)
+
+                    if log_stats_id:
+                        print(f"Path discovery: {u} -> {v}. SUCCESS.")
+
+                    # Create visualisation
+                    if visualise[0]:
+                        if visualise[0].lower() == "detail":
+                            vis_3d_g(new_nx_g, hide_ports=hide_ports)
+
+                    # Save visualisation for later animation
+                    if visualise[1]:
+                        if visualise[1] == "GIF" or visualise[1] == "MP4":
+                            vis_3d_g(
+                                new_nx_g,
+                                hide_ports=hide_ports,
+                                save_to_file=True,
+                                filename=f"{c_name}{c:03d}",
+                            )
+
+                # Write an error to edge_pths if edge not found
+                else:
+                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
+
+    # RETURN EDGE PATHS FOR FINAL CONSUMPTION
+    return edge_pths, c, num_2n_pass_edges
+
+
+#######################
+# CORE AUX OPERATIONS #
+#######################
+def prep_3d_g(g: SimpleDictGraph) -> nx.Graph:
+    """Takes a simple dictionary of nodes and edges representing a ZX graph and formats all elements
+    in a way that facilitates subsequent positioning of 3D blocks and pipes, without, in doing so, adding any
+    information to the outgoing graph.
+
+    Args:
+        - g: a ZX circuit as a simple dictionary of nodes and edges.
+
+    Returns:
+        - nx_g: a nx_graph containing all nodes and edges in incoming ZX graph,
+            formatted to facilitate positioning of 3D blocks and pipes.
+
+    """
+
+    # PREPARE EMPTY NETWORKX GRAPH
+    nx_g = nx.Graph()
+
+    # GET NODES AND EDGES FROM INCOMING ZX GRAPH
+    nodes: List[Tuple[int, str]] = g.get("nodes", [])
+    edges: List[Tuple[Tuple[int, int], str]] = g.get("edges", [])
+
+    # ADD NODES TO NETWORKX GRAPH
+    for n_id, n_type in nodes:
+        nx_g.add_node(
+            n_id,
+            type=n_type,
+            type_fam=get_zx_type_fam(n_type),
+            kind=None,
+            pos=None,
+        )
+
+    # ADD EDGES TO NETWORKX GRAPH
+    for (u, v), e_type in edges:
+        nx_g.add_edge(u, v, type=e_type)
+
+    # IDENTIFY THE NODES WITH MORE THAN 4 CONNECTIONS
+    all_nodes = list(nx_g.nodes())
+    centr_nodes = [n for n in all_nodes if get_node_degree(nx_g, n) > 4]
+
+    # BREAK ANY NODES WITH MORE THAN 4 CONNECTIONS
+    if centr_nodes:
+
+        # Determine max degree
+        centr_node = max(nx_g.nodes) if nx_g.nodes else 0
+
+        # Loop over max nodes and break as appropriate
+        i = 0
+        while i < 100:
+
+            # List of high degree nodes
+            all_nodes_loop = list(nx_g.nodes())
+            centr_nodes = [n for n in all_nodes_loop if get_node_degree(nx_g, n) > 4]
+
+            # Exit loop when no nodes with more than 4 edges
+            if not centr_nodes:
+                break
+
+            # Pick a high degree node
+            node_to_sanitise = random.choice(centr_nodes)
+            orig_node_type = nx_g.nodes[node_to_sanitise]["type"]
+
+            # Add a twin
+            centr_node += 1
+            twin_node_id = centr_node
+            nx_g.add_node(
+                twin_node_id,
+                type=orig_node_type,
+                type_fam=get_zx_type_fam(orig_node_type),
+                kind=None,
+                pos=None,
+            )
+            nx_g.add_edge(node_to_sanitise, twin_node_id, type="SIMPLE")
+
+            # Distributed edges across twins
+            neighs = list(nx_g.neighbors(node_to_sanitise))
+            neighs = [n for n in neighs if n != twin_node_id]
+
+            degree_to_shuffle = get_node_degree(nx_g, node_to_sanitise) // 2
+
+            shuffle_c = 0
+            random.shuffle(neighs)
+
+            for neigh in neighs:
+                if (
+                    shuffle_c >= degree_to_shuffle
+                    or get_node_degree(nx_g, node_to_sanitise) <= 4
+                ):
+                    break
+                if nx_g.has_edge(node_to_sanitise, neigh) and not nx_g.has_edge(
+                    twin_node_id, neigh
+                ):
+                    edge_data = nx_g.get_edge_data(node_to_sanitise, neigh)
+                    edge_type = edge_data.get("type", None)
+                    nx_g.add_edge(twin_node_id, neigh, type=edge_type)
+                    nx_g.remove_edge(node_to_sanitise, neigh)
+                    shuffle_c += 1
+
+    # RETURN THE NETWORKX GRAPH
+    return nx_g
+
+
 def run_pthfinder(
     src: StandardBlock,
     nxt_zx_type: str,
@@ -764,6 +825,7 @@ def run_pthfinder(
     taken: List[StandardCoord],
     tgt: Optional[StandardBlock] = None,
     hdm: bool = False,
+    min_succ_rate: int = 50,
     log_stats_id: Union[str, None] = None,
 ) -> List[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
@@ -780,6 +842,7 @@ def run_pthfinder(
             as opposed to creating a path between an existing block a new one to be placed at a tentative position.
         - hdm: a flag to tell the inner pathfinding algorithm that this edge is a Hadamard edge,
             which gets handled differently depending on the characteristics of the edge.
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Returns:
@@ -826,6 +889,7 @@ def run_pthfinder(
             taken=taken_cc,
             tgt=(tent_coords[0], tgt_type),
             hdm=hdm,
+            min_succ_rate=min_succ_rate,
             log_stats_id=log_stats_id,
         )
 
@@ -848,85 +912,3 @@ def run_pthfinder(
 
     # RETURN CLEAN PATHS OR EMPTY LIST IF NO VIABLE PATHS FOUND
     return clean_pths
-
-
-##################
-# AUX OPERATIONS #
-##################
-def _find_src_id(nx_g: nx.Graph) -> Optional[int]:
-    """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
-
-    Args:
-        - nx_g: an nx_graph.
-
-    Returns:
-        - src_id: the ID of the node with highest closeness centrality or a random selection from a list of highest degree nodes.
-
-    """
-
-    # TERMINATE IF THERE ARE NO NODES
-    if not nx_g.nodes:
-        return None
-
-    # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
-    max_d = -1
-    centr_nodes: List[int] = []
-
-    nodes_ds = nx_g.degree
-    if isinstance(nodes_ds, int):
-        print(
-            "Warning: nx_g.degree() returned an integer. Cannot determine start node."
-        )
-        return None  # Cannot iterate, return None
-    else:
-        for n, d in nodes_ds:
-            if d > max_d:
-                max_d = d
-                centr_nodes = [n]
-            elif d == max_d:
-                centr_nodes.append(n)
-
-    # PICK A HIGHEST DEGREE NODE, RANDOMLY BUT FAVOURING CENTRALITY
-    if centr_nodes:
-
-        # Bias selection to slightly favour centrality when several high-degree nodes exist
-        c_centrality = nx.closeness_centrality(nx_g)
-        max_centrality = max([c_centrality.get(n, -1) for n in centr_nodes])
-        max_nodes = sum(
-            [1 for n in centr_nodes if c_centrality.get(n, -1) == max_centrality]
-        )
-        if max_nodes != len(centr_nodes):
-            centr_node = max(centr_nodes, key=lambda n: c_centrality.get(n, -1))
-            centr_nodes.append(centr_node)
-
-        # Include all high-degree nodes in potential list of start nodes
-        src_id: Optional[int] = random.choice(centr_nodes)
-
-    else:
-        src_id: Optional[int] = None
-
-    # RETURN START NODE
-    return src_id
-
-
-def _get_node_degree(g: nx.Graph, node: int) -> int:
-    """Gets the degree (# of edges) of a given node.
-
-    Args:
-        - g: an nx Graph.
-        - node: the node of interest.
-
-    Returns:
-        - int: the degree for the node of interest, or 0 if graph has no edges.
-
-    """
-
-    # GET DEGREES FOR THE ENTIRE GRAPH
-    degrees = g.degree
-
-    # GET DEGREE FOR NODE OF INTEREST
-    if not isinstance(degrees, int) and hasattr(degrees, "__getitem__"):
-        return degrees[node]
-
-    # IF DEGREES NOT A LIST, RETURN 0 (SINGLE NODE WON'T HAVE EDGES)
-    return 0

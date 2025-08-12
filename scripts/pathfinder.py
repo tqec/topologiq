@@ -1,16 +1,22 @@
+import os
+
 from datetime import datetime
 from collections import deque
 from typing import List, Tuple, Optional, Union
 
 from utils.classes import StandardCoord, StandardBlock
-from utils.utils_greedy_bfs import flip_hdm, rot_o_kind
-from utils.constraints import nxt_kinds
-from utils.utils_misc import get_max_manhattan, log_stats_to_file, header_pathfinder_stats
+from utils.utils_greedy_bfs import gen_tent_tgt_coords
+from utils.utils_pathfinder import flip_hdm, rot_o_kind, nxt_kinds
+from utils.utils_misc import (
+    get_max_manhattan,
+    log_stats_to_file,
+    header_pathfinder_stats,
+)
 
 
-#########################
-# MAIN WORKFLOW MANAGER #
-#########################
+############################
+# MAIN PATHFINDER WORKFLOW #
+############################
 def pthfinder(
     src: StandardBlock,
     tent_coords: List[StandardCoord],
@@ -18,7 +24,7 @@ def pthfinder(
     tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 100,
+    min_succ_rate: int = 50,
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -32,6 +38,7 @@ def pthfinder(
             used to override placement when target block has already been placed in 3D space in previous operations.
         - taken: list of coordinates already taken in previous operations.
         - hdm: flag to highlights current operation corresponds to a Hadamard edge.
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
         - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Returns:
@@ -53,22 +60,23 @@ def pthfinder(
         if s_coords in taken_cc:
             taken_cc.remove(s_coords)
 
-    # Generate all possible target types at tentative position
+    # GENERATE ALL POSSIBLE TENTATIVE TARGET TYPES
     tent_tgt_kinds = gen_tent_tgt_kinds(
         tgt_zx_type,
         tgt_kind=(tgt_kind if tgt_kind else None),
     )
 
-    # Find paths to all potential target kinds
+    # CALL PATHFINDER ON ALL TENT COORD AND TENT KINDS
     valid_pths, visit_stats = core_pthfinder_bfs(
         src,
         tent_coords,
         tent_tgt_kinds,
+        min_succ_rate,
         taken=taken_cc,
         hdm=hdm,
-        min_succ_rate=min_succ_rate,
     )
 
+    # LOG STATS IF NEEDED
     if log_stats_id is not None:
         if t1 is not None:
             t_end = datetime.now()
@@ -111,20 +119,20 @@ def pthfinder(
                 opt_header=header_pathfinder_stats,
             )
 
-    # Return valid paths
+    # RETURN VALID PATHS (ONE OR MORE IF SUCCESSFUL)
     return valid_pths
 
 
-##################################
-# CORE PATHFINDER BFS OPERATIONS #
-##################################
+###############################
+# CORE PATHFINDER SPATIAL BFS #
+###############################
 def core_pthfinder_bfs(
     src: StandardBlock,
     tent_coords: List[StandardCoord],
     tent_tgt_kinds: List[str],
+    min_succ_rate,
     taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 100,
 ) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
@@ -132,9 +140,9 @@ def core_pthfinder_bfs(
         - src: source block's coordinates (tuple) and kind (str).
         - tent_coords: list of tentative target coords to find paths to.
         - tent_tgt_kinds: list of kinds matching the zx-type of target block
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
         - taken: list of coordinates that have already been occupied as part of previous operations.
         - hdm: a flag that highlights the current operation corresponds to a Hadamard edge.
-        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
 
     Returns:
         - valid_pths: all paths found in round, covering some or all tent_coords.
@@ -172,7 +180,7 @@ def core_pthfinder_bfs(
             get_max_manhattan(s_coords, tent_coords) * 2,
         )
 
-    # CORE PATHFINDER BFS LOOP
+    # CORE LOOP
     while queue:
         curr: StandardBlock = queue.popleft()
         curr_coords, curr_kind = curr
@@ -271,6 +279,7 @@ def core_pthfinder_bfs(
             # Increase counter of times pathfinder tries visits something new
             visit_attempts += 1
 
+    # RETURN VALID PATHS
     return valid_pths, (visit_attempts, len(visited))
 
 
@@ -323,13 +332,13 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
     if not all_blocks:
         return []
 
-    # Add first block's coordinates
+    # ADD 1ST BLOCK COORDS
     b_1st = all_blocks[0]
     if b_1st:
         b_1_coords = b_1st[0]
         taken.add(b_1_coords)
 
-    # Iterate from the second node
+    # ITERATE FROM 2ND BLOCK ONWARDS
     for i, _ in enumerate(all_blocks):
 
         if i > 0:
@@ -365,4 +374,56 @@ def get_taken_coords(all_blocks: List[StandardBlock]):
                     if ext_cs:
                         taken.add(ext_cs)
 
+    # RETURN LIST OF TAKEN COORDS
     return list(taken)
+
+
+##########
+# TESTS  #
+##########
+def test_pthfinder(
+    stats_dir: str, min_succ_rate, max_test_step: int = 3, num_repetitions: int = 1
+):
+    """Checks runtimes for creation of paths by pathfinder algorithm.
+
+    Args:
+        - stats_dir: the directory where states are to be saved
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
+        - max_test_step: Sets the maximum distance for target test node
+        - num_repetitions: Sets the number of times that the test loop will be repeated.
+
+    """
+
+    if os.path.exists(f"{stats_dir}/pathfinder_iterations_tests.csv"):
+        os.remove(f"{stats_dir}/pathfinder_iterations_tests.csv")
+
+    taken: List[StandardCoord] = []
+    hdm: bool = False
+    src_coords: StandardCoord = (0, 0, 0)
+    all_valid_start_kinds: List[str] = ["xxz", "xzx", "zxx", "xzz", "zzx", "zxz"]
+    all_valid_zx_types: List[str] = ["X", "Z"]
+    unique_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + "*"
+
+    i = 0
+    while i < num_repetitions:
+        i += 1
+        step: int = 3
+        print(f"\nRunning tests. Loop {i} of {num_repetitions}.")
+        while step <= max_test_step:
+            tent_coords = gen_tent_tgt_coords(src_coords, step, taken)
+            for start_kind in all_valid_start_kinds:
+                src = ((0, 0, 0), start_kind)
+                for zx_type in all_valid_zx_types:
+                    clean_paths = pthfinder(
+                        src,
+                        tent_coords,
+                        zx_type,
+                        tgt=(None, None),
+                        taken=taken,
+                        hdm=hdm,
+                        min_succ_rate=min_succ_rate,
+                        log_stats_id=unique_run_id,
+                    )
+                    if clean_paths:
+                        print(".", end="")
+            step += 3

@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from typing import Annotated, Literal, Any, Tuple, List
 from numpy.typing import NDArray
 
-from utils.utils_greedy_bfs import rot_o_kind
+from utils.utils_pathfinder import rot_o_kind
 from utils.classes import StandardBlock
 
 # CONSTANTS

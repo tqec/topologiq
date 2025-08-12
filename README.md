@@ -93,38 +93,43 @@ python -m run --graph:hadamards_mess
 
 # Random circuit, optimised, using PyZX: zx.generate.cliffordT(), zx.simplify.phase_free_simp().
 # Ps. Check the randomly generated graph to ensure all qubit lines are interconnected. See "process" section above for details.
-python -m run --pyzx:random
-
-```
-
-There are also several visualisation options that can be appended to any command.
-
-``` bash
-
-# "BOUNDARIES" considered and visualised.
-python -m run --pyzx:cnot
-
-# "BOUNDARIES" considered by algorithm but NOT visible in visualisations.
-python -m run --pyzx:cnot --hide_boundaries
-
-# "BOUNDARIES" stripped prior performing any operations.
-python -m run --pyzx:cnot --strip_boundaries
+python -m run --pyzx:random_graph
 
 ```
 
 There are also additional options that can be appended to any command.
 
 ``` bash
-# Run the Steane code example and log stats for every attempt
-python -m run --graph:steane --log_stats
+# Run a circuit normally and log stats for all attempts (will stop at first succeess, as per default behaviour)
+python -m run --pyzx:cnots --log_stats
 
-# Run the Steane code example 1 times only irrespective of outcome
+# Run a specific circuit a single time irrespective of outcome
 python -m run --graph:steane --repeat:1
 
-# Run the Steane code example 50 times and log stats for all 50 cycles
-python -m run --graph:steane --log_stats --repeat:50
+# Run a circuit a given number of times and log log stats for all 50 cycles
+python -m run --pyzx:cnots --log_stats --repeat:50
 
 ```
+
+And it is possible to set several visualisation options also via command.
+
+``` bash
+
+# "BOUNDARIES" considered and final outcome visualised.
+python -m run --pyzx:cnot --vis:final
+
+# "BOUNDARIES" considered and each edge and final outcome visualised.
+python -m run --pyzx:cnot --vis:detail
+
+# "BOUNDARIES" considered by algorithm but boundaries NOT visible in visualisations.
+python -m run --pyzx:cnot --vis:final --hide_boundaries
+
+# "BOUNDARIES" stripped prior performing any operations and therefore not at all considered for placements.
+python -m run --pyzx:cnot --vis:final --strip_boundaries
+
+```
+
+
 
 ## Use your own circuits
 It would be great to hear of tests using other circuits.
