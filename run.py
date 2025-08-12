@@ -8,16 +8,13 @@
 #
 
 import sys
+
+from assets.graphs import simple_graphs, pyzx_graphs
+from run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
+
 from scripts.runner import runner
-from assets.graphs import simple_graphs
-from utils.interop_pyzx import get_simple_graph_from_pyzx
-from assets.graphs import pyzx_graphs
+from utils.interop_pyzx import pyzx_g_to_simple_g
 from utils.classes import SimpleDictGraph
-from run_hyperparams import (
-    VALUE_FUNCTION_HYPERPARAMS,
-    LENGTH_OF_BEAMS,
-    MAX_PATHFINDER_SEARCH_SPACE,
-)
 
 
 ####################
@@ -47,44 +44,73 @@ def run():
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "length_of_beams": LENGTH_OF_BEAMS,
-        "max_search_space": MAX_PATHFINDER_SEARCH_SPACE,
     }
 
     # GET CIRCUIT
-    circuit_name: str | None = None
-    circuit_graph_dict: SimpleDictGraph = {"nodes": [], "edges": []}
+    c_name: str | None = None
+    c_g_dict: SimpleDictGraph = {"nodes": [], "edges": []}
 
-    # READ AND HANDLE ARGUMENTS
-    strip_boundaries: bool = False
-    hide_boundaries: bool = False
+    # DEFINE DEFAULT VALUES FOR KEY PARAMS
+    num_attempts: int = 10
+    stop_on_first_success: bool = True
+    min_pthfinder_success_rate: int = 50
+    vis_0, vis_1 = (None, None)
+    strip_ports: bool = False
+    hide_ports: bool = False
+    log_stats: bool = False
+    
+    # READ AND HANDLE ANY ARGS GIVEN IN COMMAND
     for arg in sys.argv:
 
         # Visualisation settings
         if arg == "--strip_boundaries":
-            strip_boundaries = True
+            strip_ports = True
 
         if arg == "--hide_boundaries":
-            hide_boundaries = True
+            hide_ports = True
 
         # Look for name of a "simple" or "non-descript" graph
         if arg.startswith("--graph:"):
-            circuit_name = arg.replace("--graph:", "")
-            circuit_graph_dict = getattr(simple_graphs, circuit_name)
+            c_name = arg.replace("--graph:", "")
+            c_g_dict = getattr(simple_graphs, c_name)
 
         # Look for name of a PyZX graph
         if arg.startswith("--pyzx:"):
-            circuit_name = arg.replace("--pyzx:", "")
-            pyzx_function = getattr(pyzx_graphs, circuit_name)
+            c_name = arg.replace("--pyzx:", "")
+            pyzx_function = getattr(pyzx_graphs, c_name)
             g = pyzx_function(draw_graph=True)
-            circuit_graph_dict = get_simple_graph_from_pyzx(g)
+            c_g_dict = pyzx_g_to_simple_g(g)
+        
+        # Look for visualisation options
+        if arg.startswith("--vis:"):
+            vis_0 = arg.replace("--vis:", "")
+        
+        # Look for animation options
+        if arg.startswith("--animate:"):
+            vis_1 = arg.replace("--animate:", "")
+        
+        # Look for log_stats to file flag
+        if arg.startswith("--log_stats"):
+            log_stats = True
+        
+        # Look for number of repetitions parameter
+        if arg.startswith("--repeat:"):
+            num_attempts = int(arg.replace("--repeat:", ""))
+            stop_on_first_success = False
+        
 
-    # CALL ALGORITHM ON CIRCUIT
-    if circuit_name and circuit_graph_dict["nodes"] and circuit_graph_dict["edges"]:
+    # TRIGGER ALGORITHMIC FLOW
+    if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
         _, _, _, _ = runner(
-            circuit_graph_dict,
-            circuit_name,
-            strip_boundaries=strip_boundaries,
-            hide_boundaries=hide_boundaries,
+            c_g_dict,
+            c_name,
+            min_succ_rate=min_pthfinder_success_rate,
+            strip_ports=strip_ports,
+            hide_ports=hide_ports,
+            max_attempts=num_attempts,
+            stop_on_first_success=stop_on_first_success,
+            visualise=(vis_0, vis_1),
+            log_stats=log_stats,
             **kwargs
         )
 

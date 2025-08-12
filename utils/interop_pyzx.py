@@ -6,6 +6,9 @@ from pyzx.utils import EdgeType
 from utils.classes import SimpleDictGraph
 
 
+########################
+# PYZX EXTRACTION JOBS #
+########################
 def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
     """Extracts circuit information from a PyZX graph and dumps it into a dictionary.
     Output is slightly more complete than a `to_json` export using PyZX native capacities.
@@ -59,7 +62,7 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
     return g_dict
 
 
-def get_simple_graph_from_pyzx(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
+def pyzx_g_to_simple_g(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
     """Extracts circuit information from a PyZX graph and dumps it into a simple graph.
 
     Args:

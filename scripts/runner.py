@@ -1,27 +1,30 @@
-import time
 import shutil
+
 from pathlib import Path
+from datetime import datetime
 from typing import List, Tuple, Union
 
-from scripts.greedy_bfs_traditional import main
-
-from utils.classes import Colors, SimpleDictGraph, StandardBlock
-from utils.utils_greedy_bfs import build_newly_indexed_path_dict
-from utils.utils_zx_graphs import strip_boundaries_from_zx_graph
-from utils.grapher import visualise_3d_graph, make_graph_from_final_lattice
+from scripts.graph_manager import graph_manager_bfs
+from utils.utils_misc import write_outputs
+from utils.utils_zx_graphs import strip_boundaries
+from utils.grapher import vis_3d_g, lattice_to_g
 from utils.animation import create_animation
+from utils.classes import Colors, SimpleDictGraph, StandardBlock
 
 
 ####################
 # MAIN RUN MANAGER #
 ####################
 def runner(
-    circuit_graph_dict: SimpleDictGraph,
-    circuit_name: str,
-    strip_boundaries: bool = False,
-    hide_boundaries: bool = False,
+    c_g_dict: SimpleDictGraph,
+    c_name: str,
+    min_succ_rate: int = 50,
+    strip_ports: bool = False,
+    hide_ports: bool = False,
     max_attempts: int = 10,
-    visualise: str = "final",
+    stop_on_first_success: bool = True,
+    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    log_stats: bool = False,
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -32,169 +35,159 @@ def runner(
     """Runs the algorithm on any circuit given to it
 
     Args:
-        - circuit_graph_dict: a ZX circuit as a simple dictionary of nodes and edges.
-        - circuit_name: name of ZX circuit.
-        - strip_boundaries:
+        - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges.
+        - c_name: name of ZX circuit.
+        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
+        - strip_ports:
             - true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
             - false: nodes are factored into the process and shown on visualisation.
-        - hide_boundaries:
+        - hide_ports:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
-        - visualise:
-            - detail: visualises each iteration by outer/general BFS loop,
-            - final: visualises only the final result,
-            - all: visualises each iteration step by outer/general BFS loop and final result.
+        - visualise: a tuple with visualisation settings:
+            - visualise[0]:
+                - None: no visualisation whatsoever,
+                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
+            - visualise[1]:
+                - None: no animation whatsoever,
+                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
+        - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
+            - True: log stats to file
+            - False: do NOT log stats to file
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
         - length_of_beams: length of each of the beams coming out of open nodes.
-        - max_search_space: maximum size of 3D space to generate paths for.
 
     Returns:
-        - circuit_graph_dict: original circuit given to function returns for easy traceability
-        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
-        - lattice_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
-        - lattice_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
+        - c_g_dict: original circuit given to function returns for easy traceability.
+        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
+        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
 
     """
 
     # PRELIMINARIES
-    t1 = time.time()
-    repository_root: Path = Path(__file__).resolve().parent.parent
-    output_folder_path = repository_root / "outputs/txt"
-    temp_folder_path = repository_root / "outputs/temp"
-    Path(output_folder_path).mkdir(parents=True, exist_ok=True)
+    unique_run_id = None
+    t1 = datetime.now()
+    if log_stats:
+        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
+
+    repo_root: Path = Path(__file__).resolve().parent.parent
+    out_dir_pth = repo_root / "outputs/txt"
+    temp_dir_pth = repo_root / "outputs/temp"
+    Path(out_dir_pth).mkdir(parents=True, exist_ok=True)
 
     # APPLICABLE GRAPH TRANSFORMATIONS
-    if strip_boundaries:
-        circuit_graph_dict = strip_boundaries_from_zx_graph(circuit_graph_dict)
+    if strip_ports:
+        c_g_dict = strip_boundaries(c_g_dict)
 
     # VARS TO HOLD RESULTS
-    edge_paths: Union[None, dict] = None
-    lattice_nodes: Union[None, dict[int, StandardBlock]] = None
-    lattice_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
+    edge_pths: Union[None, dict] = None
+    lat_nodes: Union[None, dict[int, StandardBlock]] = None
+    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # LOOP UNTIL SUCCESS OR LIMIT
-    errors_in_result: bool = False
     i: int = 0
     while i < max_attempts:
 
-        print(
-            "\n\n####################################################",
-            "\nSTARTING ALGORITHM FROM CLEAN SLATE",
-            f"\nAttempt {i + 1}",
-            "\n####################################################",
-        )
-
         # Update counters
+        t1_inner = datetime.now()
         i += 1
-        t1_inner = time.time()
+
+        # Update user
+        print(f"\nAttempt {i} of {max_attempts}:")
 
         # Call algorithm
-        _, edge_paths, new_nx_graph, c = main(
-            circuit_graph_dict,
-            circuit_name=circuit_name,
-            hide_boundaries=hide_boundaries,
-            visualise=visualise,
-            **kwargs,
-        )
-
-        for key, edge_path in edge_paths.items():
-            if edge_path["edge_type"] == "error":
-                errors_in_result = True
-
-        # Return result is there are no errors
-        if not errors_in_result:
-
-            # Last computations
-            duration_total = (time.time() - t1) / 60
-            lattice_nodes, lattice_edges = build_newly_indexed_path_dict(edge_paths)
-
-            # Print update and save results
-            print(
-                Colors.GREEN,
-                f"\n\nALGORITHM SUCCEEDED! Total run time: {duration_total:.2f} min",
-                Colors.RESET,
+        try:
+            _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
+                c_g_dict,
+                c_name=c_name,
+                min_succ_rate=min_succ_rate,
+                hide_ports=hide_ports,
+                visualise=visualise,
+                log_stats_id=unique_run_id,
+                **kwargs,
             )
 
-            lines: List[str] = []
+            # Return result if any
+            if lat_nodes is not None and lat_edges is not None:
 
-            lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
-            lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
-            for node in circuit_graph_dict["nodes"]:
-                lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
-            lines.append("\n")
-            for edge in circuit_graph_dict["edges"]:
-                lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
+                # Stop timer
+                duration_iter = (datetime.now() - t1_inner).total_seconds()
+                duration_all = (datetime.now() - t1).total_seconds()
 
-            lines.append(
-                '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
-            )
-
-            for key, edge_path in edge_paths.items():
-                lines.append(
-                    f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
+                # Update user
+                print(
+                    Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
+                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
                 )
 
-            lines.append(
-                "\n__________________________\nLATTICE SURGERY (Graph)\n"
-            )
-            for key, node in lattice_nodes.items():
-                lines.append(f"Node ID: {key}. Info: {node}\n")
-            for key, edge_info in lattice_edges.items():
-                lines.append(f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n")
+                if visualise[0] is not None or visualise[1] is not None:
+                    print(
+                        "Visualisations enabled. For faster runtimes, disable visualisations."
+                    )
 
-            with open(f"{output_folder_path}/{circuit_name}.txt", "w") as f:
-                f.writelines(lines)
-                f.close()
+                # Write outputs
+                write_outputs(
+                    c_g_dict, c_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
+                )
 
-            print(f"Result saved to: <...>/{circuit_name}.txt")
+                # Visualise result
+                if visualise[0]:
+                    if (
+                        visualise[0].lower() == "final"
+                        or visualise[0].lower() == "detail"
+                    ):
+                        final_nx_graph, _ = lattice_to_g(lat_nodes, lat_edges)
+                        vis_3d_g(final_nx_graph, hide_ports=hide_ports)
 
-            # Visualise result
-            final_nx_graph, _ = make_graph_from_final_lattice(lattice_nodes, lattice_edges)
-            if visualise == "final" or visualise == "all":
-                visualise_3d_graph(final_nx_graph, hide_boundaries=hide_boundaries)
-            visualise_3d_graph(
-                new_nx_graph,
-                hide_boundaries=hide_boundaries,
-                save_to_file=True,
-                filename=f"{circuit_name}{c:03d}",
-            )
+                # Animate
+                if visualise[1]:
+                    if visualise[1].lower() == "GIF" or visualise[1].lower() == "MP4":
+                        vis_3d_g(
+                            new_nx_g,
+                            hide_ports=hide_ports,
+                            save_to_file=True,
+                            filename=f"{c_name}{c:03d}",
+                        )
 
-            # Create GIF or result
-            create_animation(
-                filename_prefix=circuit_name,
-                restart_delay=5000,
-                duration=2500,
-                video=False,
-            )
+                        create_animation(
+                            filename_prefix=c_name,
+                            restart_delay=5000,
+                            duration=2500,
+                            video=True if visualise[1] == "MP4" else False,
+                        )
 
-            # End loop
-            break
+                # End loop
+                if stop_on_first_success:
+                    break
 
-        # If there are errors in result, continue loop
-        else:
+        except ValueError as e:
+
+            # Stop timer
+            duration_iter = (datetime.now() - t1_inner).total_seconds()
+            duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
-            duration_this_run = (time.time() - t1_inner) / 60
-            duration_thus_far = (time.time() - t1) / 60
             print(
-                Colors.RED,
-                "\nUNSUCCESFUL RUN. Will run again (unless run limits have been exceeded).",
-                Colors.RESET,
-                f"\n- This iteration took: {duration_this_run:.2f} min",
-                f"\n- Total run time thus far: {duration_thus_far:.2f} min",
+                Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
+                f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
             )
+
+            if visualise[0] is not None or visualise[1] is not None:
+                print(
+                    "Visualisations enabled. For faster runtimes, disable visualisations."
+                )
 
             # Delete temporary files
             try:
-                if temp_folder_path.exists():
-                    shutil.rmtree(temp_folder_path)
+                if temp_dir_pth.exists():
+                    shutil.rmtree(temp_dir_pth)
             except (ValueError, FileNotFoundError) as e:
                 print("Unable to delete temp files or temp folder does not exist", e)
 
-        # Reset errors flag for next loop (if there is one)
-        errors_in_result = False
-
-    # RETURN: original ZX graph, edge_paths, nodes and edges of result
-    return circuit_graph_dict, edge_paths, lattice_nodes, lattice_edges
+    # RETURN: original ZX graph, edge_pths, nodes and edges of result
+    return c_g_dict, edge_pths, lat_nodes, lat_edges

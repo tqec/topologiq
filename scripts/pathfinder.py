@@ -1,529 +1,429 @@
+import os
+
+from datetime import datetime
 from collections import deque
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
-from utils.classes import StandardCoord, StandardBlock, Colors
-from utils.utils_greedy_bfs import (
-    adjust_hadamards_direction,
-    is_move_allowed,
-    rotate_o_types,
+from utils.classes import StandardCoord, StandardBlock
+from utils.utils_greedy_bfs import gen_tent_tgt_coords
+from utils.utils_pathfinder import flip_hdm, rot_o_kind, nxt_kinds
+from utils.utils_misc import (
+    get_max_manhattan,
+    log_stats_to_file,
+    header_pathfinder_stats,
 )
-from utils.constraints import get_valid_next_kinds
 
 
-#########################
-# MAIN WORKFLOW MANAGER #
-#########################
-def run_bfs_for_all_potential_target_nodes(
-    source_node: StandardBlock,
-    target_node_zx_type: str,
-    distance: int,
-    max_distance: int = 30,
-    attempts_per_distance: int = 10,
-    overwrite_target_node: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
-    occupied_coords: List[StandardCoord] = [],
-    hadamard_flag: bool = False,
-) -> tuple[
-    bool,
-    Optional[int],
-    Optional[List[StandardBlock]],
-    List[Optional[List[StandardBlock]]],
-]:
+############################
+# MAIN PATHFINDER WORKFLOW #
+############################
+def pthfinder(
+    src: StandardBlock,
+    tent_coords: List[StandardCoord],
+    tgt_zx_type: str,
+    tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
+    taken: List[StandardCoord] = [],
+    hdm: bool = False,
+    min_succ_rate: int = 50,
+    log_stats_id: Union[str, None] = None,
+) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
     Runs core pathfinder on a loop until path is found within predetermined distance of source node or max distance is reached.
 
     Args:
-        - source_node: source node's coordinates (tuple) and type (str).
-        - target_node_zx_type: ZX type of the target node, taken from a ZX chart.
-        - distance: current allowed distance between source and target nodes.
-        - max_distance: maximum allowed distance between source and target nodes.
-        - attempts_per_distance: number of random target positions to try at each distance.
-        - overwrite_target_node: the information of a specific block including its position and kind,
-            used to override placement of a new node when the target node/block has already been placed in 3D space as part of previous operations.
-        - occupied_coords: list of coordinates that have already been occupied as part of previous operations.
-        - hadamard_flag: a flag that highlights the current operation corresponds to a Hadamard edge.
+        - src: source block coordinates and kind.
+        - tent_coords: list of tentative target coords to find paths to.
+        - tgt_zx_type: ZX type of the target node, taken from a ZX chart.
+        - tgt: the information of a specific block including its position and kind,
+            used to override placement when target block has already been placed in 3D space in previous operations.
+        - taken: list of coordinates already taken in previous operations.
+        - hdm: flag to highlights current operation corresponds to a Hadamard edge.
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
+        - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
 
     Returns:
-        - path_found:
-            True: path was found (success)
-            False: path was not found (fail)
-        - length: the lenght of the best path of round
-        - path: the best path of round
-        - all_paths_from_round: an object containing all paths found in round
+        - valid_pths: all paths found in round, covering some or all tent_coords.
 
     """
 
-    # HELPER VARIABLES
-    all_paths_from_round: List[Optional[List[StandardBlock]]] = []
-    start_coords, _ = source_node
-    min_path_length: Optional[int] = None
-    path_found: bool = False
-    length: Optional[int] = None
-    path = None
-    found_path_at_current_distance: bool = False
-    overwrite_target_coords, overwrite_target_type = overwrite_target_node
+    # PRELIMS
+    t1 = None
+    if log_stats_id is not None:
+        t1 = datetime.now()
 
-    obstacle_coords: List[StandardCoord] = occupied_coords[:]
-    if obstacle_coords:
-        if start_coords in obstacle_coords:
-            obstacle_coords.remove(start_coords)
+    # UNPACK INCOMING DATA
+    s_coords, _ = src
+    _, tgt_kind = tgt
 
-    min_x_bb, max_x_bb, min_y_bb, max_y_bb, min_z_bb, max_z_bb = determine_grid_size(
-        start_coords,
-        overwrite_target_coords if overwrite_target_coords else (0, 0, 0),
-        obstacle_coords=obstacle_coords,
+    taken_cc: List[StandardCoord] = taken[:]
+    if taken_cc:
+        if s_coords in taken_cc:
+            taken_cc.remove(s_coords)
+
+    # GENERATE ALL POSSIBLE TENTATIVE TARGET TYPES
+    tent_tgt_kinds = gen_tent_tgt_kinds(
+        tgt_zx_type,
+        tgt_kind=(tgt_kind if tgt_kind else None),
     )
 
-    # PATH FINDING LOOP W. MULTIPLE BFS ROUNDS WITH INCREASING DISTANCE FROM SOURCE NODE
-    for attempt in range(attempts_per_distance):
+    # CALL PATHFINDER ON ALL TENT COORD AND TENT KINDS
+    valid_pths, visit_stats = core_pthfinder_bfs(
+        src,
+        tent_coords,
+        tent_tgt_kinds,
+        min_succ_rate,
+        taken=taken_cc,
+        hdm=hdm,
+    )
 
-        # Break if path is found in previous run of loop
-        if distance > max_distance or path_found:
-            break
+    # LOG STATS IF NEEDED
+    if log_stats_id is not None:
+        if t1 is not None:
+            t_end = datetime.now()
+            max_len = 0
+            num_tent_coords = 0
+            num_tent_coords_filled = 0
+            max_manhattan = get_max_manhattan(s_coords, tent_coords)
 
-        # Generate tentative position for target using the new function
-        tentative_target_position = generate_tentative_target_position(
-            source_node,
-            min_x_bb,
-            max_x_bb,
-            min_y_bb,
-            max_y_bb,
-            min_z_bb,
-            max_z_bb,
-            obstacle_coords=obstacle_coords,
-            overwrite_target_coords=overwrite_target_node[0],
-        )
+            pth_found = False
+            if valid_pths:
+                pth_found = True
+                num_tent_coords = len(tent_coords)
+                num_tent_coords_filled = len(set([p[0] for p in valid_pths.keys()]))
+                for pth in valid_pths.values():
+                    if pth:
+                        len_pth = sum([2 if "o" in b[1] else 1 for b in pth]) - 1
+                        max_len = max(max_len, len_pth)
 
-        if tentative_target_position is None:
-            continue
+            iter_stats = [
+                log_stats_id,
+                "creation" if not tgt[1] else "discovery",
+                pth_found,
+                src[0],
+                src[1],
+                tgt[0] if tgt[0] else "TBD",
+                tgt_zx_type,
+                tgt[1] if tgt[1] else "TBD",
+                num_tent_coords,
+                num_tent_coords_filled,
+                max_manhattan,
+                max_len if max_len > 0 else "n/a",
+                visit_stats[0],
+                visit_stats[1],
+                (t_end - t1).total_seconds(),
+            ]
 
-        # Generate all possible target types at tentative position
-        potential_target_types = generate_tentative_target_types(
-            target_node_zx_type,
-            overwrite_target_type=(
-                overwrite_target_type if overwrite_target_type else None
-            ),
-        )
-
-        # Find paths to all potential target kinds
-        for potential_target_type in potential_target_types:
-            target_node: StandardBlock = (
-                tentative_target_position,
-                potential_target_type,
+            log_stats_to_file(
+                iter_stats,
+                f"pathfinder_iterations{"_tests" if log_stats_id.endswith("*") else ""}",
+                opt_header=header_pathfinder_stats,
             )
-            candidate_path_found, candidate_length, candidate_path = bfs_extended_3d(
-                source_node,
-                target_node,
-                forbidden_cords=obstacle_coords,
-                hadamard_flag=hadamard_flag,
-            )
 
-            # If path found, keep shortest path of round
-            if candidate_path_found:
-                path_found = True
-                all_paths_from_round.append(candidate_path)
-                if min_path_length is None or candidate_length < min_path_length:
-                    min_path_length = candidate_length
-                    length = candidate_length
-                    path = candidate_path
-
-        # Inform user of outcome at this distance
-        if found_path_at_current_distance:
-            path_found = True
-
-    # Return boolean for success of path finding, lenght of winner path, and winner path
-    return path_found, length, path, all_paths_from_round
+    # RETURN VALID PATHS (ONE OR MORE IF SUCCESSFUL)
+    return valid_pths
 
 
-##################################
-# CORE PATHFINDER BFS OPERATIONS #
-##################################
-def bfs_extended_3d(
-    source_node: StandardBlock,
-    target_node: StandardBlock,
-    forbidden_cords: List[StandardCoord] = [],
-    hadamard_flag: bool = False,
-):
-    """Core pathfinder function. Takes a source and target node (given to it as part of a loop with many possible combinations)
-    and a list of obstacle coordinates to avoid and determines if a topologically-correct path is possible between the source and target nodes.
+###############################
+# CORE PATHFINDER SPATIAL BFS #
+###############################
+def core_pthfinder_bfs(
+    src: StandardBlock,
+    tent_coords: List[StandardCoord],
+    tent_tgt_kinds: List[str],
+    min_succ_rate,
+    taken: List[StandardCoord] = [],
+    hdm: bool = False,
+) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
+    """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
     Args:
-        - source_node: source block's coordinates (tuple) and kind (str).
-        - target_node: target block's node's coordinates (tuple) and kind (str).
-        - forbidden_cords: list of coordinates that have already been occupied as part of previous operations.
-        - hadamard_flag: a flag that highlights the current operation corresponds to a Hadamard edge.
+        - src: source block's coordinates (tuple) and kind (str).
+        - tent_coords: list of tentative target coords to find paths to.
+        - tent_tgt_kinds: list of kinds matching the zx-type of target block
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
+        - taken: list of coordinates that have already been occupied as part of previous operations.
+        - hdm: a flag that highlights the current operation corresponds to a Hadamard edge.
 
     Returns:
-        - bool:
-            - True: path found (success),
-            - False: path NOT found (fail).
-        - path_length: the lenght of the path found, or -1 if path not found.
-        - path: the topologically-correct path between source and target blocks.
+        - valid_pths: all paths found in round, covering some or all tent_coords.
 
     """
 
-    # Unpack information for source and target nodes
-    start_coords, _ = source_node
-    end_coords, end_type = target_node
+    # UNPACK INCOMING DATA
+    s_coords, _ = src
+    sx, sy, sz = s_coords
+    end_coords = tent_coords
 
-    if start_coords in forbidden_cords:
-        forbidden_cords.remove(start_coords)
-    if end_coords in forbidden_cords:
-        forbidden_cords.remove(end_coords)
+    if s_coords in taken:
+        taken.remove(s_coords)
+    if len(end_coords) == 1 and len(tent_tgt_kinds) == 1 and end_coords[0] in taken:
+        taken.remove(end_coords[0])
 
-    queue = deque([source_node])
-    visited = {tuple(source_node): 0}
-    path_length = {tuple(source_node): 0}
-    path = {tuple(source_node): [source_node]}
+    # KEY BFS VARS
+    queue = deque([src])
+    visited: dict[Tuple[StandardBlock, StandardCoord], int] = {(src, (0, 0, 0)): 0}
+    visit_attempts = 0
 
-    start_x, start_y, start_z = [int(x) for x in start_coords]
-    end_x, end_y, end_z = [int(x) for x in end_coords]
-    initial_manhattan_distance = (
-        abs(start_x - end_x) + abs(start_y - end_y) + abs(start_z - end_z)
-    )
+    pth_len = {src: 0}
+    pth = {src: [src]}
+    valid_pths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
+    moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
+    # EXIT CONDITIONS
+    tgts_filled = 0
+    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
+    if len(tent_coords) > 1:
+        max_manhattan = get_max_manhattan(s_coords, tent_coords) * 2
+    else:
+        max_manhattan = max(
+            get_max_manhattan(s_coords, taken) * 2,
+            get_max_manhattan(s_coords, tent_coords) * 2,
+        )
+
+    # CORE LOOP
     while queue:
-        current_node_info = queue.popleft()
-        current_coords, current_type = current_node_info
-        x, y, z = [int(x) for x in current_coords]
+        curr: StandardBlock = queue.popleft()
+        curr_coords, curr_kind = curr
+        x, y, z = curr_coords
 
-        current_manhattan_distance = abs(x - end_x) + abs(y - end_y) + abs(z - end_z)
-        if current_manhattan_distance > 6 * initial_manhattan_distance:
-            print(Colors.RED + "x" + Colors.RESET, end="", flush=True)
-            return False, -1, None
+        curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
+        if curr_manhattan > max_manhattan:
+            break
 
-        if current_coords == end_coords and (
-            end_type == "ooo" or current_type == end_type
+        if curr_coords in end_coords and (
+            tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds
         ):
-            print(Colors.GREEN + "." + Colors.RESET, end="", flush=True)
+            valid_pths[curr] = pth[curr]
+            tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
+            if tgts_filled >= tgts_to_fill:
+                break
 
-            return (
-                True,
-                path_length[current_node_info],
-                path[current_node_info],
-            )
+        scale = 2 if "o" in curr_kind else 1
+        for dx, dy, dz in moves:
+            nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
+            nxt_coords = (nxt_x, nxt_y, nxt_z)
+            curr_pth_coords = [n[0] for n in pth[curr]]
 
-        scale = 2 if "o" in current_type else 1
-        spatial_moves = [
-            (1, 0, 0),
-            (-1, 0, 0),
-            (0, 1, 0),
-            (0, -1, 0),
-            (0, 0, 1),
-            (0, 0, -1),
-        ]
-
-        for dx, dy, dz in spatial_moves:
-            next_x, next_y, next_z = x + dx * scale, y + dy * scale, z + dz * scale
-            next_coords = (next_x, next_y, next_z)
-            current_path_coords = [node[0] for node in path[current_node_info]]
-
-            intermediate_pos = None
-            if "o" in current_type and scale == 2:
-                intermediate_x = x + dx * 1
-                intermediate_y = y + dy * 1
-                intermediate_z = z + dz * 1
-                intermediate_pos = (intermediate_x, intermediate_y, intermediate_z)
-                if (
-                    intermediate_pos in current_path_coords
-                    or intermediate_pos in forbidden_cords
-                ):
+            mid_pos = None
+            if "o" in curr_kind and scale == 2:
+                mid_x = x + dx * 1
+                mid_y = y + dy * 1
+                mid_z = z + dz * 1
+                mid_pos = (mid_x, mid_y, mid_z)
+                if mid_pos in curr_pth_coords or mid_pos in taken:
                     continue
 
-            if "h" in current_type:
-
-                hadamard_flag = False
+            if "h" in curr_kind:
+                hdm = False
                 if (
                     sum(
                         [
                             p[0] + p[1] if p[0] != p[1] else 0
-                            for p in list(zip(source_node[0], current_coords))
+                            for p in list(zip(src[0], curr_coords))
                         ]
                     )
                     < 0
                 ):
-                    current_type = adjust_hadamards_direction(current_type)
-                    current_type = rotate_o_types(current_type)
+                    curr_kind = flip_hdm(curr_kind)
+                    curr_kind = rot_o_kind(curr_kind)
                 else:
-                    rotated_type = rotate_o_types(current_type)
-                    current_type = rotated_type
+                    rotated_type = rot_o_kind(curr_kind)
+                    curr_kind = rotated_type
 
-                current_type = current_type[:3]
+                curr_kind = curr_kind[:3]
 
-            possible_next_types = get_valid_next_kinds(
-                current_coords, current_type, next_coords, hadamard_flag=hadamard_flag
-            )
+            possible_nxt_types = nxt_kinds(curr_coords, curr_kind, nxt_coords)
 
-            for next_type in possible_next_types:
+            for nxt_type in possible_nxt_types:
 
                 # If hadamard flag is on and the block being placed is "o", place a hadamard instead of regular pipe
-                if hadamard_flag and "o" in next_type:
-                    next_type += "h"
+                if hdm and "o" in nxt_type:
+                    nxt_type += "h"
                     if (
                         sum(
                             [
                                 p[0] + p[1] if p[0] != p[1] else 0
-                                for p in list(zip(current_coords, next_coords))
+                                for p in list(zip(curr_coords, nxt_coords))
                             ]
                         )
                         < 0
                     ):
-                        next_type = rotate_o_types(next_type)
-
-                next_node_info: StandardBlock = (next_coords, next_type)
+                        nxt_type = rot_o_kind(nxt_type)
 
                 if (
-                    next_coords not in current_path_coords
-                    and next_coords not in forbidden_cords
-                    and (intermediate_pos is None or next_coords != intermediate_pos)
+                    nxt_coords not in curr_pth_coords
+                    and nxt_coords not in taken
+                    and (mid_pos is None or nxt_coords != mid_pos)
                 ):
-                    new_path_length = path_length[current_node_info] + 1
-                    if (
-                        next_node_info not in visited
-                        or new_path_length < visited[next_node_info]
-                    ):
-                        visited[next_node_info] = new_path_length
-                        queue.append(next_node_info)
-                        path_length[next_node_info] = new_path_length
-                        path[next_node_info] = path[current_node_info] + [
-                            next_node_info
-                        ]
+                    new_pth_len = pth_len[curr] + 1
+                    nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
 
-    return False, -1, None
+                    if (
+                        (nxt_b_info, (dx, dy, dz))
+                    ) not in visited or new_pth_len < visited[
+                        (nxt_b_info, (dx, dy, dz))
+                    ]:
+                        visited[(nxt_b_info, (dx, dy, dz))] = new_pth_len
+                        queue.append(nxt_b_info)
+                        pth_len[nxt_b_info] = new_pth_len
+                        pth[nxt_b_info] = pth[curr] + [nxt_b_info]
+
+                        if nxt_coords in end_coords and (
+                            tent_tgt_kinds == ["ooo"] or nxt_type in tent_tgt_kinds
+                        ):
+                            valid_pths[nxt_b_info] = pth[nxt_b_info]
+                            tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
+                            if tgts_filled >= tgts_to_fill:
+                                break
+
+            # Increase counter of times pathfinder tries visits something new
+            visit_attempts += 1
+
+    # RETURN VALID PATHS
+    return valid_pths, (visit_attempts, len(visited))
 
 
 ##################
 # AUX OPERATIONS #
 ##################
-def generate_tentative_target_position(
-    source_node: StandardBlock,
-    min_x: int,
-    max_x: int,
-    min_y: int,
-    max_y: int,
-    min_z: int,
-    max_z: int,
-    obstacle_coords: Optional[List[StandardCoord]] = None,
-    overwrite_target_coords: Optional[StandardCoord] = None,
-) -> StandardCoord | None:
-    """Generates a tentative coordinate for next target, favouring closer targets favoured, and checking position's validity.
-    Note. Function is not really used in current flow (returns overwrite_target_coords). Here in case of future need.
-
-    Args:
-        - source_node: the information of the source block including position and kind.
-        - min_x, max_x, min_y, max_y, min_z, max_z: min and max coordinates for all axes in 3D space.
-        - obstacle_coords: list of coordinates that have already been occupied as part of previous operations.
-        - overwrite_target_coords: specific coordinates to use as ideal placement position for target block.
-
-    Returns:
-        - (x, y, z): a tuple containing a 3D coordinate
-
-    """
-
-    if overwrite_target_coords:
-        return overwrite_target_coords
-
-    obstacle_coords = obstacle_coords if obstacle_coords else []
-    source_coords, _ = source_node
-    sx, sy, sz = source_coords
-
-    # Level 1: Single Axis Displacement (+/- 3)
-    potential_targets_level_1 = [
-        (sx + 3, sy, sz),
-        (sx - 3, sy, sz),
-        (sx, sy + 3, sz),
-        (sx, sy - 3, sz),
-        (sx, sy, sz + 3),
-        (sx, sy, sz - 3),
-    ]
-    for tx, ty, tz in potential_targets_level_1:
-        if min_x <= tx <= max_x and min_y <= ty <= max_y and min_z <= tz <= max_z:
-            if (tx, ty, tz) not in obstacle_coords and is_move_allowed(
-                source_coords, (tx, ty, tz)
-            ):
-                print(f"=>> Returning potential target at Level 1: {(tx, ty, tz)}")
-                return (tx, ty, tz)
-
-    # Level 2: Two Axis Displacement (+/- 3 on two axes)
-    potential_targets_level_2 = []
-    for dx in [-3, 3]:
-        for dy in [-3, 3]:
-            potential_targets_level_2.extend(
-                [(sx + dx, sy + dy, sz), (sx + dy, sy + dx, sz)]
-            )
-        for dz in [-3, 3]:
-            potential_targets_level_2.extend(
-                [(sx + dx, sy, sz + dz), (sx + dz, sy, sz + dx)]
-            )
-        for dy in [-3, 3]:
-            for dz in [-3, 3]:
-                potential_targets_level_2.extend(
-                    [(sx, sy + dy, sz + dz), (sx, sy + dz, sz + dy)]
-                )
-
-    # Remove duplicates
-    potential_targets_level_2 = list(set(potential_targets_level_2))
-
-    for tx, ty, tz in potential_targets_level_2:
-        if min_x <= tx <= max_x and min_y <= ty <= max_y and min_z <= tz <= max_z:
-            if (tx, ty, tz) not in obstacle_coords and is_move_allowed(
-                source_coords, (tx, ty, tz)
-            ):
-                print(f"=>> Returning potential target at Level 2: {(tx, ty, tz)}")
-                return (tx, ty, tz)
-
-    # Level 3: Three Axis Displacement (+/- 3 on all three axes)
-    potential_targets_level_3 = []
-    for dx in [-3, 3]:
-        for dy in [-3, 3]:
-            for dz in [-3, 3]:
-                if dx != 0 or dy != 0 or dz != 0:  # Exclude the source itself
-                    potential_targets_level_3.append((sx + dx, sy + dy, sz + dz))
-
-    for tx, ty, tz in potential_targets_level_3:
-        if min_x <= tx <= max_x and min_y <= ty <= max_y and min_z <= tz <= max_z:
-            if (tx, ty, tz) not in obstacle_coords and is_move_allowed(
-                source_coords, (tx, ty, tz)
-            ):
-                print(f"=>> Returning potential target at Level 3: {(tx, ty, tz)}")
-                return (tx, ty, tz)
-
-    print(
-        "=> Could not generate a valid tentative target within the prioritized distances."
-    )
-
-    return None
-
-
-def determine_grid_size(
-    start_coords: StandardCoord,
-    end_coords: StandardCoord,
-    obstacle_coords: Optional[List[StandardCoord]] = None,
-    margin: int = 5,
-) -> Tuple[int, ...]:
-    """Determines the bounding box of the search space.
-
-    Args:
-        - start_coords: (x, y, z) position of the source node.
-        - end_coords: (x, y, z) position of the target node
-        - obstacle_coords: list of coordinates that have already been occupied as part of previous operations.
-        - margin: the margin to leave beyond the bounding box made by start_coord and end_coords.
-
-    Returns:
-        - min_x, max_x, min_y, max_y, min_z, max_z: min and max coordinates for all axes in 3D space.
-
-    """
-
-    all_coords = [start_coords, end_coords]
-    if obstacle_coords:
-        all_coords.extend(obstacle_coords)
-
-    min_x = min(coord[0] for coord in all_coords) - margin
-    max_x = max(coord[0] for coord in all_coords) + margin
-    min_y = min(coord[1] for coord in all_coords) - margin
-    max_y = max(coord[1] for coord in all_coords) + margin
-    min_z = min(coord[2] for coord in all_coords) - margin
-    max_z = max(coord[2] for coord in all_coords) + margin
-
-    return min_x, max_x, min_y, max_y, min_z, max_z
-
-
-def generate_tentative_target_types(
-    target_node_zx_type: str, overwrite_target_type: Optional[str] = None
-) -> List[str]:
+def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List[str]:
     """Returns all possible valid kinds/types for a given ZX type,
     typically needed when a new block is being added to the 3D space,
     as each ZX type can be fulfilled with more than one block types/kinds.
 
     Args:
-        - target_node_zx_type: the ZX type of the target node.
-        - overwrite_target_type: a specific block/pipe type/kind to return irrespective of ZX type,
+        - tgt_zx_type: the ZX type of the target node.
+        - tgt_kind: a specific block/pipe type/kind to return irrespective of ZX type,
             used when the target block was already placed as part of previous operations and therefore already has an assigned kind.
 
     Returns:
-        - family: a list of applicable types/kinds for the given ZX type.
+        - fam: a list of applicable types/kinds for the given ZX type.
 
     """
 
-    if overwrite_target_type:
-        return [overwrite_target_type]
+    if tgt_kind:
+        return [tgt_kind]
 
-    # NODE TYPE FAMILIES
-    X = ["xxz", "xzx", "zxx"]
-    Z = ["xzz", "zzx", "zxz"]
-    BOUNDARY = ["ooo"]
-    SIMPLE = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
-    HADAMARD = ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
-
-    if target_node_zx_type in ["X", "Z"]:
-        family = X if target_node_zx_type == "X" else Z
-    elif target_node_zx_type == "O":
-        family = BOUNDARY
-    elif target_node_zx_type == "SIMPLE":
-        family = SIMPLE
-    elif target_node_zx_type == "HADAMARD":
-        family = HADAMARD
+    if tgt_zx_type in ["X", "Z"]:
+        return ["xxz", "xzx", "zxx"] if tgt_zx_type == "X" else ["xzz", "zzx", "zxz"]
+    elif tgt_zx_type == "O":
+        return ["ooo"]
+    elif tgt_zx_type == "SIMPLE":
+        return ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
+    elif tgt_zx_type == "HADAMARD":
+        return ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
     else:
-        return [target_node_zx_type]
-
-    return family
+        return [tgt_zx_type]
 
 
-def get_coords_occupied_by_blocks(preexistent_structure: List[StandardBlock]):
+def get_taken_coords(all_blocks: List[StandardBlock]):
     """Converts a series of blocks into a list of all coordinates occupied by the blocks.
 
     Args:
-        - preexistent_structure: a list of blocks and pipes that altogether make a space-time diagram.
+        - all_blocks: a list of blocks and pipes that altogether make a space-time diagram.
 
     Returns:
-        - list(obstacle_coords): a list of coordinates taken by the blocks and pipes in the preexistent_structure.
+        - list(taken): a list of coordinates taken by pre-existing cubes and pipes (blocks).
 
     """
 
-    obstacle_coords = set()
+    taken = set()
 
-    if not preexistent_structure:
+    if not all_blocks:
         return []
 
-    # Add first block's coordinates
-    first_block = preexistent_structure[0]
-    if first_block:
-        first_block_coords = first_block[0]
-        obstacle_coords.add(first_block_coords)
+    # ADD 1ST BLOCK COORDS
+    b_1st = all_blocks[0]
+    if b_1st:
+        b_1_coords = b_1st[0]
+        taken.add(b_1_coords)
 
-    # Iterate from the second node
-    for i, block in enumerate(preexistent_structure):
+    # ITERATE FROM 2ND BLOCK ONWARDS
+    for i, _ in enumerate(all_blocks):
 
         if i > 0:
 
-            current_node = preexistent_structure[i]
-            prev_node = preexistent_structure[i - 1]
+            curr = all_blocks[i]
+            prev = all_blocks[i - 1]
 
-            if current_node and prev_node:
-                current_node_coords, current_node_type = current_node
-                prev_node_coords, prev_node_type = prev_node
+            if curr and prev:
+                curr_c, curr_k = curr
+                prev_c, _ = prev
 
                 # Add current node's coordinates
-                obstacle_coords.add(current_node_coords)
+                taken.add(curr_c)
 
-                if "o" in current_node_type:
-                    cx, cy, cz = current_node_coords
-                    px, py, pz = prev_node_coords
-                    extended_coords = None
+                if "o" in curr_k:
+                    cx, cy, cz = curr_c
+                    px, py, pz = prev_c
+                    ext_cs = None
 
                     if cx == px + 1:
-                        extended_coords = (cx + 1, cy, cz)
+                        ext_cs = (cx + 1, cy, cz)
                     elif cx == px - 1:
-                        extended_coords = (cx - 1, cy, cz)
+                        ext_cs = (cx - 1, cy, cz)
                     elif cy == py + 1:
-                        extended_coords = (cx, cy + 1, cz)
+                        ext_cs = (cx, cy + 1, cz)
                     elif cy == py - 1:
-                        extended_coords = (cx, cy - 1, cz)
+                        ext_cs = (cx, cy - 1, cz)
                     elif cz == pz + 1:
-                        extended_coords = (cx, cy, cz + 1)
+                        ext_cs = (cx, cy, cz + 1)
                     elif cz == pz - 1:
-                        extended_coords = (cx, cy, cz - 1)
+                        ext_cs = (cx, cy, cz - 1)
 
-                    if extended_coords:
-                        obstacle_coords.add(extended_coords)
+                    if ext_cs:
+                        taken.add(ext_cs)
 
-    return list(obstacle_coords)
+    # RETURN LIST OF TAKEN COORDS
+    return list(taken)
+
+
+##########
+# TESTS  #
+##########
+def test_pthfinder(
+    stats_dir: str, min_succ_rate, max_test_step: int = 3, num_repetitions: int = 1
+):
+    """Checks runtimes for creation of paths by pathfinder algorithm.
+
+    Args:
+        - stats_dir: the directory where states are to be saved
+        - min_succ_rate: min % of tent_coords that need to be filled, used as exit condition.
+        - max_test_step: Sets the maximum distance for target test node
+        - num_repetitions: Sets the number of times that the test loop will be repeated.
+
+    """
+
+    if os.path.exists(f"{stats_dir}/pathfinder_iterations_tests.csv"):
+        os.remove(f"{stats_dir}/pathfinder_iterations_tests.csv")
+
+    taken: List[StandardCoord] = []
+    hdm: bool = False
+    src_coords: StandardCoord = (0, 0, 0)
+    all_valid_start_kinds: List[str] = ["xxz", "xzx", "zxx", "xzz", "zzx", "zxz"]
+    all_valid_zx_types: List[str] = ["X", "Z"]
+    unique_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + "*"
+
+    i = 0
+    while i < num_repetitions:
+        i += 1
+        step: int = 3
+        print(f"\nRunning tests. Loop {i} of {num_repetitions}.")
+        while step <= max_test_step:
+            tent_coords = gen_tent_tgt_coords(src_coords, step, taken)
+            for start_kind in all_valid_start_kinds:
+                src = ((0, 0, 0), start_kind)
+                for zx_type in all_valid_zx_types:
+                    clean_paths = pthfinder(
+                        src,
+                        tent_coords,
+                        zx_type,
+                        tgt=(None, None),
+                        taken=taken,
+                        hdm=hdm,
+                        min_succ_rate=min_succ_rate,
+                        log_stats_id=unique_run_id,
+                    )
+                    if clean_paths:
+                        print(".", end="")
+            step += 3
