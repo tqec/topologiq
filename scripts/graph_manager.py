@@ -243,7 +243,7 @@ def graph_manager_bfs(
                                     log_stats_id,
                                     c_name,
                                     run_success,
-                                    list(edge_pths.keys()),
+                                    [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
                                 ]
 
                                 log_stats_to_file(
@@ -312,7 +312,7 @@ def graph_manager_bfs(
                 log_stats_id,
                 c_name,
                 run_success,
-                list(edge_pths.keys()),
+                [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
             ]
 
             log_stats_to_file(
@@ -356,12 +356,12 @@ def graph_manager_bfs(
             f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
             opt_header=header_bfs_stats,
         )
-
+        
         outputs_stats = [
             log_stats_id,
             c_name,
             run_success,
-            list(edge_pths.keys()),
+            [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
         ]
 
         log_stats_to_file(
