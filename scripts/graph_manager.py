@@ -16,7 +16,7 @@ from utils.utils_greedy_bfs import (
 from utils.utils_pathfinder import check_exits
 from utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
 from utils.grapher import vis_3d_g, edge_pths_to_g
-from utils.utils_misc import log_stats_to_file, header_bfs_stats
+from utils.utils_misc import prep_stats_n_log
 from utils.classes import (
     PathBetweenNodes,
     StandardBlock,
@@ -86,8 +86,14 @@ def graph_manager_bfs(
     """
 
     # PRELIMS
-    # Turn on logging of stats if needed
-    t1 = datetime.now()
+    # Set all timers to None in case there are errors
+    t1 = None
+    t2 = None
+    t_end = None
+
+    # Start first timer
+    if log_stats_id is not None:
+        t1 = datetime.now()
 
     # Variables to hold results
     nx_g = prep_3d_g(g)
@@ -212,44 +218,26 @@ def graph_manager_bfs(
                             # LOG STATS TO FILE
                             if log_stats_id is not None:
                                 t_end = datetime.now()
+                                times = {"t1": t1, "t2": t2, "t_end": t_end}
+                                run_success = False
+                                counts = {
+                                    "num_input_nodes_processed": num_nodes_input,
+                                    "num_input_edges_processed": num_1st_pass_edges,
+                                    "num_1st_pass_edges_processed": num_1st_pass_edges,
+                                    "num_2n_pass_edges_processed": 0,
+                                }
 
-                                run_success = (
-                                    lat_nodes is not None and lat_edges is not None
-                                )
-                                bfs_manager_stats = [
+                                prep_stats_n_log(
+                                    "graph_manager_cycle",
                                     log_stats_id,
-                                    c_name,
-                                    kwargs["length_of_beams"],
                                     run_success,
-                                    "error",
-                                    "error",
-                                    "error",
-                                    "error",
-                                    len(edge_pths),
-                                    "error",
-                                    "error",
-                                    (t_end - t1).total_seconds() if t1 else "error",
-                                    "error",
-                                    (t_end - t1).total_seconds() if t1 else "error",
-                                ]
-
-                                log_stats_to_file(
-                                    bfs_manager_stats,
-                                    f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
-                                    opt_header=header_bfs_stats,
-                                )
-
-                                outputs_stats = [
-                                    log_stats_id,
-                                    c_name,
-                                    run_success,
-                                    [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
-                                ]
-
-                                log_stats_to_file(
-                                    outputs_stats,
-                                    f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
-                                    opt_header=header_bfs_stats,
+                                    counts,
+                                    times,
+                                    c_name=c_name,
+                                    len_beams=kwargs["length_of_beams"],
+                                    edge_pths=edge_pths,
+                                    lat_nodes=lat_nodes,
+                                    lat_edges=lat_edges,
                                 )
 
                             raise ValueError(
@@ -264,7 +252,8 @@ def graph_manager_bfs(
     taken = list(set(taken))
 
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
-    t2 = datetime.now()
+    if log_stats_id is not None:
+        t2 = datetime.now()
     num_2n_pass_edges = 0
     try:
         edge_pths, c, num_2n_pass_edges = second_pass(
@@ -283,42 +272,26 @@ def graph_manager_bfs(
         # LOG STATS TO FILE
         if log_stats_id is not None:
             t_end = datetime.now()
+            times = {"t1": t1, "t2": t2, "t_end": t_end}
+            run_success = False
+            counts = {
+                "num_input_nodes_processed": num_nodes_input,
+                "num_input_edges_processed": num_1st_pass_edges + num_2n_pass_edges,
+                "num_1st_pass_edges_processed": num_1st_pass_edges,
+                "num_2n_pass_edges_processed": num_2n_pass_edges,
+            }
 
-            run_success = lat_nodes is not None and lat_edges is not None
-            bfs_manager_stats = [
+            prep_stats_n_log(
+                "graph_manager_cycle",
                 log_stats_id,
-                c_name,
-                kwargs["length_of_beams"],
                 run_success,
-                "error",
-                "error",
-                "error",
-                "error",
-                len(edge_pths),
-                "error",
-                "error",
-                (t2 - t1).total_seconds() if t2 and t1 else "error",
-                (t_end - t2).total_seconds() if t2 else "error",
-                (t_end - t1).total_seconds() if t1 else "error",
-            ]
-
-            log_stats_to_file(
-                bfs_manager_stats,
-                f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
-                opt_header=header_bfs_stats,
-            )
-
-            outputs_stats = [
-                log_stats_id,
-                c_name,
-                run_success,
-                [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
-            ]
-
-            log_stats_to_file(
-                outputs_stats,
-                f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
-                opt_header=header_bfs_stats,
+                counts,
+                times,
+                c_name=c_name,
+                len_beams=kwargs["length_of_beams"],
+                edge_pths=edge_pths,
+                lat_nodes=lat_nodes,
+                lat_edges=lat_edges,
             )
 
         # FORCE FAILURE
@@ -332,42 +305,26 @@ def graph_manager_bfs(
     # LOG STATS TO FILE IF NEEDED
     if log_stats_id is not None:
         t_end = datetime.now()
-
+        times = {"t1": t1, "t2": t2, "t_end": t_end}
         run_success = lat_nodes is not None and lat_edges is not None
-        bfs_manager_stats = [
-            log_stats_id,
-            c_name,
-            kwargs["length_of_beams"],
-            run_success,
-            num_nodes_input,
-            num_1st_pass_edges + num_2n_pass_edges,
-            num_1st_pass_edges,
-            num_2n_pass_edges,
-            len(edge_pths),
-            len(lat_nodes.keys()) if lat_nodes else 0,
-            len(lat_edges.keys()) if lat_edges else 0,
-            (t2 - t1).total_seconds() if t2 and t1 else "error",
-            (t_end - t2).total_seconds() if t2 else "error",
-            (t_end - t1).total_seconds() if t1 else "error",
-        ]
+        counts = {
+            "num_input_nodes_processed": num_nodes_input,
+            "num_input_edges_processed": num_1st_pass_edges + num_2n_pass_edges,
+            "num_1st_pass_edges_processed": num_1st_pass_edges,
+            "num_2n_pass_edges_processed": num_2n_pass_edges,
+        }
 
-        log_stats_to_file(
-            bfs_manager_stats,
-            f"bfs_manager{"_tests" if log_stats_id.endswith("*") else ""}",
-            opt_header=header_bfs_stats,
-        )
-        
-        outputs_stats = [
+        prep_stats_n_log(
+            "graph_manager_cycle",
             log_stats_id,
-            c_name,
             run_success,
-            [edge_pth['src_tgt_ids'] for edge_pth in edge_pths.values()],
-        ]
-
-        log_stats_to_file(
-            outputs_stats,
-            f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
-            opt_header=header_bfs_stats,
+            counts,
+            times,
+            c_name=c_name,
+            len_beams=kwargs["length_of_beams"],
+            edge_pths=edge_pths,
+            lat_nodes=lat_nodes,
+            lat_edges=lat_edges,
         )
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE

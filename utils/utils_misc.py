@@ -1,9 +1,10 @@
+from datetime import datetime
 import os
 import csv
 import numpy as np
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple, Union
 
 from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 
@@ -11,16 +12,16 @@ from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 #############
 # CONSTANTS #
 #############
-header_bfs_stats = [
+HEADER_BFS_MANAGER_STATS = [
     "unique_run_id",
+    "run_success",
     "circuit_name",
     "len_beams",
-    "run_success",
-    "num_nodes_input",
-    "num_edges_input",
-    "num_normal_edges_input",
-    "num_second_pass_edges_input",
+    "num_input_nodes_processed",
     "num_input_edges_processed",
+    "num_1st_pass_edges_processed",
+    "num_2n_pass_edges_processed",
+    "num_edges_in_edge_paths",
     "num_blocks_output",
     "num_edges_output",
     "duration_first_pass",
@@ -28,22 +29,25 @@ header_bfs_stats = [
     "duration_total",
 ]
 
-header_pathfinder_stats = [
+HEADER_PATHFINDER_STATS = [
     "unique_run_id",
-    "circuit_name",
-    "run_success",
-    "num_nodes_input",
-    "num_edges_input",
-    "num_normal_edges_input",
-    "num_second_pass_edges_input",
-    "num_blocks_output",
-    "num_edges_output",
-    "duration_first_pass",
-    "duration_second_pass",
-    "duration_total",
+    "iter_type",
+    "iter_success",
+    "src_coords",
+    "src_kind",
+    "tgt_coords",
+    "tgt_zx_type",
+    "tgt_kind",
+    "num_tent_coords_received",
+    "num_tent_coords_filled",
+    "max_manhattan_src_to_any_tent_coord",
+    "len_longest_path",
+    "num_visitation_attempts",
+    "num_sites_visited",
+    "iter_duration",
 ]
 
-header_edge_pths = [
+HEADER_OUTPUT_STATS = [
     "unique_run_id",
     "circuit_name",
     "run_success",
@@ -80,10 +84,137 @@ def get_max_manhattan(src_c: StandardCoord, all_cs: List[StandardCoord]) -> int:
 
     return 0
 
+
 ############
 # LOGGERS  #
 ############
-def log_stats_to_file(stats_line: List, stats_type: str, opt_header: List[str] = []):
+def prep_stats_n_log(
+    stats_type: str,
+    log_stats_id: str,
+    op_success: bool,
+    counts: dict[str, int],
+    times: dict[str, Union[datetime, None]],
+    c_name: str = "unknown",
+    len_beams: int = 0,
+    edge_pths: Union[None, dict] = None,
+    lat_nodes: Union[None, dict[int, StandardBlock]] = None,
+    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
+    src: Union[None, StandardBlock] = None,
+    tgt: Tuple[Union[None, StandardCoord], Union[None, str]] = (None, None),
+    tgt_zx_type: Union[None, str] = None,
+    visit_stats: Tuple[int, int] = (0, 0),
+):
+    """Takes a list of arguments and assembles them in the appropriate order needed to log stats to file. Uses the type of stats to determine appropriate order
+
+    Args:
+        -
+
+    Keyword arguments (kwargs):
+        - This varies per operation. See "CONSTANTS" section above in this file for all possibilities.
+
+    Returns:
+        - main_stats: array containing all principal stats to be logged to the corresponding stats file.
+        - aux_stats: array containing any secondary stats to be logged to any auxiliary stats file, or an empty array if no secondary stats exist.
+    """
+
+    # INITIALISE ARRAYS
+    main_stats = []
+    aux_stats = []
+
+    # FILL ARRAYS AS PER LOG TYPE
+    if "graph_manager" in stats_type:
+
+        durations = {
+            "first_pass": (
+                (times["t2"] - times["t1"]).total_seconds()
+                if times["t2"] and times["t1"]
+                else "error"
+            ),
+            "second_pass": (
+                (times["t_end"] - times["t2"]).total_seconds()
+                if times["t2"] and times["t_end"]
+                else "error"
+            ),
+            "total": (
+                (times["t_end"] - times["t1"]).total_seconds()
+                if times["t1"] and times["t_end"]
+                else "error"
+            ),
+        }
+
+        main_stats = [
+            log_stats_id,
+            op_success,
+            c_name,
+            len_beams,
+            counts["num_input_nodes_processed"] if op_success else 0,
+            counts["num_input_edges_processed"] if op_success else 0,
+            counts["num_1st_pass_edges_processed"] if op_success else 0,
+            counts["num_2n_pass_edges_processed"] if op_success else 0,
+            len(edge_pths) if edge_pths else 0,
+            len(lat_nodes.keys()) if lat_nodes else 0,
+            len(lat_edges.keys()) if lat_edges else 0,
+            durations["first_pass"],
+            durations["second_pass"],
+            durations["total"],
+        ]
+
+        aux_stats = [
+            log_stats_id,
+            op_success,
+            c_name,
+            (
+                [edge_pth["src_tgt_ids"] for edge_pth in edge_pths.values()]
+                if edge_pths
+                else ["error"]
+            ),
+        ]
+
+        log_stats(
+            aux_stats,
+            f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
+            opt_header=HEADER_OUTPUT_STATS,
+        )
+    elif "pathfinder" in stats_type:
+        op_type = "creation" if not tgt[1] else "discovery"
+        durations = {
+            "total": (
+                (times["t_end"] - times["t1"]).total_seconds()
+                if times["t1"] and times["t_end"]
+                else "error"
+            )
+        }
+
+        main_stats = [
+            log_stats_id,
+            op_type,
+            op_success,
+            src[0] if src else "error",
+            src[1] if src else "error",
+            tgt[0] if tgt[0] else "TBD",
+            tgt_zx_type,
+            tgt[1] if tgt[1] else "TBD",
+            counts["num_tent_coords"],
+            counts["num_tent_coords_filled"],
+            counts["max_manhattan"],
+            counts["len_longest_path"],
+            visit_stats[0],
+            visit_stats[1],
+            durations["total"],
+        ]
+
+    log_stats(
+        main_stats,
+        f"{stats_type}{"_tests" if log_stats_id.endswith("*") else ""}",
+        opt_header=(
+            HEADER_BFS_MANAGER_STATS
+            if "graph_manager" in stats_type
+            else HEADER_PATHFINDER_STATS
+        ),
+    )
+
+
+def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []):
     """Writes statistics to one of the statistics files in `./assets/stats/`
     Args:
         - stats_line: the line of statistics to be logged to file.
@@ -156,4 +287,3 @@ def write_outputs(
     with open(f"{out_dir_pth}/{c_name}.txt", "w") as f:
         f.writelines(lines)
         f.close()
-        
