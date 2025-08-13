@@ -6,7 +6,7 @@ stats_checks.py
 
 # Outputs
 outputs/
-assets/stats/
+assets/stats/*.csv
 
 # Python 
 .venv/
