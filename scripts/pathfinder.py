@@ -7,11 +7,7 @@ from typing import List, Tuple, Optional, Union
 from utils.classes import StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import gen_tent_tgt_coords
 from utils.utils_pathfinder import flip_hdm, rot_o_kind, nxt_kinds
-from utils.utils_misc import (
-    get_max_manhattan,
-    log_stats_to_file,
-    header_pathfinder_stats,
-)
+from utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
 
 ############################
@@ -48,6 +44,7 @@ def pthfinder(
 
     # PRELIMS
     t1 = None
+    t_end = None
     if log_stats_id is not None:
         t1 = datetime.now()
 
@@ -78,46 +75,38 @@ def pthfinder(
 
     # LOG STATS IF NEEDED
     if log_stats_id is not None:
-        if t1 is not None:
-            t_end = datetime.now()
-            max_len = 0
-            num_tent_coords = 0
-            num_tent_coords_filled = 0
-            max_manhattan = get_max_manhattan(s_coords, tent_coords)
 
-            pth_found = False
-            if valid_pths:
-                pth_found = True
-                num_tent_coords = len(tent_coords)
-                num_tent_coords_filled = len(set([p[0] for p in valid_pths.keys()]))
-                for pth in valid_pths.values():
-                    if pth:
-                        len_pth = sum([2 if "o" in b[1] else 1 for b in pth]) - 1
-                        max_len = max(max_len, len_pth)
+        t_end = datetime.now()
+        times = {"t1": t1, "t_end": t_end}
+        iter_success = True if valid_pths else False
 
-            iter_stats = [
-                log_stats_id,
-                "creation" if not tgt[1] else "discovery",
-                pth_found,
-                src[0],
-                src[1],
-                tgt[0] if tgt[0] else "TBD",
-                tgt_zx_type,
-                tgt[1] if tgt[1] else "TBD",
-                num_tent_coords,
-                num_tent_coords_filled,
-                max_manhattan,
-                max_len if max_len > 0 else "n/a",
-                visit_stats[0],
-                visit_stats[1],
-                (t_end - t1).total_seconds(),
-            ]
+        len_longest_pth = 0
+        if valid_pths:
+            for pth in valid_pths.values():
+                if pth:
+                    len_pth = sum([2 if "o" in b[1] else 1 for b in pth]) - 1
+                    len_longest_pth = max(len_longest_pth, len_pth)
 
-            log_stats_to_file(
-                iter_stats,
-                f"pathfinder_iterations{"_tests" if log_stats_id.endswith("*") else ""}",
-                opt_header=header_pathfinder_stats,
-            )
+        counts = {
+            "num_tent_coords": len(tent_coords) if valid_pths else 0,
+            "num_tent_coords_filled": (
+                len(set([p[0] for p in valid_pths.keys()])) if valid_pths else 0
+            ),
+            "max_manhattan": get_max_manhattan(s_coords, tent_coords),
+            "len_longest_path": len_longest_pth if len_longest_pth > 0 else 0,
+        }
+
+        prep_stats_n_log(
+            "pathfinder_iterations",
+            log_stats_id,
+            iter_success,
+            counts,
+            times,
+            src=src,
+            tgt=tgt,
+            tgt_zx_type=tgt_zx_type,
+            visit_stats=visit_stats,
+        )
 
     # RETURN VALID PATHS (ONE OR MORE IF SUCCESSFUL)
     return valid_pths
