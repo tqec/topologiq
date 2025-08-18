@@ -53,7 +53,7 @@ def run():
     # DEFINE DEFAULT VALUES FOR KEY PARAMS
     num_attempts: int = 10
     stop_on_first_success: bool = True
-    min_pthfinder_success_rate: int = 50
+    min_pthfinder_success_rate: int = 60
     vis_0, vis_1 = (None, None)
     strip_ports: bool = False
     hide_ports: bool = False

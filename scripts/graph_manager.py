@@ -97,6 +97,7 @@ def graph_manager_bfs(
 
     # Variables to hold results
     nx_g = prep_3d_g(g)
+
     num_nodes_input: int = 0
     num_1st_pass_edges: int = 0
     lat_nodes: Union[None, dict[int, StandardBlock]] = None
@@ -129,10 +130,6 @@ def graph_manager_bfs(
         tent_kinds: Optional[List[str]] = nx_g.nodes[src].get("type_fam")
         random_kind = random.choice(tent_kinds) if tent_kinds else None
 
-        # Write info of node
-        nx_g.nodes[src]["pos"] = (0, 0, 0)
-        nx_g.nodes[src]["kind"] = random_kind
-
         # Update list of taken coords and all_beams with node's position & beams
         taken.append((0, 0, 0))
         _, src_beams = check_exits(
@@ -142,7 +139,16 @@ def graph_manager_bfs(
             all_beams,
             kwargs["length_of_beams"],
         )
+
+        # Write info of node
+        nx_g.nodes[src]["pos"] = (0, 0, 0)
+        nx_g.nodes[src]["kind"] = random_kind
+        nx_g.nodes[src]["beams"] = src_beams
+
+        # Update global beams array
         all_beams.append(src_beams)
+
+        # Update node counter
         num_nodes_input += 1
 
     # LOOP FOR ALL OTHER NODES
@@ -255,6 +261,7 @@ def graph_manager_bfs(
     if log_stats_id is not None:
         t2 = datetime.now()
     num_2n_pass_edges = 0
+
     try:
         edge_pths, c, num_2n_pass_edges = second_pass(
             nx_g,
@@ -262,6 +269,7 @@ def graph_manager_bfs(
             edge_pths,
             c_name,
             c,
+            all_beams,
             min_succ_rate=min_succ_rate,
             hide_ports=hide_ports,
             visualise=visualise,
@@ -378,7 +386,7 @@ def place_nxt_block(
     """
 
     # PRUNE BEAMS TO CONSIDER RECENT NODE PLACEMENTS
-    all_beams = prune_beams(all_beams, taken)
+    nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
     # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
     # Previous node data
@@ -432,39 +440,60 @@ def place_nxt_block(
                 beams_len=kwargs["length_of_beams"],
             )
 
+            # Check path doesn't obstruct an absolutely necessary exit by previously placed nodes
+            # XYZ
+            coords_in_pth = get_taken_coords(clean_pth)
+
             # Reset # of unobstructed exits and node beams if node is a boundary
             if nxt_neigh_zx_type == "O":
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
             if tgt_unobstr_exit_n >= nxt_neigh_neigh_n:
-                coords_in_pth = [p[0] for p in clean_pth]
                 beams_broken_by_pth = 0
-                for beam in all_beams:
-                    for coord in beam:
-                        if coord in coords_in_pth:
-                            beams_broken_by_pth += 1
 
-                all_nodes_in_pth = [p for p in clean_pth]
-                if nxt_neigh_zx_type == "O":
-                    tgt_kind = "ooo"
+                # for beam in all_beams:
+                # for coord in beam:
+                # if coord in coords_in_pth:
+                # beams_broken_by_pth += 1
 
-                    all_nodes_in_pth[-1] = (all_nodes_in_pth[-1][0], tgt_kind)
+                critical_beams_broken = False
+                for n_id in nx_g.nodes():
 
-                pth_data = {
-                    "tgt_pos": tgt_coords,
-                    "tgt_kind": tgt_kind,
-                    "tgt_beams": tgt_beams,
-                    "coords_in_pth": coords_in_pth,
-                    "all_nodes_in_pth": all_nodes_in_pth,
-                    "beams_broken_by_pth": beams_broken_by_pth,
-                    "len_of_pth": len(clean_pth),
-                    "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
-                }
+                    if n_id != src_id and nx_g.nodes[n_id]["beams"]:
+                        broken = 0
+                        for bm in nx_g.nodes[n_id]["beams"]:
+                            critical_beams_broken = False
+                            if any([(c in coords_in_pth) for c in bm]):
+                                beams_broken_by_pth += 1
+                                broken += 1
 
-                viable_pths.append(PathBetweenNodes(**pth_data))
+                            # beams_broken_by_pth += broken
+                            if broken > 4 - get_node_degree(nx_g, n_id):
+                                critical_beams_broken = True
+
+                if critical_beams_broken is not True:
+                    all_nodes_in_pth = [p for p in clean_pth]
+
+                    if nxt_neigh_zx_type == "O":
+                        tgt_kind = "ooo"
+                        all_nodes_in_pth[-1] = (all_nodes_in_pth[-1][0], tgt_kind)
+
+                    pth_data = {
+                        "tgt_pos": tgt_coords,
+                        "tgt_kind": tgt_kind,
+                        "tgt_beams": tgt_beams,
+                        "coords_in_pth": coords_in_pth,
+                        "all_nodes_in_pth": all_nodes_in_pth,
+                        "beams_broken_by_pth": beams_broken_by_pth,
+                        "len_of_pth": len(clean_pth),
+                        "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
+                    }
+
+                    viable_pths.append(PathBetweenNodes(**pth_data))
 
         winner_pth: Optional[PathBetweenNodes] = None
         if viable_pths:
+
             winner_pth = max(viable_pths, key=lambda pth: pth.weighed_value(**kwargs))
 
         # Rewrite current node with data of winner candidate
@@ -484,9 +513,21 @@ def place_nxt_block(
                 for block in pretty_winner_pth
             ]
 
-            # Update node information
+            # Update source info
+            nx_g.nodes[src_id]["completed"] += 1
+
+            # Update target node information
             nx_g.nodes[neigh_id]["pos"] = winner_pth.tgt_pos
             nx_g.nodes[neigh_id]["kind"] = winner_pth.tgt_kind
+            nx_g.nodes[neigh_id]["completed"] += 1
+            nx_g.nodes[neigh_id]["beams"] = (
+                []
+                if nx_g.nodes[neigh_id]["completed"] >= get_node_degree(nx_g, neigh_id)
+                else winner_pth.tgt_beams
+            )
+
+            # Add beams of winner's target node to list of graphs' all_beams
+            all_beams.append(winner_pth.tgt_beams)
 
             # Update edge_pth dictionary
             edge = tuple(sorted((src_id, neigh_id)))
@@ -503,9 +544,6 @@ def place_nxt_block(
             # Add path to position to list of graphs' occupied positions
             all_coords_in_pth = get_taken_coords(winner_pth.all_nodes_in_pth)
             taken.extend(all_coords_in_pth)
-
-            # Add beams of winner's target node to list of graphs' all_beams
-            all_beams.append(winner_pth.tgt_beams)
 
             if log_stats_id:
                 print(f"Path creation: {src_id} -> {neigh_id}. SUCCESS.")
@@ -542,6 +580,7 @@ def second_pass(
     edge_pths: dict,
     c_name: str,
     c: int,
+    all_beams: List[NodeBeams],
     min_succ_rate: int = 50,
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
@@ -608,6 +647,27 @@ def second_pass(
                 # Update edge counter
                 num_2n_pass_edges += 1
 
+                # Prune beams to consider recent node placements
+                nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
+
+                critical_beams: dict[int, Tuple[int, NodeBeams]] = {}
+                num_edges_still_to_complete = 0
+                for node_id in nx_g.nodes():
+                    n_beams = nx_g.nodes[node_id]["beams"]
+                    if n_beams != []:
+                        n_degree = get_node_degree(nx_g, node_id)
+                        n_edges_completed = nx_g.nodes[node_id]["completed"]
+                        num_edges_still_to_complete = n_degree - n_edges_completed
+                        if num_edges_still_to_complete == 0:
+                            pass
+                        elif node_id == u or node_id == v:
+                            pass
+                        else:
+                            critical_beams[node_id] = (
+                                num_edges_still_to_complete,
+                                n_beams,
+                            )
+
                 # Check if edge is hadamard
                 zx_edge_type = nx_g.get_edge_data(u, v).get("type")
                 hdm: bool = True if zx_edge_type == "HADAMARD" else False
@@ -623,6 +683,7 @@ def second_pass(
                     hdm=hdm,
                     min_succ_rate=min_succ_rate,
                     log_stats_id=log_stats_id,
+                    critical_beams=critical_beams,
                 )
 
                 # Write to edge_pths if an edge is found
@@ -637,6 +698,17 @@ def second_pass(
                         "pth_nodes": clean_pths[0],
                         "edge_type": edge_type,
                     }
+
+                    # Update source info
+                    nx_g.nodes[u]["completed"] += 1
+
+                    # Update target node information
+                    nx_g.nodes[v]["completed"] += 1
+                    nx_g.nodes[v]["beams"] = (
+                        []
+                        if nx_g.nodes[v]["completed"] >= get_node_degree(nx_g, v)
+                        else nx_g.nodes[v]["beams"]
+                    )
 
                     # Add path to position to list of graphs' occupied positions
                     all_coords_in_pth = get_taken_coords(clean_pths[0])
@@ -703,6 +775,8 @@ def prep_3d_g(g: SimpleDictGraph) -> nx.Graph:
             type_fam=get_zx_type_fam(n_type),
             kind=None,
             pos=None,
+            beams=None,
+            completed=0,
         )
 
     # ADD EDGES TO NETWORKX GRAPH
@@ -744,6 +818,8 @@ def prep_3d_g(g: SimpleDictGraph) -> nx.Graph:
                 type_fam=get_zx_type_fam(orig_node_type),
                 kind=None,
                 pos=None,
+                beams=None,
+                completed=0,
             )
             nx_g.add_edge(node_to_sanitise, twin_node_id, type="SIMPLE")
 
@@ -783,6 +859,7 @@ def run_pthfinder(
     tgt: Optional[StandardBlock] = None,
     hdm: bool = False,
     min_succ_rate: int = 50,
+    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     log_stats_id: Union[str, None] = None,
 ) -> List[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
@@ -847,6 +924,7 @@ def run_pthfinder(
             tgt=(tent_coords[0], tgt_type),
             hdm=hdm,
             min_succ_rate=min_succ_rate,
+            critical_beams=critical_beams,
             log_stats_id=log_stats_id,
         )
 

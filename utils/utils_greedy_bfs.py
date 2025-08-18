@@ -1,5 +1,4 @@
 import random
-import numpy as np
 import networkx as nx
 
 from typing import Tuple, List, Optional
@@ -175,8 +174,8 @@ def gen_tent_tgt_coords(
 
 
 def prune_beams(
-    all_beams: List[NodeBeams], taken: List[StandardCoord]
-) -> List[NodeBeams]:
+    nx_g: nx.Graph, all_beams: List[NodeBeams], taken: List[StandardCoord]
+) -> Tuple[nx.Graph, List[NodeBeams]]:
     """Removes beams that have already been broken, as these are no longer indicative of anything.
     Args:
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
@@ -193,10 +192,28 @@ def prune_beams(
             ]
             if iter_beams:
                 new_beams.append(iter_beams)
-    except:
+    except (IndexError, ValueError, LookupError, KeyError) as e:
         new_beams = all_beams
 
-    return new_beams
+    try:
+        for n_id in nx_g.nodes():
+            new_beams = []
+            if nx_g.nodes[n_id]["completed"] == []:
+                pass
+            elif nx_g.nodes[n_id]["completed"] >= get_node_degree(nx_g, n_id):
+                nx_g.nodes[n_id]["beams"] = []
+            else:
+                old_beams = nx_g.nodes[n_id]["beams"]
+                if old_beams:
+                    for beam in old_beams:
+                        if all([(c not in taken) for c in beam]):
+                            new_beams.append(beam)
+
+                    nx_g.nodes[n_id]["beams"] = new_beams
+    except (IndexError, ValueError, LookupError, KeyError) as e:
+        nx_g = nx_g
+
+    return nx_g, new_beams
 
 
 def reindex_pth_dict(

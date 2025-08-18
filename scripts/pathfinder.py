@@ -2,11 +2,11 @@ import os
 
 from datetime import datetime
 from collections import deque
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, cast
 
-from utils.classes import StandardCoord, StandardBlock
+from utils.classes import NodeBeams, StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import gen_tent_tgt_coords
-from utils.utils_pathfinder import flip_hdm, rot_o_kind, nxt_kinds
+from utils.utils_pathfinder import flip_hdm, prune_visited, rot_o_kind, nxt_kinds
 from utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
 
@@ -21,6 +21,7 @@ def pthfinder(
     taken: List[StandardCoord] = [],
     hdm: bool = False,
     min_succ_rate: int = 50,
+    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -71,6 +72,7 @@ def pthfinder(
         min_succ_rate,
         taken=taken_cc,
         hdm=hdm,
+        critical_beams=critical_beams,
     )
 
     # LOG STATS IF NEEDED
@@ -122,6 +124,7 @@ def core_pthfinder_bfs(
     min_succ_rate,
     taken: List[StandardCoord] = [],
     hdm: bool = False,
+    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
 ) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
@@ -160,14 +163,21 @@ def core_pthfinder_bfs(
 
     # EXIT CONDITIONS
     tgts_filled = 0
-    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
+    tgts_to_fill = (
+        int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
+    )
+
     if len(tent_coords) > 1:
         max_manhattan = get_max_manhattan(s_coords, tent_coords) * 2
+        src_tgt_manhattan = max_manhattan
     else:
+        src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
         max_manhattan = max(
             get_max_manhattan(s_coords, taken) * 2,
-            get_max_manhattan(s_coords, tent_coords) * 2,
+            src_tgt_manhattan * 2,
         )
+
+    src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
 
     # CORE LOOP
     while queue:
@@ -176,6 +186,11 @@ def core_pthfinder_bfs(
         x, y, z = curr_coords
 
         curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
+
+        if curr_manhattan > src_tgt_manhattan * 2:
+            continue
+            # visited = prune_visited(visited)
+
         if curr_manhattan > max_manhattan:
             break
 
@@ -193,6 +208,22 @@ def core_pthfinder_bfs(
             nxt_coords = (nxt_x, nxt_y, nxt_z)
             curr_pth_coords = [n[0] for n in pth[curr]]
 
+            if nxt_coords in taken:
+                continue
+
+            if critical_beams:
+                nodes_with_critical_beams_id = critical_beams.keys()
+                if nodes_with_critical_beams_id:
+                    for node_id in nodes_with_critical_beams_id:
+                        min_exit_num = critical_beams[node_id][0]
+                        beams = critical_beams[node_id][1]
+                        beams_broken_for_node = sum(
+                            [nxt_coords in beam for beam in beams]
+                        )
+                        if len(beams) - beams_broken_for_node < min_exit_num:
+                            pass
+                            # continue
+
             mid_pos = None
             if "o" in curr_kind and scale == 2:
                 mid_x = x + dx * 1
@@ -201,6 +232,19 @@ def core_pthfinder_bfs(
                 mid_pos = (mid_x, mid_y, mid_z)
                 if mid_pos in curr_pth_coords or mid_pos in taken:
                     continue
+
+                if critical_beams:
+                    nodes_with_critical_beams_id = critical_beams.keys()
+                    if nodes_with_critical_beams_id:
+                        for node_id in nodes_with_critical_beams_id:
+                            min_exit_num = critical_beams[node_id][0]
+                            beams = critical_beams[node_id][1]
+                            beams_broken_for_node = sum(
+                                [mid_pos in beam for beam in beams]
+                            )
+                            if len(beams) - beams_broken_for_node < min_exit_num:
+                                pass
+                                # continue
 
             if "h" in curr_kind:
                 hdm = False
@@ -222,7 +266,6 @@ def core_pthfinder_bfs(
                 curr_kind = curr_kind[:3]
 
             possible_nxt_types = nxt_kinds(curr_coords, curr_kind, nxt_coords)
-
             for nxt_type in possible_nxt_types:
 
                 # If hadamard flag is on and the block being placed is "o", place a hadamard instead of regular pipe
