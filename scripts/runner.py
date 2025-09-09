@@ -183,11 +183,11 @@ def runner(
                 )
 
             # Delete temporary files
-            try:
-                if temp_dir_pth.exists():
-                    shutil.rmtree(temp_dir_pth)
-            except (ValueError, FileNotFoundError) as e:
-                print("Unable to delete temp files or temp folder does not exist", e)
+            #try:
+                #if temp_dir_pth.exists():
+                    #shutil.rmtree(temp_dir_pth)
+            #except (ValueError, FileNotFoundError) as e:
+                #print("Unable to delete temp files or temp folder does not exist", e)
 
     # RETURN: original ZX graph, edge_pths, nodes and edges of result
     return c_g_dict, edge_pths, lat_nodes, lat_edges

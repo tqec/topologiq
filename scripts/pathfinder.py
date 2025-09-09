@@ -6,7 +6,13 @@ from typing import List, Tuple, Optional, Union, cast
 
 from utils.classes import NodeBeams, StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import gen_tent_tgt_coords
-from utils.utils_pathfinder import flip_hdm, prune_visited, rot_o_kind, nxt_kinds
+from utils.utils_pathfinder import (
+    check_is_exit,
+    flip_hdm,
+    prune_visited,
+    rot_o_kind,
+    nxt_kinds,
+)
 from utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
 
@@ -142,7 +148,7 @@ def core_pthfinder_bfs(
     """
 
     # UNPACK INCOMING DATA
-    s_coords, _ = src
+    s_coords, s_kind = src
     sx, sy, sz = s_coords
     end_coords = tent_coords
 
@@ -159,7 +165,15 @@ def core_pthfinder_bfs(
     pth_len = {src: 0}
     pth = {src: [src]}
     valid_pths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
-    moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+    moves_unadjusted = [
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1),
+    ]
 
     # EXIT CONDITIONS
     tgts_filled = 0
@@ -178,8 +192,9 @@ def core_pthfinder_bfs(
         )
 
     src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
-
+    prune_distance = src_tgt_manhattan
     # CORE LOOP
+    once = True
     while queue:
         curr: StandardBlock = queue.popleft()
         curr_coords, curr_kind = curr
@@ -187,9 +202,12 @@ def core_pthfinder_bfs(
 
         curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
 
-        if curr_manhattan > src_tgt_manhattan * 2:
+        if curr_manhattan < prune_distance - 6:
+            visited = prune_visited(visited)
+            prune_distance = curr_manhattan
+
+        if curr_manhattan > src_tgt_manhattan + 6:
             continue
-            # visited = prune_visited(visited)
 
         if curr_manhattan > max_manhattan:
             break
@@ -203,6 +221,21 @@ def core_pthfinder_bfs(
                 break
 
         scale = 2 if "o" in curr_kind else 1
+
+        moves_adjusted = []
+        remaining_moves = []
+        for move in moves_unadjusted:
+            valid_exit = check_is_exit((0, 0, 0), curr_kind, move)
+            if valid_exit:
+                moves_adjusted.append(move)
+            else:
+                remaining_moves.append(move)
+        moves_adjusted += remaining_moves
+        if len(tent_coords) == 1:
+            moves = moves_adjusted
+        else: 
+            moves = moves_unadjusted
+        moves = moves_unadjusted
         for dx, dy, dz in moves:
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
@@ -216,13 +249,12 @@ def core_pthfinder_bfs(
                 if nodes_with_critical_beams_id:
                     for node_id in nodes_with_critical_beams_id:
                         min_exit_num = critical_beams[node_id][0]
-                        beams = critical_beams[node_id][1]
+                        beams = critical_beams[node_id][1][:3]
                         beams_broken_for_node = sum(
                             [nxt_coords in beam for beam in beams]
                         )
                         if len(beams) - beams_broken_for_node < min_exit_num:
-                            pass
-                            # continue
+                            continue
 
             mid_pos = None
             if "o" in curr_kind and scale == 2:
@@ -238,13 +270,12 @@ def core_pthfinder_bfs(
                     if nodes_with_critical_beams_id:
                         for node_id in nodes_with_critical_beams_id:
                             min_exit_num = critical_beams[node_id][0]
-                            beams = critical_beams[node_id][1]
+                            beams = critical_beams[node_id][1][:3]
                             beams_broken_for_node = sum(
                                 [mid_pos in beam for beam in beams]
                             )
                             if len(beams) - beams_broken_for_node < min_exit_num:
-                                pass
-                                # continue
+                                continue
 
             if "h" in curr_kind:
                 hdm = False
@@ -319,17 +350,17 @@ def core_pthfinder_bfs(
 # AUX OPERATIONS #
 ##################
 def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List[str]:
-    """Returns all possible valid kinds/types for a given ZX type,
+    """Returns all possible valid kinds for a given ZX type,
     typically needed when a new block is being added to the 3D space,
-    as each ZX type can be fulfilled with more than one block types/kinds.
+    as each ZX type can be fulfilled with more than one block kind.
 
     Args:
         - tgt_zx_type: the ZX type of the target node.
-        - tgt_kind: a specific block/pipe type/kind to return irrespective of ZX type,
+        - tgt_kind: a specific kind to return irrespective of ZX type,
             used when the target block was already placed as part of previous operations and therefore already has an assigned kind.
 
     Returns:
-        - fam: a list of applicable types/kinds for the given ZX type.
+        - fam: a list of applicable kinds for the given ZX type.
 
     """
 
@@ -337,7 +368,7 @@ def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List
         return [tgt_kind]
 
     if tgt_zx_type in ["X", "Z"]:
-        return ["xxz", "xzx", "zxx"] if tgt_zx_type == "X" else ["xzz", "zzx", "zxz"]
+        return ["zzx", "zxz", "xzz"] if tgt_zx_type == "X" else ["xxz", "xzx", "zxx"]
     elif tgt_zx_type == "O":
         return ["ooo"]
     elif tgt_zx_type == "SIMPLE":
@@ -432,7 +463,7 @@ def test_pthfinder(
     taken: List[StandardCoord] = []
     hdm: bool = False
     src_coords: StandardCoord = (0, 0, 0)
-    all_valid_start_kinds: List[str] = ["xxz", "xzx", "zxx", "xzz", "zzx", "zxz"]
+    all_valid_start_kinds: List[str] = ["zzx", "zxz", "xzz", "xxz", "xzx", "zxx"]
     all_valid_zx_types: List[str] = ["X", "Z"]
     unique_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + "*"
 

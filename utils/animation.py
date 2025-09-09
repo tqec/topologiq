@@ -68,3 +68,6 @@ def create_animation(
     if remove_temp_images:
         if temp_folder_pth.exists():
             shutil.rmtree(temp_folder_pth)
+
+if __name__ == "__main__":
+    create_animation(filename_prefix="simple_mess_fail_A", video=True)

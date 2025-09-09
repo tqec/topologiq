@@ -252,7 +252,7 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[
     """
 
     # HELPER VARIABLES
-    c_ks = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
+    c_ks = ["xxz", "zzx", "xzz", "zxx", "zxz", "xzx"]
     p_ks = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
     # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
