@@ -15,7 +15,7 @@ from utils.utils_greedy_bfs import (
 )
 from utils.utils_pathfinder import check_exits
 from utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
-from utils.grapher import vis_3d_g, edge_pths_to_g
+from utils.grapher import lattice_to_g, vis_3d_g
 from utils.utils_misc import prep_stats_n_log
 from utils.classes import (
     PathBetweenNodes,
@@ -37,11 +37,11 @@ def graph_manager_bfs(
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
+    debug: bool = False,
     **kwargs,
 ) -> Tuple[
     nx.Graph,
     dict,
-    nx.Graph,
     int,
     Union[None, dict[int, StandardBlock]],
     Union[None, dict[Tuple[int, int], List[str]]],
@@ -67,6 +67,9 @@ def graph_manager_bfs(
         - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
             - True: log stats to file
             - False: do NOT log stats to file
+        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            - True: debugging mode on,
+            - False: debugging mode off.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -78,8 +81,6 @@ def graph_manager_bfs(
             updated regularly over the course of the process.
         - edge_pths: the raw set of 3D edges found (with redundant blocks for start and end positions of some edges),
             updated regularly over the course of the process.
-        - new_nx_g: a nx_graph containing the 3D blocks and pipes that have been placed successfully at any given point in time,
-            used mainly for visualisations.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations),
             updated regularly over the course of the process.
 
@@ -109,19 +110,19 @@ def graph_manager_bfs(
     all_beams: List[NodeBeams] = []
     edge_pths: dict = {}
 
-    queue: deque = deque([src])
+    queue: deque[int] = deque([src])
     visited: set = {src}
 
     # VALIDITY CHECKS
     if not check_zx_types(g):
         print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
-        return (nx_g, edge_pths, nx.Graph(), 0, lat_nodes, lat_edges)
+        return (nx_g, edge_pths, 0, lat_nodes, lat_edges)
 
     # SPECIAL PROCESS FOR CENTRAL NODE
     # Terminate if there is no start node
     if src is None:
         print(Colors.RED + "Graph has no nodes." + Colors.RESET)
-        return nx_g, edge_pths, nx.Graph(), 0, lat_nodes, lat_edges
+        return nx_g, edge_pths, 0, lat_nodes, lat_edges
 
     # Place start node at origin
     else:
@@ -192,23 +193,52 @@ def graph_manager_bfs(
                         if c < int(len(edge_pths)):
                             if list(edge_pths.values())[-1]["pth_nodes"] != "error":
 
-                                # Create graph from existing edges
-                                new_nx_g = edge_pths_to_g(edge_pths)
+                                if visualise[0] or visualise[1]:
 
-                                # Create visualisation
-                                if visualise[0]:
-                                    if visualise[0].lower() == "detail":
-                                        vis_3d_g(new_nx_g, hide_ports=hide_ports)
+                                    # Create graph from existing edges
+                                    partial_lat_nodes, partial_lat_edges = (
+                                        reindex_pth_dict(edge_pths)
+                                    )
+                                    partial_nx_g, _ = lattice_to_g(
+                                        partial_lat_nodes, partial_lat_edges, nx_g
+                                    )
 
-                                # Save visualisation for later animation
-                                if visualise[1]:
-                                    if visualise[1] == "GIF" or visualise[1] == "MP4":
-                                        vis_3d_g(
-                                            new_nx_g,
-                                            hide_ports=hide_ports,
-                                            save_to_file=True,
-                                            filename=f"{c_name}{c:03d}",
-                                        )
+                                    # Create visualisation
+                                    if visualise[0]:
+                                        if visualise[0].lower() == "detail":
+                                            current_nodes = (curr_parent, neigh_id)
+                                            vis_3d_g(
+                                                partial_nx_g,
+                                                current_nodes=current_nodes,
+                                                hide_ports=hide_ports,
+                                                debug=debug,
+                                                taken=taken,
+                                            )
+
+                                    # Save visualisation for later animation
+                                    if visualise[1]:
+                                        if (
+                                            visualise[1] == "GIF"
+                                            or visualise[1] == "MP4"
+                                        ):
+                                            current_nodes = (curr_parent, neigh_id)
+                                            vis_3d_g(
+                                                partial_nx_g,
+                                                current_nodes=current_nodes,
+                                                hide_ports=hide_ports,
+                                                save_to_file=True,
+                                                filename=f"{c_name}{c:03d}",
+                                                debug=(
+                                                    True
+                                                    if (
+                                                        visualise[0]
+                                                        and visualise[0].lower()
+                                                        == "detail"
+                                                    )
+                                                    else False
+                                                ),
+                                                taken=taken,
+                                            )
 
                                 c = len(edge_pths)
 
@@ -274,6 +304,7 @@ def graph_manager_bfs(
             hide_ports=hide_ports,
             visualise=visualise,
             log_stats_id=log_stats_id,
+            debug=debug,
         )
     except ValueError as e:
 
@@ -308,7 +339,6 @@ def graph_manager_bfs(
     # IF WE MADE IT HERE, ALL EDGES CLEARED
     # ASSEMBLE FINAL LATTICE SURGERY
     lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
-    new_nx_g = edge_pths_to_g(edge_pths)
 
     # LOG STATS TO FILE IF NEEDED
     if log_stats_id is not None:
@@ -336,7 +366,7 @@ def graph_manager_bfs(
         )
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
-    return nx_g, edge_pths, new_nx_g, c, lat_nodes, lat_edges
+    return nx_g, edge_pths, c, lat_nodes, lat_edges
 
 
 ##################
@@ -451,11 +481,6 @@ def place_nxt_block(
             if tgt_unobstr_exit_n >= nxt_neigh_neigh_n:
                 beams_broken_by_pth = 0
 
-                # for beam in all_beams:
-                # for coord in beam:
-                # if coord in coords_in_pth:
-                # beams_broken_by_pth += 1
-
                 critical_beams_broken = False
                 for n_id in nx_g.nodes():
 
@@ -493,7 +518,6 @@ def place_nxt_block(
 
         winner_pth: Optional[PathBetweenNodes] = None
         if viable_pths:
-
             winner_pth = max(viable_pths, key=lambda pth: pth.weighed_value(**kwargs))
 
         # Rewrite current node with data of winner candidate
@@ -585,6 +609,7 @@ def second_pass(
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
+    debug: bool = False,
 ) -> Tuple[dict, int, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
     which typically happens when there are multiple interconnected nodes.
@@ -608,6 +633,9 @@ def second_pass(
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
         - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
+        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            - True: debugging mode on,
+            - False: debugging mode off.
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -714,26 +742,44 @@ def second_pass(
                     all_coords_in_pth = get_taken_coords(clean_pths[0])
                     taken.extend(all_coords_in_pth)
 
-                    # Create graph from existing edges
-                    new_nx_g = edge_pths_to_g(edge_pths)
-
                     if log_stats_id:
                         print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
                     # Create visualisation
-                    if visualise[0]:
-                        if visualise[0].lower() == "detail":
-                            vis_3d_g(new_nx_g, hide_ports=hide_ports)
+                    if visualise[0] or visualise[1]:
 
-                    # Save visualisation for later animation
-                    if visualise[1]:
-                        if visualise[1] == "GIF" or visualise[1] == "MP4":
-                            vis_3d_g(
-                                new_nx_g,
-                                hide_ports=hide_ports,
-                                save_to_file=True,
-                                filename=f"{c_name}{c:03d}",
-                            )
+                        # Create graph from existing edges
+                        partial_lat_nodes, partial_lat_edges = reindex_pth_dict(
+                            edge_pths
+                        )
+                        partial_nx_g, _ = lattice_to_g(
+                            partial_lat_nodes, partial_lat_edges, nx_g
+                        )
+
+                        if visualise[0]:
+                            if visualise[0].lower() == "detail":
+                                current_nodes = (u, v)
+                                vis_3d_g(
+                                    partial_nx_g,
+                                    current_nodes,
+                                    hide_ports=hide_ports,
+                                    debug=debug,
+                                    taken=taken,
+                                )
+
+                        # Save visualisation for later animation
+                        if visualise[1]:
+                            if visualise[1] == "GIF" or visualise[1] == "MP4":
+                                current_nodes = (u, v)
+                                vis_3d_g(
+                                    partial_nx_g,
+                                    current_nodes,
+                                    hide_ports=hide_ports,
+                                    save_to_file=True,
+                                    filename=f"{c_name}{c:03d}",
+                                    debug=debug,
+                                    taken=taken,
+                                )
 
                 # Write an error to edge_pths if edge not found
                 else:

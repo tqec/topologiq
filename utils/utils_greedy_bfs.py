@@ -5,10 +5,11 @@ from typing import Tuple, List, Optional
 
 from utils.classes import StandardCoord, NodeBeams, StandardBlock
 
+
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_start_id(nx_g: nx.Graph) -> Optional[int]:
+def find_start_id(nx_g: nx.Graph) -> int:
     """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
 
     Args:
@@ -21,18 +22,20 @@ def find_start_id(nx_g: nx.Graph) -> Optional[int]:
 
     # TERMINATE IF THERE ARE NO NODES
     if not nx_g.nodes:
-        return None
+        raise ValueError("Start node not found")
 
     # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
     max_d = -1
     centr_nodes: List[int] = []
 
     nodes_ds = nx_g.degree
+
     if isinstance(nodes_ds, int):
         print(
             "Warning: nx_g.degree() returned an integer. Cannot determine start node."
         )
-        return None  # Cannot iterate, return None
+        raise ValueError("Start node not found")
+
     else:
         for n, d in nodes_ds:
             if d > max_d:
@@ -42,7 +45,7 @@ def find_start_id(nx_g: nx.Graph) -> Optional[int]:
                 centr_nodes.append(n)
 
     # PICK A HIGHEST DEGREE NODE
-    src_id: Optional[int] = random.choice(centr_nodes) if centr_nodes else None
+    src_id: int = random.choice(centr_nodes)
 
     # RETURN START NODE
     return src_id
@@ -69,6 +72,7 @@ def get_node_degree(g: nx.Graph, node: int) -> int:
 
     # IF DEGREES NOT A LIST, RETURN 0 (SINGLE NODE WON'T HAVE EDGES)
     return 0
+
 
 ######################
 # BFS AUX OPERATIONS #

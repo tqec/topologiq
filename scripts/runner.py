@@ -25,6 +25,7 @@ def runner(
     stop_on_first_success: bool = True,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
+    debug: bool = False,
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -77,7 +78,6 @@ def runner(
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     out_dir_pth = repo_root / "outputs/txt"
-    temp_dir_pth = repo_root / "outputs/temp"
     Path(out_dir_pth).mkdir(parents=True, exist_ok=True)
 
     # APPLICABLE GRAPH TRANSFORMATIONS
@@ -102,13 +102,14 @@ def runner(
 
         # Call algorithm
         try:
-            _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
+            nx_g, edge_pths, c, lat_nodes, lat_edges = graph_manager_bfs(
                 c_g_dict,
                 c_name=c_name,
                 min_succ_rate=min_succ_rate,
                 hide_ports=hide_ports,
                 visualise=visualise,
                 log_stats_id=unique_run_id,
+                debug=debug,
                 **kwargs,
             )
 
@@ -136,30 +137,37 @@ def runner(
                 )
 
                 # Visualise result
-                if visualise[0]:
-                    if (
-                        visualise[0].lower() == "final"
-                        or visualise[0].lower() == "detail"
-                    ):
-                        final_nx_graph, _ = lattice_to_g(lat_nodes, lat_edges)
-                        vis_3d_g(final_nx_graph, hide_ports=hide_ports)
+                if visualise[0] or visualise[1]:
 
-                # Animate
-                if visualise[1]:
-                    if visualise[1].lower() == "GIF" or visualise[1].lower() == "MP4":
-                        vis_3d_g(
-                            new_nx_g,
-                            hide_ports=hide_ports,
-                            save_to_file=True,
-                            filename=f"{c_name}{c:03d}",
-                        )
+                    final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
-                        create_animation(
-                            filename_prefix=c_name,
-                            restart_delay=5000,
-                            duration=2500,
-                            video=True if visualise[1] == "MP4" else False,
-                        )
+                    if visualise[0]:
+                        if (
+                            visualise[0].lower() == "final"
+                            or visualise[0].lower() == "detail"
+                        ):
+
+                            vis_3d_g(final_nx_g, hide_ports=hide_ports)
+
+                    # Animate
+                    if visualise[1]:
+                        if (
+                            visualise[1].lower() == "GIF"
+                            or visualise[1].lower() == "MP4"
+                        ):
+                            vis_3d_g(
+                                final_nx_g,
+                                hide_ports=hide_ports,
+                                save_to_file=True,
+                                filename=f"{c_name}{c:03d}",
+                            )
+
+                            create_animation(
+                                filename_prefix=c_name,
+                                restart_delay=5000,
+                                duration=2500,
+                                video=True if visualise[1] == "MP4" else False,
+                            )
 
                 # End loop
                 if stop_on_first_success:
@@ -183,11 +191,11 @@ def runner(
                 )
 
             # Delete temporary files
-            #try:
-                #if temp_dir_pth.exists():
-                    #shutil.rmtree(temp_dir_pth)
-            #except (ValueError, FileNotFoundError) as e:
-                #print("Unable to delete temp files or temp folder does not exist", e)
+            # try:
+            # if temp_dir_pth.exists():
+            # shutil.rmtree(temp_dir_pth)
+            # except (ValueError, FileNotFoundError) as e:
+            # print("Unable to delete temp files or temp folder does not exist", e)
 
     # RETURN: original ZX graph, edge_pths, nodes and edges of result
     return c_g_dict, edge_pths, lat_nodes, lat_edges

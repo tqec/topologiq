@@ -58,6 +58,7 @@ def run():
     strip_ports: bool = False
     hide_ports: bool = False
     log_stats: bool = False
+    debug: bool = False
     
     # READ AND HANDLE ANY ARGS GIVEN IN COMMAND
     for arg in sys.argv:
@@ -98,6 +99,10 @@ def run():
             num_attempts = int(arg.replace("--repeat:", ""))
             stop_on_first_success = False
         
+                # Look for number of repetitions parameter
+        if arg.startswith("--debug"):
+            debug = True
+        
 
     # TRIGGER ALGORITHMIC FLOW
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
@@ -111,6 +116,7 @@ def run():
             stop_on_first_success=stop_on_first_success,
             visualise=(vis_0, vis_1),
             log_stats=log_stats,
+            debug=debug,
             **kwargs
         )
 

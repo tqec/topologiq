@@ -5,12 +5,13 @@ import numpy as np
 import networkx as nx
 from pathlib import Path
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from typing import Annotated, Literal, Any, Tuple, List
+from matplotlib.text import Text
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+from typing import Annotated, Literal, Any, Optional, Tuple, List
 from numpy.typing import NDArray
 
-from utils.utils_pathfinder import rot_o_kind
-from utils.classes import StandardBlock
+from utils.utils_pathfinder import check_is_exit, rot_o_kind
+from utils.classes import StandardBlock, StandardCoord
 
 # CONSTANTS
 node_hex_map = {
@@ -38,22 +39,27 @@ node_hex_map = {
     "X": ["red", "red", "red"],
     "Y": ["green", "green", "green"],
     "Z": ["blue", "blue", "blue"],
+    "beam": ["yellow"],
 }
 
 
 # MAIN VISUALISATION FUNCTION
 def vis_3d_g(
     graph: nx.Graph,
+    current_nodes: Optional[Tuple[int, int]] = None,
     hide_ports: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
     save_to_file: bool = False,
-    filename: str | None = None,
-    pauli_webs_graph: nx.Graph | None = None,
+    filename: Optional[str] = None,
+    pauli_webs_graph: Optional[nx.Graph] = None,
+    debug: bool = False,
+    taken: List[StandardCoord] = [],
 ):
     """Manages the process of visualising a graph with many nodes/blocks and edges/pipes.
 
     Args:
-        - graph: An incoming graph formatted as an nx.Graph,
+        - graph: incoming graph formatted as an nx.Graph,
+        - current_nodes: ID of the last (src, tgt) nodes connected by the algorithm,
         - hide_ports:
             - True: do not display boundary nodes even if present in the incoming graph,
             - False: display boundary nodes if present.
@@ -62,9 +68,29 @@ def vis_3d_g(
             - True: saves visualisation to file and does NOT show it on screen,
             - False: shows visualisation on screen and does NOT save it to file.
         - filename: filename to use if saving a visualisation.
-        - pauli_webs_graph: additional optional graph containing a single Pauli web.
-
+        - pauli_webs_graph: optional graph containing a single Pauli web.
+        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            - True: debugging mode on,
+            - False: debugging mode off.
+        - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
     """
+
+    def onpick(event):
+        """Handles click events on visualisation pop-up frame"""
+
+        artist = event.artist
+        node_id = artist.get_label()
+
+        for child in ax.get_children():
+            if isinstance(child, Text) and child.get_text() != "":
+                label_id = child.get_text()[: child.get_text().find(":")]
+                if label_id == node_id:
+                    child.set_visible(not child.get_visible())
+            elif isinstance(child, Line3DCollection) and child.get_label() != "":
+                if child.get_label() == node_id:
+                    child.set_visible(not child.get_visible())
+
+        plt.draw()
 
     # HELPER VARIABLES
     gray_hex = "gray"
@@ -82,6 +108,7 @@ def vis_3d_g(
     # RENDER CUBES (NODES)
     for node_id in graph.nodes():
         node_type = node_types.get(node_id)
+
         if (
             node_type
             and "o" not in node_type
@@ -91,33 +118,26 @@ def vis_3d_g(
             if position:
                 size = [1.0, 1.0, 1.0]
                 edge_col = "black"
-                alpha = 1.0 if not pauli_webs_graph else 0.7
+                alpha = 0.5 if debug else 0.7 if pauli_webs_graph else 1
 
                 if node_type == "ooo":
                     size = [0.9, 0.9, 0.9]
                     edge_col = "white"
-                    alpha = 0.7
 
-                if "*" in node_type:
-                    edge_col = "white"
-                    alpha = 0.3
-
-                elif "_visited" in node_type:
-                    size = [0.5, 0.5, 0.5]
-                    edge_col = gray_hex
-                    alpha = 0.8  # Adjust alpha as needed
-
-                else:
-                    render_block(
-                        ax,
-                        position,
-                        size,
-                        node_type[:3],
-                        node_hex_map,
-                        alpha=alpha,
-                        edge_col=edge_col,
-                        border_width=0.5 if not pauli_webs_graph else 0.1,
-                    )
+                render_block(
+                    ax,
+                    node_id,
+                    position,
+                    size,
+                    node_type[:3],
+                    node_hex_map,
+                    alpha=alpha,
+                    edge_col=edge_col,
+                    border_width=0.5 if not pauli_webs_graph else 0.1,
+                    current_nodes=current_nodes,
+                    debug=debug,
+                    taken=taken,
+                )
 
     # RENDER PIPES (EDGES)
     for u, v in graph.edges():
@@ -140,7 +160,7 @@ def vis_3d_g(
                 face_cols = [gray_hex] * 6
 
                 if pipe_type:
-                    alpha = 1 if not pauli_webs_graph else 0.4
+                    alpha = 0.5 if debug else 0.4 if pauli_webs_graph else 1
                     edge_col = "white" if "*" in pipe_type else "black"
 
                     col = node_hex_map.get(pipe_type.replace("*", ""), ["gray"] * 3)
@@ -233,9 +253,27 @@ def vis_3d_g(
                             border_width=0.5 if not pauli_webs_graph else 0,
                         )
 
+    # RENDER BEAMS
+    if debug:
+        for node_id in graph:
+            node_beams = graph.nodes()[node_id]["beams"]
+            for beam in node_beams:
+                for beam_pos in beam:
+                    ax.scatter(
+                        beam_pos[0],
+                        beam_pos[1],
+                        beam_pos[2],
+                        c="yellow",
+                        s=10,
+                        edgecolors="black",
+                        alpha=0.5,
+                        depthshade=True,
+                    )
+
     # RENDER PAULI WEBS
     if pauli_webs_graph:
 
+        # Cubes (nodes)
         for node_id in pauli_webs_graph.nodes:
             pos = node_positions[node_id]
             ax.scatter(
@@ -248,7 +286,7 @@ def vis_3d_g(
                 depthshade=True,
             )
 
-        # RENDER PIPES (EDGES)
+        # Pipes (edges)
         for (u, v), node_info in pauli_webs_graph.edges().items():
             pos_u = node_positions[u]
             pos_v = node_positions[v]
@@ -287,6 +325,7 @@ def vis_3d_g(
         plt.savefig(f"{temp_folder_pth}/{filename}.png")
         plt.close()
     else:
+        fig.canvas.mpl_connect("pick_event", onpick)
         plt.show()
 
 
@@ -303,6 +342,7 @@ def edge_pths_to_g(edge_pths: dict[Any, Any]) -> nx.Graph:
         - final_graph: an nx.Graph with all the information in edge_pths but in a format more amicable for visualisation
 
     """
+
     final_graph = nx.Graph()
     node_counter = 0
     for edge, pth_data in edge_pths.items():
@@ -360,6 +400,7 @@ def edge_pths_to_g(edge_pths: dict[Any, Any]) -> nx.Graph:
 def lattice_to_g(
     lat_nodes: dict[int, StandardBlock],
     lat_edges: dict[Tuple[int, int], List[str]],
+    nx_g: nx.Graph,
     pauli_webs: dict[Tuple[int, int], str] = {},
 ) -> Tuple[nx.Graph, nx.Graph]:
     """Converts an set of lattice nodes and edges into an nx.Graph that can be visualised with `vis_3d_g`.
@@ -373,15 +414,19 @@ def lattice_to_g(
 
     """
 
-    final_graph = nx.Graph()
+    lattice_g = nx.Graph()
     pauli_webs_graph = nx.Graph()
 
     for key, node_info in lat_nodes.items():
-        final_graph.add_node(key, pos=node_info[0], type=node_info[1])
+        lattice_g.add_node(key, pos=node_info[0], type=node_info[1])
+        if key in nx_g.nodes():
+            lattice_g.nodes()[key]["beams"] = nx_g.nodes()[key]["beams"]
+        else:
+            lattice_g.nodes()[key]["beams"] = []
 
     for key, edge_info in lat_edges.items():
-        final_graph.add_edge(key[0], key[1], pipe_type=edge_info[0])
-    print()
+        lattice_g.add_edge(key[0], key[1], pipe_type=edge_info[0])
+
     if pauli_webs:
         nodes_in_web = []
         for key, edge_info in pauli_webs.items():
@@ -393,8 +438,8 @@ def lattice_to_g(
             pauli_webs_graph.add_node(
                 node_id, pos=lat_nodes[node_id][0], type=lat_nodes[node_id][1]
             )
-    print()
-    return final_graph, pauli_webs_graph
+
+    return lattice_g, pauli_webs_graph
 
 
 # MISC FUNCTIONS
@@ -457,6 +502,7 @@ def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
 
 def render_block(
     ax: Any,
+    node_id: int,
     position: Tuple[int, int, int],
     size: list[float],
     node_type: str,
@@ -464,17 +510,23 @@ def render_block(
     alpha: float = 1.0,
     edge_col: None | str = None,
     border_width: float = 0.5,
+    current_nodes: Optional[Tuple[int, int]] = None,
+    debug: bool = True,
+    taken: List[StandardCoord] = [],
 ):
     """Renders a regular (non-'h') block.
 
     Args:
         - ax: Matplotlib's 3D subplot object.
+        - node_id: the ID of the node
         - position: (x, y, z) coordinates of the block.
         - size: (size_x, size_y, size_z) of the block.
         - node_type: block's kind.
         - node_hex_map: map of (HEX) colours for block.
         - edge_col: color for the edges of blocks.
         - border_width: width for borders of block.
+        - current_nodes: optional parameter to pass ID of the last (src, tgt) nodes connected by the algorithm,
+        - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
     """
 
     x, y, z = position
@@ -494,7 +546,53 @@ def render_block(
         linewidths=border_width,
         edgecolors=edge_col,
         alpha=alpha,
+        picker=True,
+        label=node_id,
     )
+
+    diffs = [
+        (2, 0, 0),
+        (0, 0, 2),
+        (0, 0, -2),
+        (0, 2, 0),
+        (-2, 0, 0),
+        (0, -2, 0),
+    ]
+
+    for d in diffs:
+        label_pos = (
+            position[0] + d[0],
+            position[1] + d[1],
+            position[2] + d[2],
+        )
+
+        if (
+            check_is_exit(position, node_type, label_pos) is not True
+            or node_type == "ooo"
+        ) and label_pos not in taken:
+            ax.text(
+                label_pos[0],
+                label_pos[1],
+                label_pos[2],
+                s=f"{node_id}: {node_type} {position}",
+                color="black",
+                visible=True if current_nodes and node_id in current_nodes else False,
+            )
+
+            ax.quiver(
+                position[0],
+                position[1],
+                position[2],
+                label_pos[0] - position[0],
+                label_pos[1] - position[1],
+                label_pos[2] - position[2],
+                color="black",
+                lw=1,
+                label=node_id,
+                visible=True if current_nodes and node_id in current_nodes else False,
+            )
+
+            break
 
     # ADD TO PLOT
     ax.add_collection3d(poly_collection)
