@@ -59,6 +59,7 @@ def run():
     hide_ports: bool = False
     log_stats: bool = False
     debug: bool = False
+    fig_data = None
     
     # READ AND HANDLE ANY ARGS GIVEN IN COMMAND
     for arg in sys.argv:
@@ -79,7 +80,7 @@ def run():
         if arg.startswith("--pyzx:"):
             c_name = arg.replace("--pyzx:", "")
             pyzx_function = getattr(pyzx_graphs, c_name)
-            g = pyzx_function(draw_graph=True)
+            g, fig_data = pyzx_function(draw_graph=True)
             c_g_dict = pyzx_g_to_simple_g(g)
         
         # Look for visualisation options
@@ -106,6 +107,7 @@ def run():
 
     # TRIGGER ALGORITHMIC FLOW
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
+        
         _, _, _, _ = runner(
             c_g_dict,
             c_name,
@@ -117,6 +119,7 @@ def run():
             visualise=(vis_0, vis_1),
             log_stats=log_stats,
             debug=debug,
+            fig_data=fig_data,
             **kwargs
         )
 

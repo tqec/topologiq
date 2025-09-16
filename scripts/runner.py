@@ -2,7 +2,8 @@ import shutil
 
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
+import matplotlib.figure
 
 from scripts.graph_manager import graph_manager_bfs
 from utils.utils_misc import write_outputs
@@ -26,6 +27,7 @@ def runner(
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
     debug: bool = False,
+    fig_data: Optional[matplotlib.figure.Figure] = None,
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -57,6 +59,10 @@ def runner(
         - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
             - True: log stats to file
             - False: do NOT log stats to file
+        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            - True: debugging mode on,
+            - False: debugging mode off.
+        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -78,6 +84,7 @@ def runner(
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     out_dir_pth = repo_root / "outputs/txt"
+    temp_dir_pth = repo_root / "outputs/temp"
     Path(out_dir_pth).mkdir(parents=True, exist_ok=True)
 
     # APPLICABLE GRAPH TRANSFORMATIONS
@@ -110,6 +117,7 @@ def runner(
                 visualise=visualise,
                 log_stats_id=unique_run_id,
                 debug=debug,
+                fig_data=fig_data,
                 **kwargs,
             )
 
@@ -147,19 +155,26 @@ def runner(
                             or visualise[0].lower() == "detail"
                         ):
 
-                            vis_3d_g(final_nx_g, hide_ports=hide_ports)
+                            vis_3d_g(
+                                final_nx_g,
+                                edge_pths,
+                                hide_ports=hide_ports,
+                                fig_data=fig_data,
+                            )
 
                     # Animate
                     if visualise[1]:
                         if (
-                            visualise[1].lower() == "GIF"
-                            or visualise[1].lower() == "MP4"
+                            visualise[1].lower() == "gif"
+                            or visualise[1].lower() == "mp4"
                         ):
                             vis_3d_g(
                                 final_nx_g,
+                                edge_pths,
                                 hide_ports=hide_ports,
                                 save_to_file=True,
                                 filename=f"{c_name}{c:03d}",
+                                fig_data=fig_data,
                             )
 
                             create_animation(
@@ -190,12 +205,12 @@ def runner(
                     "Visualisations enabled. For faster runtimes, disable visualisations."
                 )
 
-            # Delete temporary files
-            # try:
-            # if temp_dir_pth.exists():
-            # shutil.rmtree(temp_dir_pth)
-            # except (ValueError, FileNotFoundError) as e:
-            # print("Unable to delete temp files or temp folder does not exist", e)
+        # Delete temporary files
+        try:
+            if temp_dir_pth.exists():
+                shutil.rmtree(temp_dir_pth)
+        except (ValueError, FileNotFoundError) as e:
+            print("Unable to delete temp files or temp folder does not exist", e)
 
     # RETURN: original ZX graph, edge_pths, nodes and edges of result
     return c_g_dict, edge_pths, lat_nodes, lat_edges

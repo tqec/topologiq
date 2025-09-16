@@ -5,7 +5,9 @@ from datetime import datetime
 from collections import deque
 from typing import Tuple, List, Optional, Any, Union, cast
 
+import matplotlib.figure
 from scripts.pathfinder import pthfinder, get_taken_coords
+from utils.animation import create_animation
 from utils.utils_greedy_bfs import (
     find_start_id,
     get_node_degree,
@@ -38,6 +40,7 @@ def graph_manager_bfs(
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
+    fig_data: Optional[matplotlib.figure.Figure] = None,
     **kwargs,
 ) -> Tuple[
     nx.Graph,
@@ -70,6 +73,7 @@ def graph_manager_bfs(
         - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
             - True: debugging mode on,
             - False: debugging mode off.
+        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -209,10 +213,12 @@ def graph_manager_bfs(
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
                                                 partial_nx_g,
+                                                edge_pths,
                                                 current_nodes=current_nodes,
                                                 hide_ports=hide_ports,
                                                 debug=debug,
                                                 taken=taken,
+                                                fig_data=fig_data,
                                             )
 
                                     # Save visualisation for later animation
@@ -224,20 +230,14 @@ def graph_manager_bfs(
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
                                                 partial_nx_g,
+                                                edge_pths,
                                                 current_nodes=current_nodes,
                                                 hide_ports=hide_ports,
                                                 save_to_file=True,
                                                 filename=f"{c_name}{c:03d}",
-                                                debug=(
-                                                    True
-                                                    if (
-                                                        visualise[0]
-                                                        and visualise[0].lower()
-                                                        == "detail"
-                                                    )
-                                                    else False
-                                                ),
+                                                debug=debug,
                                                 taken=taken,
+                                                fig_data=fig_data,
                                             )
 
                                 c = len(edge_pths)
@@ -251,7 +251,16 @@ def graph_manager_bfs(
                     else:
                         if step == 9:
 
-                            # LOG STATS TO FILE
+                            # CREATE ANIMATION OF FAILED ATTEMPT
+                            if visualise[1]:
+                                create_animation(
+                                    filename_prefix=f"FAIL_{c_name}",
+                                    restart_delay=5000,
+                                    duration=2500,
+                                    video=True if visualise[1] == "MP4" else False,
+                                )
+
+                            # LOG STATS OF FAILED ATTEMPT
                             if log_stats_id is not None:
                                 t_end = datetime.now()
                                 times = {"t1": t1, "t2": t2, "t_end": t_end}
@@ -305,10 +314,20 @@ def graph_manager_bfs(
             visualise=visualise,
             log_stats_id=log_stats_id,
             debug=debug,
+            fig_data=fig_data,
         )
     except ValueError as e:
 
-        # LOG STATS TO FILE
+        # CREATE ANIMATION OF FAILED ATTEMPT
+        if visualise[1]:
+            create_animation(
+                filename_prefix=f"FAIL_{c_name}",
+                restart_delay=5000,
+                duration=2500,
+                video=True if visualise[1] == "MP4" else False,
+            )
+
+        # LOG STATS OF FAILED ATTEMPT
         if log_stats_id is not None:
             t_end = datetime.now()
             times = {"t1": t1, "t2": t2, "t_end": t_end}
@@ -340,7 +359,9 @@ def graph_manager_bfs(
     # ASSEMBLE FINAL LATTICE SURGERY
     lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
 
-    # LOG STATS TO FILE IF NEEDED
+    # LOG STATS OF SUCCESS
+    # Note. Whereas failure logging requires two log stats blocks because failures can arise in two places,
+    # only one success logging is needed as success is unitary
     if log_stats_id is not None:
         t_end = datetime.now()
         times = {"t1": t1, "t2": t2, "t_end": t_end}
@@ -610,6 +631,7 @@ def second_pass(
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
+    fig_data: Optional[matplotlib.figure.Figure] = None,
 ) -> Tuple[dict, int, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
     which typically happens when there are multiple interconnected nodes.
@@ -636,6 +658,7 @@ def second_pass(
         - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
             - True: debugging mode on,
             - False: debugging mode off.
+        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -761,24 +784,31 @@ def second_pass(
                                 current_nodes = (u, v)
                                 vis_3d_g(
                                     partial_nx_g,
+                                    edge_pths,
                                     current_nodes,
                                     hide_ports=hide_ports,
                                     debug=debug,
                                     taken=taken,
+                                    fig_data=fig_data,
                                 )
 
                         # Save visualisation for later animation
                         if visualise[1]:
-                            if visualise[1] == "GIF" or visualise[1] == "MP4":
+                            if (
+                                visualise[1].lower() == "gif"
+                                or visualise[1].lower() == "mp4"
+                            ):
                                 current_nodes = (u, v)
                                 vis_3d_g(
                                     partial_nx_g,
+                                    edge_pths,
                                     current_nodes,
                                     hide_ports=hide_ports,
                                     save_to_file=True,
                                     filename=f"{c_name}{c:03d}",
                                     debug=debug,
                                     taken=taken,
+                                    fig_data=fig_data,
                                 )
 
                 # Write an error to edge_pths if edge not found

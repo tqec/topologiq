@@ -53,9 +53,7 @@ def create_animation(
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
         if video:
             # Important! Videos require FFmpeg (the actual thing, not just the Python wrapper)
-            iio.mimsave(
-                f"./{output_folder_pth}/{filename_prefix}.mp4", images, fps=0.7
-            )
+            iio.mimsave(f"./{output_folder_pth}/{filename_prefix}.mp4", images, fps=0.7)
         else:
             iio.mimsave(
                 f"./{output_folder_pth}/{filename_prefix}.gif",
@@ -69,5 +67,6 @@ def create_animation(
         if temp_folder_pth.exists():
             shutil.rmtree(temp_folder_pth)
 
+
 if __name__ == "__main__":
-    create_animation(filename_prefix="simple_mess_fail_A", video=True)
+    create_animation(filename_prefix="cnots", video=True)

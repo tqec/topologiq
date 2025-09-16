@@ -3,7 +3,9 @@ import networkx as nx
 
 from typing import Tuple, List, Optional
 
+from utils.animation import create_animation
 from utils.classes import StandardCoord, NodeBeams, StandardBlock
+from utils.grapher import lattice_to_g, vis_3d_g
 
 
 #######################
@@ -293,3 +295,9 @@ def reindex_pth_dict(
             i += 1
 
     return lat_nodes, lat_edges
+
+
+######################
+# DEBUG OPERATIONS #
+######################
+# CONSIDER MOVE LOGGING AND ANIMATION HERE.

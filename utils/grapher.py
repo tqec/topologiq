@@ -1,13 +1,21 @@
 # NetworkX / Matplotlib functions to create quick 3D visualisations of algorithmic progress and a visualisation of final result.
 # File is an absolute mess at the moment. It works though.
-
+import io
 import numpy as np
 import networkx as nx
 from pathlib import Path
+from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
+import matplotlib.text as mtext
+import matplotlib.path as mpath
+
+import matplotlib.figure
 import matplotlib.pyplot as plt
 from matplotlib.text import Text
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
-from typing import Annotated, Literal, Any, Optional, Tuple, List
+from typing import Annotated, Dict, Literal, Any, Optional, Tuple, List, IO, Union
 from numpy.typing import NDArray
 
 from utils.utils_pathfinder import check_is_exit, rot_o_kind
@@ -43,9 +51,303 @@ node_hex_map = {
 }
 
 
+def figure_to_png(
+    fig: matplotlib.figure.Figure,
+    processed_ids: List[Union[str, int]],
+    processed_edges: List[Tuple[int, int]],
+) -> IO[bytes]:
+    """Converts a Matplotlib Figure object to an in-memory PNG file with a transparent background.
+
+    Args:
+        - fig: the Matplotlib Figure object to convert.
+        - processed_ids: ids of the nodes already processed by the algorithm.
+        - processed_edges: (src, tgt) ids composing the edges already processed by the algorithm.
+
+    Returns:
+        - png_io: an in-memory binary stream (BytesIO object) containing the PNG data.
+
+    """
+
+    ax = fig.gca()
+    fig.canvas.draw()
+    min_x, max_x = float("inf"), float("-inf")
+    min_y, max_y = float("inf"), float("-inf")
+    background_color: Tuple = (0.95, 0.95, 0.95)
+
+    artists_data = []
+    max_r = 0
+
+    # Phase 1: Data Collection and Bounding Box Calculation
+    for artist in ax.get_children():
+        artist_properties = {"type": None, "properties": {}}
+
+        if isinstance(artist, mpatches.Circle):
+            x, y = artist.get_center()
+            r = artist.get_radius()
+            max_r = r if r > max_r else max_r
+            min_x = min(min_x, x - r)
+            max_x = max(max_x, x + r)
+            min_y = min(min_y, y - r)
+            max_y = max(max_y, y + r)
+
+            artist_properties.update(
+                {
+                    "type": "circle",
+                    "properties": {
+                        "center": artist.get_center(),
+                        "radius": artist.get_radius(),
+                        "facecolor": artist.get_facecolor(),
+                        "edgecolor": artist.get_edgecolor(),
+                    },
+                }
+            )
+
+        elif isinstance(artist, mtext.Text):
+            x, y = artist.get_position()
+            text = artist.get_text()
+
+            if text.isnumeric():
+                min_x = min(min_x, x)
+                max_x = max(max_x, x)
+                min_y = min(min_y, y)
+                max_y = max(max_y, y)
+
+                artist_properties.update(
+                    {
+                        "type": "text",
+                        "properties": {
+                            "position": artist.get_position(),
+                            "text": text,
+                            "horizontalalignment": artist.get_horizontalalignment(),
+                            "verticalalignment": artist.get_verticalalignment(),
+                        },
+                    }
+                )
+
+        elif isinstance(artist, mlines.Line2D):
+            x_data, y_data = artist.get_data()
+            min_x = min(min_x, np.min(x_data))
+            max_x = max(max_x, np.max(x_data))
+            min_y = min(min_y, np.min(y_data))
+            max_y = max(max_y, np.max(y_data))
+
+            artist_properties.update(
+                {
+                    "type": "line",
+                    "properties": {
+                        "xdata": artist.get_xdata(),
+                        "ydata": artist.get_ydata(),
+                        "color": artist.get_color(),
+                        "linestyle": artist.get_linestyle(),
+                    },
+                }
+            )
+
+        elif isinstance(artist, mpatches.PathPatch):
+            bbox_display = artist.get_window_extent()
+            bbox_data = bbox_display.transformed(ax.transData.inverted())
+            min_x = min(min_x, bbox_data.x0)
+            max_x = max(max_x, bbox_data.x1)
+            min_y = min(min_y, bbox_data.y0)
+            max_y = max(max_y, bbox_data.y1)
+
+            path = artist.get_path()
+            if path:
+                artist_properties.update(
+                    {
+                        "type": "path",
+                        "properties": {
+                            "path": path,
+                            "facecolor": artist.get_facecolor(),
+                            "edgecolor": artist.get_edgecolor(),
+                            "linewidth": artist.get_linewidth(),
+                        },
+                    }
+                )
+
+        if artist_properties["type"]:
+            artists_data.append(artist_properties)
+
+    # Convert processed_ids to a consistent string type
+    processed_ids_str = [str(i) for i in processed_ids]
+
+    # Add a small margin
+    padding = 0.5
+    width = max_x - min_x + padding * 2
+    height = max_y - min_y + padding * 2
+
+    # Create new figure
+    new_fig = plt.figure(figsize=(width, height), dpi=100)
+    new_ax = new_fig.add_axes([0, 0, 1, 1])
+    new_ax.set_facecolor(background_color)
+    new_fig_patch = getattr(new_fig, "patch", None)
+    if new_fig_patch:
+        new_fig_patch.set_facecolor(background_color)
+
+    # Phase 2: Recreate Artists in the New Figure
+    label_positions = {}
+    for data in artists_data:
+        props = data["properties"]
+
+        if data["type"] == "circle":
+            new_x = props["center"][0] - min_x + padding
+            new_y = props["center"][1] - min_y + padding
+            new_circle = mpatches.Circle(
+                (new_x, new_y),
+                props["radius"],
+                facecolor=props["facecolor"],
+                edgecolor=props["edgecolor"],
+                transform=new_ax.transData,
+                zorder=1,
+            )
+            new_ax.add_patch(new_circle)
+
+        elif data["type"] == "text":
+            original_text = props["text"]
+            is_processed = False
+            if original_text.isnumeric() and original_text in processed_ids_str:
+                is_processed = True
+
+            new_x = props["position"][0] - min_x + padding
+            new_y = props["position"][1] - min_y + padding
+            new_text = mtext.Text(
+                x=new_x,
+                y=new_y,
+                text=original_text,
+                color="green" if is_processed else "black",
+                horizontalalignment=props["horizontalalignment"],
+                verticalalignment=props["verticalalignment"],
+                transform=new_ax.transData,
+                zorder=3,
+                bbox=dict(
+                    facecolor="white" if is_processed else "none",
+                    edgecolor="green" if is_processed else "none",
+                    boxstyle="round",
+                ),
+            )
+            new_text.set_fontsize(14)
+            new_ax.add_artist(new_text)
+
+            label_positions[props["text"]] = props["position"]
+
+        elif data["type"] == "line":
+            x_data = [x - min_x + padding for x in props["xdata"]]
+            y_data = [y - min_y + padding for y in props["ydata"]]
+            new_line = mlines.Line2D(
+                xdata=x_data,
+                ydata=y_data,
+                color=props["color"],
+                linestyle=props["linestyle"],
+                transform=new_ax.transData,
+                zorder=0,
+            )
+            new_ax.add_line(new_line)
+
+        elif data["type"] == "path":
+            path = props["path"]
+            vertices = path.vertices
+            if len(vertices) >= 2:
+                start_point = vertices[0]
+                end_point = vertices[-1]
+
+                new_start_x = start_point[0] - min_x + padding
+                new_start_y = start_point[1] - min_y + padding
+                new_end_x = end_point[0] - min_x + padding
+                new_end_y = end_point[1] - min_y + padding
+
+                # Determine the midpoint and a perpendicular offset for the control point
+                mid_x = (new_start_x + new_end_x) / 2
+                mid_y = (new_start_y + new_end_y) / 2
+                dx = new_end_x - new_start_x
+                dy = new_end_y - new_start_y
+                offset = max_r * 2
+
+                if abs(dx) < 1e-6:
+                    control_x = mid_x - offset
+                    control_y = mid_y
+                else:
+                    perp_dx = -dy
+                    perp_dy = dx
+                    length = np.sqrt(perp_dx**2 + perp_dy**2)
+                    if length != 0:
+                        perp_dx /= length
+                        perp_dy /= length
+                    control_x = mid_x + perp_dx * offset
+                    control_y = mid_y + perp_dy * offset
+
+                path_data = [
+                    (mpath.Path.MOVETO, (new_start_x, new_start_y)),
+                    (mpath.Path.CURVE3, (control_x, control_y)),
+                    (mpath.Path.CURVE3, (new_end_x, new_end_y)),
+                ]
+                codes, verts = zip(*path_data)
+
+                new_path = mpath.Path(verts, codes)
+                new_patch = mpatches.PathPatch(
+                    new_path,
+                    facecolor=props["facecolor"],
+                    edgecolor=props["edgecolor"],
+                    linewidth=props["linewidth"],
+                    transform=new_ax.transData,
+                    zorder=0,
+                )
+                new_ax.add_patch(new_patch)
+
+    for u, v in processed_edges:
+        u_str, v_str = str(u), str(v)
+
+        if u_str in label_positions and v_str in label_positions:
+            x1, y1 = label_positions[u_str]
+            x2, y2 = label_positions[v_str]
+
+            # Apply the same offset as for other artists
+            new_x_data = [x1 - min_x + padding, x2 - min_x + padding]
+            new_y_data = [y1 - min_y + padding, y2 - min_y + padding]
+
+            new_edge = mlines.Line2D(
+                xdata=new_x_data,
+                ydata=new_y_data,
+                color="black",
+                linestyle=":",
+                zorder=2,
+                transform=new_ax.transData,
+            )
+            new_ax.add_line(new_edge)
+
+    # Set limits for the new axes
+    new_ax.set_xlim(0, width)
+    new_ax.set_ylim(0, height)
+    new_ax.set_aspect("equal")
+    new_ax.axis("off")
+
+    # Add border to overlay to emphasise separation
+    rect = mpatches.Rectangle(
+        (0, 0),
+        width,
+        height,
+        facecolor="none",
+        edgecolor="gray",
+        linewidth=2,
+        linestyle=":",
+        transform=new_ax.transData,
+        zorder=10,
+    )
+    new_ax.add_patch(rect)
+
+    png = io.BytesIO()
+    new_fig.savefig(png, format="png")
+    png.seek(0)
+
+    plt.close(fig)
+    plt.close(new_fig)
+
+    return png
+
+
 # MAIN VISUALISATION FUNCTION
 def vis_3d_g(
     graph: nx.Graph,
+    edge_pths: dict,
     current_nodes: Optional[Tuple[int, int]] = None,
     hide_ports: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
@@ -54,12 +356,14 @@ def vis_3d_g(
     pauli_webs_graph: Optional[nx.Graph] = None,
     debug: bool = False,
     taken: List[StandardCoord] = [],
+    fig_data: Optional[matplotlib.figure.Figure] = None,
 ):
     """Manages the process of visualising a graph with many nodes/blocks and edges/pipes.
 
     Args:
-        - graph: incoming graph formatted as an nx.Graph,
-        - current_nodes: ID of the last (src, tgt) nodes connected by the algorithm,
+        - graph: incoming graph formatted as an nx.Graph.
+        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - current_nodes: ID of the last (src, tgt) nodes connected by the algorithm.
         - hide_ports:
             - True: do not display boundary nodes even if present in the incoming graph,
             - False: display boundary nodes if present.
@@ -73,6 +377,7 @@ def vis_3d_g(
             - True: debugging mode on,
             - False: debugging mode off.
         - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
     """
 
     def onpick(event):
@@ -320,6 +625,45 @@ def vis_3d_g(
     # Pop visualisation or save to file
     repository_root: Path = Path(__file__).resolve().parent.parent
     temp_folder_pth = repository_root / "outputs/temp"
+
+    if fig_data:
+        png_buffer = figure_to_png(
+            fig_data,
+            processed_ids=graph.nodes(),
+            processed_edges=list(edge_pths.keys()),
+        )
+        overlay_image = Image.open(png_buffer)
+        img_width, img_height = overlay_image.size
+        aspect_ratio = img_width / img_height
+        desired_height_ratio = 0.3
+        calculated_width_ratio = (
+            desired_height_ratio
+            * (fig.get_figheight() / fig.get_figwidth())
+            * aspect_ratio
+        )
+
+        # 3. Create a new axes for the overlay, positioned in the bottom-right
+        # Create a new axes for the overlay at the bottom-right
+        # Position is [left, bottom, width, height]
+        margin = 0.02  # Adjust this value as needed for the desired spacing
+        left = (
+            1 - calculated_width_ratio - margin
+        )  # Align to the right side, with a margin
+        bottom = 0.0 + margin  # Align to the bottom, with a margin
+
+        ax_overlay = fig.add_axes(
+            [left, bottom, calculated_width_ratio, desired_height_ratio]
+        )
+
+        # 4. Hide the frame, ticks, and background of the overlay axes
+        ax_overlay.set_xticks([])
+        ax_overlay.set_yticks([])
+        ax_overlay.axis("off")
+
+        # 5. Use imshow on the new, dedicated 2D axes
+        overlay_array = np.asarray(overlay_image)
+        ax_overlay.imshow(overlay_array)
+
     if save_to_file:
         Path(temp_folder_pth).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_pth}/{filename}.png")
@@ -511,7 +855,7 @@ def render_block(
     edge_col: None | str = None,
     border_width: float = 0.5,
     current_nodes: Optional[Tuple[int, int]] = None,
-    debug: bool = True,
+    debug: bool = False,
     taken: List[StandardCoord] = [],
 ):
     """Renders a regular (non-'h') block.
@@ -574,7 +918,7 @@ def render_block(
                 label_pos[0],
                 label_pos[1],
                 label_pos[2],
-                s=f"{node_id}: {node_type} {position}",
+                s=f"{node_id}: {node_type}",
                 color="black",
                 visible=True if current_nodes and node_id in current_nodes else False,
             )
