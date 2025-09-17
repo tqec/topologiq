@@ -492,7 +492,6 @@ def place_nxt_block(
             )
 
             # Check path doesn't obstruct an absolutely necessary exit by previously placed nodes
-            # XYZ
             coords_in_pth = get_taken_coords(clean_pth)
 
             # Reset # of unobstructed exits and node beams if node is a boundary
@@ -594,6 +593,7 @@ def place_nxt_block(
                 print(f"Path creation: {src_id} -> {neigh_id}. SUCCESS.")
 
             # Return updated list of taken coords and all_beams, with success code
+            nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
             return taken, all_beams, edge_pths, True
 
         # Handle cases where no winner is found
@@ -613,9 +613,11 @@ def place_nxt_block(
                 print(f"Path creation: {src_id} -> {neigh_id}. FAIL.")
 
             # Return unchanged list of taken coords and all_beams, with failure boolean
+            nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
             return taken, all_beams, edge_pths, False
 
     # FAIL SAFE RETURN TO AVOID TYPE ERRORS
+    nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
     return taken, all_beams, edge_pths, False
 
 
@@ -675,8 +677,9 @@ def second_pass(
     num_2n_pass_edges = 0
     for u, v, data in nx_g.edges(data=True):
 
-        # Ensure occupied coords do not have duplicates
+        # Ensure occupied coords do not have duplicates and prune beams for good practice
         taken = list(set(taken))
+        nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
         # Get source and target node for specific edge
         u_coords = nx_g.nodes[u].get("pos")
@@ -810,6 +813,9 @@ def second_pass(
                                     taken=taken,
                                     fig_data=fig_data,
                                 )
+                    
+                    # Prune beams before moving to next edge
+                    nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
                 # Write an error to edge_pths if edge not found
                 else:
