@@ -105,7 +105,10 @@ def runner(
         i += 1
 
         # Update user
-        print(f"\nAttempt {i} of {max_attempts}:")
+        if log_stats:
+            print(f"\nAttempt {i} of {max_attempts}:")
+        else: 
+            print(".")
 
         # Call algorithm
         try:
