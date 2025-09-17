@@ -26,7 +26,7 @@ def pthfinder(
     tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 50,
+    min_succ_rate: int = 60,
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
