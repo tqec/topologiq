@@ -195,15 +195,15 @@ def runner(
             duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
-            print(
-                Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
-                f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
-            )
-
-            if visualise[0] is not None or visualise[1] is not None:
+            if log_stats:
                 print(
-                    "Visualisations enabled. For faster runtimes, disable visualisations."
+                    Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
+                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
                 )
+                if visualise[0] is not None or visualise[1] is not None:
+                    print(
+                        "Visualisations enabled. For faster runtimes, disable visualisations."
+                    )
 
         # Delete temporary files
         try:
