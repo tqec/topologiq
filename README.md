@@ -1,13 +1,11 @@
 # Topologiq: Algorithmic Lattice Surgery
-A family of algorithms (ok, there's currently *one* full algorithm, but it is a foundation to make a family of them) to convert ZX circuits into logical versions of themselves.
+A tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery and produces topologically correct space-time diagrams (logical computations) like the one below (see `./assets/media` for additional examples).
 
-It is based on the surface code and lattice surgery and produces topologically correct space-time diagrams (logical computations) like the one below (see `./assets/media` for additional examples).
-
-![GIF animation of an example using Steane code](./assets/media/steane.gif)
+![GIF animation of an example using Steane code](./assets/media/cnots.gif)
 
 *Figure 1. Example output (Stene code).*
 
-***Note.*** This is work in progress.
+***Note.*** This is work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
 
 ## Background
 ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
@@ -24,9 +22,7 @@ When you name these "primitives" by reference to both the underlying topological
 The algorithms in this repository use the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
 
 ## Install
-The goal is to enable usage as a dependency.
-
-Meanwhile, the best way to install is to clone the repository, recreate the environment, and install all dependencies.
+Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies.
 
 Clone. 
 ```
@@ -58,29 +54,26 @@ pip install -r requirements.txt
 ## Examples
 For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times. 
 
-A succesfull result will produce:
-- a 3D interactive graph (pops up)
-- a GIF animation of the process (saves to `./outputs/media/`)
-- a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`)
-  - All information printed to this TXT file is also available for programmatic use.
+A succesfull result will produce a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`) (all information printed to this TXT file is also available for programmatic use). There are also optional parameters to trigger a variety of visualisations and summary animations.
 
 All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
+
+> *NB! The validation documents are currently out of data as recent improvements have fundamentally altered outputs.*
 
 ``` bash
 # A CNOT, using PyZX.
 python -m run --pyzx:cnot
 
 # Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
-# Ps. This one is not actually validated. I just realised I changed the circuit after validating a different combination of CNOTs. Will change back soon.
 python -m run --pyzx:cnots
 
 # A medium-size circuit with three interconnected lines.
 python -m run --pyzx:simple_mess
 
-# Line of hadamards
+# Line of hadamards.
 python -m run --graph:hadamard_line
 
-# Circuit with Hadamards on bends
+# Circuit with Hadamards on bends.
 python -m run --graph:hadamard_bend
 
 # A 7-qubit Steane code, from a non-descript graph. 
@@ -91,23 +84,20 @@ python -m run --graph:steane
 # Ps. This is a tightly-packed circuit with several interconnected nodes and a few Hadamards, so a few rounds might be needed for success.
 python -m run --graph:hadamards_mess
 
-# Random circuit, optimised, using PyZX: zx.generate.cliffordT(), zx.simplify.phase_free_simp().
-# Ps. Check the randomly generated graph to ensure all qubit lines are interconnected. See "process" section above for details.
-python -m run --pyzx:random_graph
-
 ```
 
-There are also additional options that can be appended to any command.
+There are also additional options that can be appended to any command for debugging and statistical purposes.
 
 ``` bash
-# Run a circuit normally and log stats for all attempts (will stop at first succeess, as per default behaviour)
+
+# Run a circuit normally and log stats for all attempts to complete the specific circuit.
 python -m run --pyzx:cnots --log_stats
 
-# Run a specific circuit a single time irrespective of outcome
+# Run a specific circuit a single time irrespective of outcome.
 python -m run --graph:steane --repeat:1
 
-# Run a circuit a given number of times and log log stats for all 50 cycles
-python -m run --pyzx:cnots --log_stats --repeat:50
+# Run a circuit a given number of times and log log stats for all 50 cycles.
+python -m run --pyzx:cnots --repeat:50
 
 ```
 
@@ -115,28 +105,33 @@ And it is possible to set several visualisation options also via command.
 
 ``` bash
 
-# "BOUNDARIES" considered and final outcome visualised.
+# Final outcome visualised.
 python -m run --pyzx:cnot --vis:final
 
-# "BOUNDARIES" considered and each edge and final outcome visualised.
-python -m run --pyzx:cnot --vis:detail
+# Each edge-placement is visualised / a series of progress visualisations.
+python -m run --pyzx:cnots --vis:detail
 
-# "BOUNDARIES" considered by algorithm but boundaries NOT visible in visualisations.
+# A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
+python -m run --pyzx:cnots --animate:GIF
+python -m run --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)
+
+# Run visualisations on debug mode (additional details shown) (only helpful if combined with detail visualisations or animations).
+python -m run --pyzx:cnots --vis:detail --debug
+
+# "BOUNDARIES" considered by algorithm but NOT shown in visualisations.
 python -m run --pyzx:cnot --vis:final --hide_boundaries
 
-# "BOUNDARIES" stripped prior performing any operations and therefore not at all considered for placements.
+# "BOUNDARIES" stripped prior performing any operations and therefore not considered.
 python -m run --pyzx:cnot --vis:final --strip_boundaries
 
 ```
 
-
-
 ## Use your own circuits
 It would be great to hear of tests using other circuits.
 - You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `assets/graphs/simple_graphs.py` for examples.
+  - No visualisation of input graphs currently available.
 - You can also use a PyZX graph. See check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs.
-
-Please note, however, that the algorithm is not expected to always succeed. The current goal is to inform developmental priorities by identifying types of circuits for which the current implementation performs good, less good, bad, and awfully.
+  - Feed PyZX's Matplotlib figure (`fig = zx.draw_matplotlib(...)`) to the algorithm using the `fig_data` optional parameter of `scripts/runner.py/`'s `runner()` function to get the PyZX graph overlayed over final output visualisations.
 
 ## Yeah, but how does it work, really?
 A detailed insight into the algorithm and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of the inner workings of the algorithm. 
@@ -162,12 +157,10 @@ A detailed insight into the algorithm and, hopefully, a paper, is in progress. M
 
 ## Pending
 Everything is pending, but below a list of highest priorities:
-- Add health checks to outcomes to avoid undetected errors.
 - Improve PyZX support.
-- Add better documentation.
-- Add detailed example sheets.
-- Enable automatic selection and variation of hyperparameters.
-- Improve run-times.
+- Detter documentation.
+- More example notebooks.
+- Improve run-times further.
 
 ## License
 This repository is open source software. All code in the repository is under an Apache 2.0 license.
