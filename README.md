@@ -12,7 +12,7 @@ In essence, as illustrated in the GIF animation below (more examples [here](./as
 > ***Note.*** ***Topologiq*** is compatible with [PyZX](https://github.com/zxcalc/pyzx) (incl. [phases & T-gates](./assets/notebooks/pyzx_phases_t_gates.ipynb), [Pauli webs](./assets/notebooks/pyzx_pauli_webs.ipynb), and [QASM interop](./assets/notebooks/qasm_via_pyzx.ipynb)) and, theoretically, any other ZX tool able to produce a similar ZX graphs.
 
 ## Background
-ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
+ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to QEC. Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
 
 A leading approach to building logical quantum computations that are seemingly resilient to errors is the surface code,<sup>[8-14]</sup> a planar entanglement of qubit operations that join many qubits into a single logical computation. Lattice surgery<sup>[15-23]</sup> is the process of merging and splitting surface code patches to create continuous logical computations, often visualised as space-time diagrams like Figure 1.
 
