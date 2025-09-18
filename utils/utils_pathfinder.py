@@ -1,12 +1,8 @@
-import os
 import numpy as np
 
-from datetime import datetime
 from typing import Tuple, List, Optional
 
-
-from utils.utils_greedy_bfs import gen_tent_tgt_coords
-from utils.classes import StandardCoord, NodeBeams, StandardBeam
+from utils.classes import StandardBlock, StandardCoord, NodeBeams, StandardBeam
 
 #############################
 # PATHFINDER AUX OPERATIONS #
@@ -256,7 +252,7 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[
     """
 
     # HELPER VARIABLES
-    c_ks = ["xxz", "xzz", "xzx", "zzx", "zxx", "zxz"]
+    c_ks = ["xxz", "zzx", "xzz", "zxx", "zxz", "xzx"]
     p_ks = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
     # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
@@ -338,3 +334,21 @@ def flip_hdm(k: str) -> str:
 
     # Return revised kind
     return new_k
+
+def prune_visited(visited: dict[Tuple[StandardBlock, StandardCoord], int]) -> dict[Tuple[StandardBlock, StandardCoord], int]:
+    """Takes the visited dictionary from the pathfinder and prunes the second (directional) element of the keys
+    
+    Args:
+        - visited: a dictionary of visited sites, used by the pathfinder algorithm to keep track of sites visited in order to avoid revisiting them.
+
+    Returns:
+        - new_visited: a new version of the incoming dictionary, with directional elements of keys zeroed out, which has the effect of enabling the algorithm to revisit any sites previously visited.
+    
+    """
+    
+    new_visited = {}
+    for k, v in visited.items():
+        block_info = k[0]
+        new_visited[(block_info, (0,0,0))] = v
+    
+    return new_visited

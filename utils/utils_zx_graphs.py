@@ -55,9 +55,9 @@ def get_zx_type_fam(t: str) -> Optional[List[str]]:
     """
 
     fams: Dict[str, List[str]] = {
-        "X": ["xxz", "xzx", "zxx"],
+        "X": ["zzx", "zxz", "xzz"],
         "Y": ["yyy"],
-        "Z": ["xzz", "zzx", "zxz"],
+        "Z": ["zxx", "xxz", "xzx"],
         "O": ["ooo"],
         "SIMPLE": ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"],
         "HADAMARD": ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"],
@@ -83,6 +83,5 @@ def kind_to_zx_type(k: str) -> str:
     elif "o" in k:
         zx_t = "HADAMARD" if "h" in k else "SIMPLE"
     else:
-        zx_t = max(set(k), key=lambda c: k.count(c)).capitalize()
-
+        zx_t = min(set(k), key=lambda c: k.count(c)).capitalize()
     return zx_t

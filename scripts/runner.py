@@ -2,7 +2,8 @@ import shutil
 
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
+import matplotlib.figure
 
 from scripts.graph_manager import graph_manager_bfs
 from utils.utils_misc import write_outputs
@@ -25,6 +26,8 @@ def runner(
     stop_on_first_success: bool = True,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
+    debug: bool = False,
+    fig_data: Optional[matplotlib.figure.Figure] = None,
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -56,6 +59,10 @@ def runner(
         - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
             - True: log stats to file
             - False: do NOT log stats to file
+        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            - True: debugging mode on,
+            - False: debugging mode off.
+        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -98,17 +105,22 @@ def runner(
         i += 1
 
         # Update user
-        print(f"\nAttempt {i} of {max_attempts}:")
+        if log_stats:
+            print(f"\nAttempt {i} of {max_attempts}:")
+        else: 
+            print(".")
 
         # Call algorithm
         try:
-            _, edge_pths, new_nx_g, c, lat_nodes, lat_edges = graph_manager_bfs(
+            nx_g, edge_pths, c, lat_nodes, lat_edges = graph_manager_bfs(
                 c_g_dict,
                 c_name=c_name,
                 min_succ_rate=min_succ_rate,
                 hide_ports=hide_ports,
                 visualise=visualise,
                 log_stats_id=unique_run_id,
+                debug=debug,
+                fig_data=fig_data,
                 **kwargs,
             )
 
@@ -136,30 +148,44 @@ def runner(
                 )
 
                 # Visualise result
-                if visualise[0]:
-                    if (
-                        visualise[0].lower() == "final"
-                        or visualise[0].lower() == "detail"
-                    ):
-                        final_nx_graph, _ = lattice_to_g(lat_nodes, lat_edges)
-                        vis_3d_g(final_nx_graph, hide_ports=hide_ports)
+                if visualise[0] or visualise[1]:
 
-                # Animate
-                if visualise[1]:
-                    if visualise[1].lower() == "GIF" or visualise[1].lower() == "MP4":
-                        vis_3d_g(
-                            new_nx_g,
-                            hide_ports=hide_ports,
-                            save_to_file=True,
-                            filename=f"{c_name}{c:03d}",
-                        )
+                    final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
-                        create_animation(
-                            filename_prefix=c_name,
-                            restart_delay=5000,
-                            duration=2500,
-                            video=True if visualise[1] == "MP4" else False,
-                        )
+                    if visualise[0]:
+                        if (
+                            visualise[0].lower() == "final"
+                            or visualise[0].lower() == "detail"
+                        ):
+
+                            vis_3d_g(
+                                final_nx_g,
+                                edge_pths,
+                                hide_ports=hide_ports,
+                                fig_data=fig_data,
+                            )
+
+                    # Animate
+                    if visualise[1]:
+                        if (
+                            visualise[1].lower() == "gif"
+                            or visualise[1].lower() == "mp4"
+                        ):
+                            vis_3d_g(
+                                final_nx_g,
+                                edge_pths,
+                                hide_ports=hide_ports,
+                                save_to_file=True,
+                                filename=f"{c_name}{c:03d}",
+                                fig_data=fig_data,
+                            )
+
+                            create_animation(
+                                filename_prefix=c_name,
+                                restart_delay=5000,
+                                duration=2500,
+                                video=True if visualise[1] == "MP4" else False,
+                            )
 
                 # End loop
                 if stop_on_first_success:
@@ -172,22 +198,22 @@ def runner(
             duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
-            print(
-                Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
-                f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
-            )
-
-            if visualise[0] is not None or visualise[1] is not None:
+            if log_stats:
                 print(
-                    "Visualisations enabled. For faster runtimes, disable visualisations."
+                    Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
+                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
                 )
+                if visualise[0] is not None or visualise[1] is not None:
+                    print(
+                        "Visualisations enabled. For faster runtimes, disable visualisations."
+                    )
 
-            # Delete temporary files
-            try:
-                if temp_dir_pth.exists():
-                    shutil.rmtree(temp_dir_pth)
-            except (ValueError, FileNotFoundError) as e:
-                print("Unable to delete temp files or temp folder does not exist", e)
+        # Delete temporary files
+        try:
+            if temp_dir_pth.exists():
+                shutil.rmtree(temp_dir_pth)
+        except (ValueError, FileNotFoundError) as e:
+            print("Unable to delete temp files or temp folder does not exist", e)
 
     # RETURN: original ZX graph, edge_pths, nodes and edges of result
     return c_g_dict, edge_pths, lat_nodes, lat_edges

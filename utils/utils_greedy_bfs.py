@@ -1,15 +1,17 @@
 import random
-import numpy as np
 import networkx as nx
 
 from typing import Tuple, List, Optional
 
+from utils.animation import create_animation
 from utils.classes import StandardCoord, NodeBeams, StandardBlock
+from utils.grapher import lattice_to_g, vis_3d_g
+
 
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_start_id(nx_g: nx.Graph) -> Optional[int]:
+def find_start_id(nx_g: nx.Graph) -> int:
     """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
 
     Args:
@@ -22,18 +24,20 @@ def find_start_id(nx_g: nx.Graph) -> Optional[int]:
 
     # TERMINATE IF THERE ARE NO NODES
     if not nx_g.nodes:
-        return None
+        raise ValueError("Start node not found")
 
     # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
     max_d = -1
     centr_nodes: List[int] = []
 
     nodes_ds = nx_g.degree
+
     if isinstance(nodes_ds, int):
         print(
             "Warning: nx_g.degree() returned an integer. Cannot determine start node."
         )
-        return None  # Cannot iterate, return None
+        raise ValueError("Start node not found")
+
     else:
         for n, d in nodes_ds:
             if d > max_d:
@@ -43,7 +47,7 @@ def find_start_id(nx_g: nx.Graph) -> Optional[int]:
                 centr_nodes.append(n)
 
     # PICK A HIGHEST DEGREE NODE
-    src_id: Optional[int] = random.choice(centr_nodes) if centr_nodes else None
+    src_id: int = random.choice(centr_nodes)
 
     # RETURN START NODE
     return src_id
@@ -70,6 +74,7 @@ def get_node_degree(g: nx.Graph, node: int) -> int:
 
     # IF DEGREES NOT A LIST, RETURN 0 (SINGLE NODE WON'T HAVE EDGES)
     return 0
+
 
 ######################
 # BFS AUX OPERATIONS #
@@ -175,8 +180,8 @@ def gen_tent_tgt_coords(
 
 
 def prune_beams(
-    all_beams: List[NodeBeams], taken: List[StandardCoord]
-) -> List[NodeBeams]:
+    nx_g: nx.Graph, all_beams: List[NodeBeams], taken: List[StandardCoord]
+) -> Tuple[nx.Graph, List[NodeBeams]]:
     """Removes beams that have already been broken, as these are no longer indicative of anything.
     Args:
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
@@ -193,10 +198,28 @@ def prune_beams(
             ]
             if iter_beams:
                 new_beams.append(iter_beams)
-    except:
+    except (IndexError, ValueError, LookupError, KeyError) as e:
         new_beams = all_beams
 
-    return new_beams
+    try:
+        for n_id in nx_g.nodes():
+            new_beams = []
+            if nx_g.nodes[n_id]["completed"] == []:
+                pass
+            elif nx_g.nodes[n_id]["completed"] >= get_node_degree(nx_g, n_id):
+                nx_g.nodes[n_id]["beams"] = []
+            else:
+                old_beams = nx_g.nodes[n_id]["beams"]
+                if old_beams:
+                    for beam in old_beams:
+                        if all([(c not in taken) for c in beam]):
+                            new_beams.append(beam)
+
+                    nx_g.nodes[n_id]["beams"] = new_beams
+    except (IndexError, ValueError, LookupError, KeyError) as e:
+        nx_g = nx_g
+
+    return nx_g, new_beams
 
 
 def reindex_pth_dict(
@@ -272,3 +295,9 @@ def reindex_pth_dict(
             i += 1
 
     return lat_nodes, lat_edges
+
+
+######################
+# DEBUG OPERATIONS #
+######################
+# CONSIDER MOVE LOGGING AND ANIMATION HERE.

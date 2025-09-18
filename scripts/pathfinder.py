@@ -2,11 +2,17 @@ import os
 
 from datetime import datetime
 from collections import deque
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, cast
 
-from utils.classes import StandardCoord, StandardBlock
+from utils.classes import NodeBeams, StandardCoord, StandardBlock
 from utils.utils_greedy_bfs import gen_tent_tgt_coords
-from utils.utils_pathfinder import flip_hdm, rot_o_kind, nxt_kinds
+from utils.utils_pathfinder import (
+    check_is_exit,
+    flip_hdm,
+    prune_visited,
+    rot_o_kind,
+    nxt_kinds,
+)
 from utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
 
@@ -20,7 +26,8 @@ def pthfinder(
     tgt: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
     taken: List[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 50,
+    min_succ_rate: int = 60,
+    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -71,6 +78,7 @@ def pthfinder(
         min_succ_rate,
         taken=taken_cc,
         hdm=hdm,
+        critical_beams=critical_beams,
     )
 
     # LOG STATS IF NEEDED
@@ -122,6 +130,7 @@ def core_pthfinder_bfs(
     min_succ_rate,
     taken: List[StandardCoord] = [],
     hdm: bool = False,
+    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
 ) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
@@ -139,7 +148,7 @@ def core_pthfinder_bfs(
     """
 
     # UNPACK INCOMING DATA
-    s_coords, _ = src
+    s_coords, s_kind = src
     sx, sy, sz = s_coords
     end_coords = tent_coords
 
@@ -156,26 +165,50 @@ def core_pthfinder_bfs(
     pth_len = {src: 0}
     pth = {src: [src]}
     valid_pths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
-    moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+    moves_unadjusted = [
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1),
+    ]
 
     # EXIT CONDITIONS
     tgts_filled = 0
-    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100)
+    tgts_to_fill = (
+        int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
+    )
+
     if len(tent_coords) > 1:
         max_manhattan = get_max_manhattan(s_coords, tent_coords) * 2
+        src_tgt_manhattan = max_manhattan
     else:
+        src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
         max_manhattan = max(
             get_max_manhattan(s_coords, taken) * 2,
-            get_max_manhattan(s_coords, tent_coords) * 2,
+            src_tgt_manhattan * 2,
         )
 
+    src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
+    prune_distance = src_tgt_manhattan
     # CORE LOOP
+    once = True
     while queue:
         curr: StandardBlock = queue.popleft()
         curr_coords, curr_kind = curr
         x, y, z = curr_coords
 
         curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
+
+        if curr_manhattan < prune_distance - 6:
+            visited = prune_visited(visited)
+            prune_distance = curr_manhattan
+
+        if curr_manhattan > src_tgt_manhattan + 6:
+            continue
+
         if curr_manhattan > max_manhattan:
             break
 
@@ -188,10 +221,40 @@ def core_pthfinder_bfs(
                 break
 
         scale = 2 if "o" in curr_kind else 1
+
+        moves_adjusted = []
+        remaining_moves = []
+        for move in moves_unadjusted:
+            valid_exit = check_is_exit((0, 0, 0), curr_kind, move)
+            if valid_exit:
+                moves_adjusted.append(move)
+            else:
+                remaining_moves.append(move)
+        moves_adjusted += remaining_moves
+        if len(tent_coords) == 1:
+            moves = moves_adjusted
+        else: 
+            moves = moves_unadjusted
+        moves = moves_unadjusted
         for dx, dy, dz in moves:
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
             curr_pth_coords = [n[0] for n in pth[curr]]
+
+            if nxt_coords in taken:
+                continue
+
+            if critical_beams:
+                nodes_with_critical_beams_id = critical_beams.keys()
+                if nodes_with_critical_beams_id:
+                    for node_id in nodes_with_critical_beams_id:
+                        min_exit_num = critical_beams[node_id][0]
+                        beams = critical_beams[node_id][1][:3]
+                        beams_broken_for_node = sum(
+                            [nxt_coords in beam for beam in beams]
+                        )
+                        if len(beams) - beams_broken_for_node < min_exit_num:
+                            continue
 
             mid_pos = None
             if "o" in curr_kind and scale == 2:
@@ -201,6 +264,18 @@ def core_pthfinder_bfs(
                 mid_pos = (mid_x, mid_y, mid_z)
                 if mid_pos in curr_pth_coords or mid_pos in taken:
                     continue
+
+                if critical_beams:
+                    nodes_with_critical_beams_id = critical_beams.keys()
+                    if nodes_with_critical_beams_id:
+                        for node_id in nodes_with_critical_beams_id:
+                            min_exit_num = critical_beams[node_id][0]
+                            beams = critical_beams[node_id][1][:3]
+                            beams_broken_for_node = sum(
+                                [mid_pos in beam for beam in beams]
+                            )
+                            if len(beams) - beams_broken_for_node < min_exit_num:
+                                continue
 
             if "h" in curr_kind:
                 hdm = False
@@ -222,7 +297,6 @@ def core_pthfinder_bfs(
                 curr_kind = curr_kind[:3]
 
             possible_nxt_types = nxt_kinds(curr_coords, curr_kind, nxt_coords)
-
             for nxt_type in possible_nxt_types:
 
                 # If hadamard flag is on and the block being placed is "o", place a hadamard instead of regular pipe
@@ -276,17 +350,17 @@ def core_pthfinder_bfs(
 # AUX OPERATIONS #
 ##################
 def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List[str]:
-    """Returns all possible valid kinds/types for a given ZX type,
+    """Returns all possible valid kinds for a given ZX type,
     typically needed when a new block is being added to the 3D space,
-    as each ZX type can be fulfilled with more than one block types/kinds.
+    as each ZX type can be fulfilled with more than one block kind.
 
     Args:
         - tgt_zx_type: the ZX type of the target node.
-        - tgt_kind: a specific block/pipe type/kind to return irrespective of ZX type,
+        - tgt_kind: a specific kind to return irrespective of ZX type,
             used when the target block was already placed as part of previous operations and therefore already has an assigned kind.
 
     Returns:
-        - fam: a list of applicable types/kinds for the given ZX type.
+        - fam: a list of applicable kinds for the given ZX type.
 
     """
 
@@ -294,7 +368,7 @@ def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List
         return [tgt_kind]
 
     if tgt_zx_type in ["X", "Z"]:
-        return ["xxz", "xzx", "zxx"] if tgt_zx_type == "X" else ["xzz", "zzx", "zxz"]
+        return ["zzx", "zxz", "xzz"] if tgt_zx_type == "X" else ["xxz", "xzx", "zxx"]
     elif tgt_zx_type == "O":
         return ["ooo"]
     elif tgt_zx_type == "SIMPLE":
@@ -389,7 +463,7 @@ def test_pthfinder(
     taken: List[StandardCoord] = []
     hdm: bool = False
     src_coords: StandardCoord = (0, 0, 0)
-    all_valid_start_kinds: List[str] = ["xxz", "xzx", "zxx", "xzz", "zzx", "zxz"]
+    all_valid_start_kinds: List[str] = ["zzx", "zxz", "xzz", "xxz", "xzx", "zxx"]
     all_valid_zx_types: List[str] = ["X", "Z"]
     unique_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + "*"
 
