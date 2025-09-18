@@ -1,9 +1,11 @@
 # Topologiq: Algorithmic Lattice Surgery
-***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery and produces topologically-correct space-time diagrams (logical computations) like the one in the GIF animation below (see `./assets/media` for additional examples).
+***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
+
+In essence, as illustrated in the GIF animation below (more examples [here](./assets/media/)), ***topologiq*** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram that can more easily be consumed by other quantum error correction (QEC) software/tools.
 
 ![Algorithmic lattice surgery of a CNOT](./assets/media/cnots.gif)
 
-*Figure 1. Example output (Stene code).*
+*Figure 1. Algorithmic lattice surgery of a CNOT.*
 
 > ***Note.*** Work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
 
