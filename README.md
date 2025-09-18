@@ -1,15 +1,13 @@
 # Topologiq: Algorithmic Lattice Surgery
-***Topologiq*** is tool to convert ZX circuits into logical versions of themselves.
-
-It is based on the surface code and lattice surgery and produces topologically-correct space-time diagrams (logical computations) like the one in the GIF animation below (see `./assets/media` for additional examples).
-
-Compatible with PyZX and, theoretically, any other ZX tool able to produce a ZX graph with labelled nodes/spiders and edges/pipes.
+***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery and produces topologically-correct space-time diagrams (logical computations) like the one in the GIF animation below (see `./assets/media` for additional examples).
 
 ![Algorithmic lattice surgery of a CNOT](./assets/media/cnots.gif)
 
 *Figure 1. Example output (Stene code).*
 
-***Note.*** Work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
+> ***Note.*** Work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
+
+> ***Note.*** ***Topologiq*** is compatible with [PyZX](https://github.com/zxcalc/pyzx) (incl. [phases & T-gates](./assets/notebooks/pyzx_phases_t_gates.ipynb), [Pauli webs](./assets/notebooks/pyzx_pauli_webs.ipynb), and [QASM interop](./assets/notebooks/qasm_via_pyzx.ipynb)) and, theoretically, any other ZX tool able to produce a similar ZX graphs.
 
 ## Background
 ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
