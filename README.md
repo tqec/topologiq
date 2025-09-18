@@ -1,11 +1,15 @@
 # Topologiq: Algorithmic Lattice Surgery
-A tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery and produces topologically correct space-time diagrams (logical computations) like the one below (see `./assets/media` for additional examples).
+***Topologiq*** is tool to convert ZX circuits into logical versions of themselves.
 
-![GIF animation of an example using Steane code](./assets/media/cnots.gif)
+It is based on the surface code and lattice surgery and produces topologically-correct space-time diagrams (logical computations) like the one in the GIF animation below (see `./assets/media` for additional examples).
+
+Compatible with PyZX and, theoretically, any other ZX tool able to produce a ZX graph with labelled nodes/spiders and edges/pipes.
+
+![Algorithmic lattice surgery of a CNOT](./assets/media/cnots.gif)
 
 *Figure 1. Example output (Stene code).*
 
-***Note.*** This is work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
+***Note.*** Work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
 
 ## Background
 ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to quantum error correction (QEC). Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
@@ -19,7 +23,7 @@ When you name these "primitives" by reference to both the underlying topological
 - The names can be used to establish potential placements for linked operations
 - The names can be used to ensure the outcome of a lattice surgery is topologically correct.
 
-The algorithms in this repository use the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
+***Topologiq*** uses the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
 
 ## Install
 Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies.
@@ -58,7 +62,7 @@ A succesfull result will produce a TXT file with information about the initial Z
 
 All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
 
-> *NB! The validation documents are currently out of data as recent improvements have fundamentally altered outputs.*
+> *NB! The validation documents are currently outdated as recent improvements have fundamentally altered outputs.*
 
 ``` bash
 # A CNOT, using PyZX.
