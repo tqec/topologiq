@@ -15,7 +15,7 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 from matplotlib.text import Text
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
-from typing import Annotated, Dict, Literal, Any, Optional, Tuple, List, IO, Union
+from typing import Annotated, Literal, Any, Optional, Tuple, List, IO, Union
 from numpy.typing import NDArray
 
 from utils.utils_pathfinder import check_is_exit, rot_o_kind
@@ -562,18 +562,19 @@ def vis_3d_g(
     if debug:
         for node_id in graph:
             node_beams = graph.nodes()[node_id]["beams"]
-            for beam in node_beams:
-                for beam_pos in beam:
-                    ax.scatter(
-                        beam_pos[0],
-                        beam_pos[1],
-                        beam_pos[2],
-                        c="yellow",
-                        s=10,
-                        edgecolors="black",
-                        alpha=0.5,
-                        depthshade=True,
-                    )
+            if node_beams:
+                for beam in node_beams:
+                    for beam_pos in beam:
+                        ax.scatter(
+                            beam_pos[0],
+                            beam_pos[1],
+                            beam_pos[2],
+                            c="yellow",
+                            s=10,
+                            edgecolors="black",
+                            alpha=0.5,
+                            depthshade=True,
+                        )
 
     # RENDER PAULI WEBS
     if pauli_webs_graph:
@@ -629,7 +630,7 @@ def vis_3d_g(
     if fig_data:
         png_buffer = figure_to_png(
             fig_data,
-            processed_ids=graph.nodes(),
+            processed_ids=list(graph),
             processed_edges=list(edge_pths.keys()),
         )
         overlay_image = Image.open(png_buffer)

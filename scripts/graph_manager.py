@@ -456,7 +456,7 @@ def place_nxt_block(
 
         # More current node data
         nxt_neigh_node_data = nx_g.nodes[neigh_id]
-        nxt_neigh_zx_type: str = nxt_neigh_node_data.get("type")
+        nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
 
         # Current edge data
         zx_edge_type = nx_g.get_edge_data(src_id, neigh_id).get("type")
@@ -682,8 +682,8 @@ def second_pass(
         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
         # Get source and target node for specific edge
-        u_coords = nx_g.nodes[u].get("pos")
-        v_coords = nx_g.nodes[v].get("pos")
+        u_coords: Optional[StandardCoord] = nx_g.nodes[u].get("pos")
+        v_coords: Optional[StandardCoord] = nx_g.nodes[v].get("pos")
 
         if u_coords is not None and v_coords is not None:
 
@@ -691,8 +691,8 @@ def second_pass(
             c += 1
 
             # Format adjustments to match existing operations
-            u_kind = nx_g.nodes[u].get("kind")
-            v_zx_type = nx_g.nodes[v].get("type")
+            u_kind = cast(str, nx_g.nodes[u].get("kind"))
+            v_zx_type = cast(str, nx_g.nodes[v].get("type"))
             edge = tuple(sorted((u, v)))
 
             # Call pathfinder on any graph edge that does not have an entry in edge_pths
@@ -728,98 +728,100 @@ def second_pass(
 
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
-                clean_pths = run_pthfinder(
-                    (u_coords, u_kind),
-                    v_zx_type,
-                    3,
-                    taken[:],
-                    tgt=(v_coords, nx_g.nodes[v].get("kind")),
-                    hdm=hdm,
-                    min_succ_rate=min_succ_rate,
-                    log_stats_id=log_stats_id,
-                    critical_beams=critical_beams,
-                )
-
-                # Write to edge_pths if an edge is found
-                if clean_pths:
-
-                    # Update edge paths
-                    coords_in_pth = [p[0] for p in clean_pths[0]]  # Take the first path
-                    edge_type = data.get("type", "SIMPLE")
-                    edge_pths[edge] = {
-                        "src_tgt_ids": (u, v),
-                        "pth_coordinates": coords_in_pth,
-                        "pth_nodes": clean_pths[0],
-                        "edge_type": edge_type,
-                    }
-
-                    # Update source info
-                    nx_g.nodes[u]["completed"] += 1
-
-                    # Update target node information
-                    nx_g.nodes[v]["completed"] += 1
-                    nx_g.nodes[v]["beams"] = (
-                        []
-                        if nx_g.nodes[v]["completed"] >= get_node_degree(nx_g, v)
-                        else nx_g.nodes[v]["beams"]
+                v_kind: Optional[str] = nx_g.nodes[v].get("kind")
+                if v_coords and v_kind:
+                    clean_pths = run_pthfinder(
+                        (u_coords, u_kind),
+                        v_zx_type,
+                        3,
+                        taken[:],
+                        tgt=(v_coords, v_kind),
+                        hdm=hdm,
+                        min_succ_rate=min_succ_rate,
+                        log_stats_id=log_stats_id,
+                        critical_beams=critical_beams,
                     )
 
-                    # Add path to position to list of graphs' occupied positions
-                    all_coords_in_pth = get_taken_coords(clean_pths[0])
-                    taken.extend(all_coords_in_pth)
+                    # Write to edge_pths if an edge is found
+                    if clean_pths:
 
-                    if log_stats_id:
-                        print(f"Path discovery: {u} -> {v}. SUCCESS.")
+                        # Update edge paths
+                        coords_in_pth = [p[0] for p in clean_pths[0]]  # Take the first path
+                        edge_type = data.get("type", "SIMPLE")
+                        edge_pths[edge] = {
+                            "src_tgt_ids": (u, v),
+                            "pth_coordinates": coords_in_pth,
+                            "pth_nodes": clean_pths[0],
+                            "edge_type": edge_type,
+                        }
 
-                    # Create visualisation
-                    if visualise[0] or visualise[1]:
+                        # Update source info
+                        nx_g.nodes[u]["completed"] += 1
 
-                        # Create graph from existing edges
-                        partial_lat_nodes, partial_lat_edges = reindex_pth_dict(
-                            edge_pths
+                        # Update target node information
+                        nx_g.nodes[v]["completed"] += 1
+                        nx_g.nodes[v]["beams"] = (
+                            []
+                            if nx_g.nodes[v]["completed"] >= get_node_degree(nx_g, v)
+                            else nx_g.nodes[v]["beams"]
                         )
-                        partial_nx_g, _ = lattice_to_g(
-                            partial_lat_nodes, partial_lat_edges, nx_g
-                        )
 
-                        if visualise[0]:
-                            if visualise[0].lower() == "detail":
-                                current_nodes = (u, v)
-                                vis_3d_g(
-                                    partial_nx_g,
-                                    edge_pths,
-                                    current_nodes,
-                                    hide_ports=hide_ports,
-                                    debug=debug,
-                                    taken=taken,
-                                    fig_data=fig_data,
-                                )
+                        # Add path to position to list of graphs' occupied positions
+                        all_coords_in_pth = get_taken_coords(clean_pths[0])
+                        taken.extend(all_coords_in_pth)
 
-                        # Save visualisation for later animation
-                        if visualise[1]:
-                            if (
-                                visualise[1].lower() == "gif"
-                                or visualise[1].lower() == "mp4"
-                            ):
-                                current_nodes = (u, v)
-                                vis_3d_g(
-                                    partial_nx_g,
-                                    edge_pths,
-                                    current_nodes,
-                                    hide_ports=hide_ports,
-                                    save_to_file=True,
-                                    filename=f"{c_name}{c:03d}",
-                                    debug=debug,
-                                    taken=taken,
-                                    fig_data=fig_data,
-                                )
-                    
-                    # Prune beams before moving to next edge
-                    nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
+                        if log_stats_id:
+                            print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
-                # Write an error to edge_pths if edge not found
-                else:
-                    raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
+                        # Create visualisation
+                        if visualise[0] or visualise[1]:
+
+                            # Create graph from existing edges
+                            partial_lat_nodes, partial_lat_edges = reindex_pth_dict(
+                                edge_pths
+                            )
+                            partial_nx_g, _ = lattice_to_g(
+                                partial_lat_nodes, partial_lat_edges, nx_g
+                            )
+
+                            if visualise[0]:
+                                if visualise[0].lower() == "detail":
+                                    current_nodes = (u, v)
+                                    vis_3d_g(
+                                        partial_nx_g,
+                                        edge_pths,
+                                        current_nodes,
+                                        hide_ports=hide_ports,
+                                        debug=debug,
+                                        taken=taken,
+                                        fig_data=fig_data,
+                                    )
+
+                            # Save visualisation for later animation
+                            if visualise[1]:
+                                if (
+                                    visualise[1].lower() == "gif"
+                                    or visualise[1].lower() == "mp4"
+                                ):
+                                    current_nodes = (u, v)
+                                    vis_3d_g(
+                                        partial_nx_g,
+                                        edge_pths,
+                                        current_nodes,
+                                        hide_ports=hide_ports,
+                                        save_to_file=True,
+                                        filename=f"{c_name}{c:03d}",
+                                        debug=debug,
+                                        taken=taken,
+                                        fig_data=fig_data,
+                                    )
+                        
+                        # Prune beams before moving to next edge
+                        nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
+
+                    # Write an error to edge_pths if edge not found
+                    else:
+                        raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
 
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
     return edge_pths, c, num_2n_pass_edges
