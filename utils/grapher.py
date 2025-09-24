@@ -68,6 +68,7 @@ def figure_to_png(
 
     """
 
+    # PRELIMS
     ax = fig.gca()
     fig.canvas.draw()
     min_x, max_x = float("inf"), float("-inf")
@@ -77,10 +78,11 @@ def figure_to_png(
     artists_data = []
     max_r = 0
 
-    # Phase 1: Data Collection and Bounding Box Calculation
+    # COLLECT ARTISTS DATA & CALC BOUNDING BOX
     for artist in ax.get_children():
         artist_properties = {"type": None, "properties": {}}
 
+        # Nodes/spiders
         if isinstance(artist, mpatches.Circle):
             x, y = artist.get_center()
             r = artist.get_radius()
@@ -102,6 +104,7 @@ def figure_to_png(
                 }
             )
 
+        # Labels
         elif isinstance(artist, mtext.Text):
             x, y = artist.get_position()
             text = artist.get_text()
@@ -118,12 +121,14 @@ def figure_to_png(
                         "properties": {
                             "position": artist.get_position(),
                             "text": text,
+                            "fontsize": artist.get_fontsize(),
                             "horizontalalignment": artist.get_horizontalalignment(),
                             "verticalalignment": artist.get_verticalalignment(),
                         },
                     }
                 )
 
+        # Edges
         elif isinstance(artist, mlines.Line2D):
             x_data, y_data = artist.get_data()
             min_x = min(min_x, np.min(x_data))
@@ -139,10 +144,12 @@ def figure_to_png(
                         "ydata": artist.get_ydata(),
                         "color": artist.get_color(),
                         "linestyle": artist.get_linestyle(),
+                        "alpha": artist.get_alpha() if artist.get_alpha() else 1,
                     },
                 }
             )
 
+        # Curved edges
         elif isinstance(artist, mpatches.PathPatch):
             bbox_display = artist.get_window_extent()
             bbox_data = bbox_display.transformed(ax.transData.inverted())
@@ -168,15 +175,15 @@ def figure_to_png(
         if artist_properties["type"]:
             artists_data.append(artist_properties)
 
-    # Convert processed_ids to a consistent string type
+    # IDs -> STRING
     processed_ids_str = [str(i) for i in processed_ids]
 
-    # Add a small margin
+    # MARGINS
     padding = 0.5
     width = max_x - min_x + padding * 2
     height = max_y - min_y + padding * 2
 
-    # Create new figure
+    # NEW FIGURE
     new_fig = plt.figure(figsize=(width, height), dpi=100)
     new_ax = new_fig.add_axes([0, 0, 1, 1])
     new_ax.set_facecolor(background_color)
@@ -184,11 +191,12 @@ def figure_to_png(
     if new_fig_patch:
         new_fig_patch.set_facecolor(background_color)
 
-    # Phase 2: Recreate Artists in the New Figure
+    # Recreate artists
     label_positions = {}
     for data in artists_data:
         props = data["properties"]
 
+        # Nodes/spiders
         if data["type"] == "circle":
             new_x = props["center"][0] - min_x + padding
             new_y = props["center"][1] - min_y + padding
@@ -202,6 +210,7 @@ def figure_to_png(
             )
             new_ax.add_patch(new_circle)
 
+        # Labels
         elif data["type"] == "text":
             original_text = props["text"]
             is_processed = False
@@ -225,11 +234,12 @@ def figure_to_png(
                     boxstyle="round",
                 ),
             )
-            new_text.set_fontsize(14)
+            new_text.set_fontsize(props["fontsize"])
             new_ax.add_artist(new_text)
 
             label_positions[props["text"]] = props["position"]
 
+        # Edges
         elif data["type"] == "line":
             x_data = [x - min_x + padding for x in props["xdata"]]
             y_data = [y - min_y + padding for y in props["ydata"]]
@@ -238,11 +248,13 @@ def figure_to_png(
                 ydata=y_data,
                 color=props["color"],
                 linestyle=props["linestyle"],
+                alpha=props["alpha"],
                 transform=new_ax.transData,
                 zorder=0,
             )
             new_ax.add_line(new_line)
 
+        # Curved edges
         elif data["type"] == "path":
             path = props["path"]
             vertices = path.vertices
@@ -255,7 +267,6 @@ def figure_to_png(
                 new_end_x = end_point[0] - min_x + padding
                 new_end_y = end_point[1] - min_y + padding
 
-                # Determine the midpoint and a perpendicular offset for the control point
                 mid_x = (new_start_x + new_end_x) / 2
                 mid_y = (new_start_y + new_end_y) / 2
                 dx = new_end_x - new_start_x
@@ -314,33 +325,36 @@ def figure_to_png(
             )
             new_ax.add_line(new_edge)
 
-    # Set limits for the new axes
+    # NEW AX CONFIG
     new_ax.set_xlim(0, width)
     new_ax.set_ylim(0, height)
     new_ax.set_aspect("equal")
     new_ax.axis("off")
 
-    # Add border to overlay to emphasise separation
+    border_inset = 0.05  # A small offset to prevent clipping
     rect = mpatches.Rectangle(
-        (0, 0),
-        width,
-        height,
+        (border_inset, border_inset),
+        width - 2 * border_inset,
+        height - 2 * border_inset,
         facecolor="none",
         edgecolor="gray",
-        linewidth=2,
+        linewidth=1,
         linestyle=":",
         transform=new_ax.transData,
         zorder=10,
     )
     new_ax.add_patch(rect)
 
+    # PNG BUFFER
     png = io.BytesIO()
     new_fig.savefig(png, format="png")
     png.seek(0)
 
+    # CLOSE FIGS TO AVOID OVERLOADS
     plt.close(fig)
     plt.close(new_fig)
 
+    # RETURN PNG BUFFER
     return png
 
 
@@ -605,7 +619,7 @@ def vis_3d_g(
                 linewidth=3,
             )
 
-    # Adjust plot limits
+    # ADJUST PLOT LIMITS
     all_positions = np.array(list(node_positions.values()))
     if all_positions.size > 0:
         max_range = np.ptp(all_positions, axis=0).max() / 2.0
@@ -618,15 +632,12 @@ def vis_3d_g(
         ax.set_ylim([-2, 2])
         ax.set_zlim([-2, 2])
 
-    # Set labels
+    # SET LABELS
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
 
-    # Pop visualisation or save to file
-    repository_root: Path = Path(__file__).resolve().parent.parent
-    temp_folder_pth = repository_root / "outputs/temp"
-
+    # RENDER OVERLAY
     if fig_data:
         png_buffer = figure_to_png(
             fig_data,
@@ -636,6 +647,8 @@ def vis_3d_g(
         overlay_image = Image.open(png_buffer)
         img_width, img_height = overlay_image.size
         aspect_ratio = img_width / img_height
+
+        # Width ratio
         desired_height_ratio = 0.3
         calculated_width_ratio = (
             desired_height_ratio
@@ -643,28 +656,42 @@ def vis_3d_g(
             * aspect_ratio
         )
 
-        # 3. Create a new axes for the overlay, positioned in the bottom-right
-        # Create a new axes for the overlay at the bottom-right
-        # Position is [left, bottom, width, height]
-        margin = 0.02  # Adjust this value as needed for the desired spacing
-        left = (
-            1 - calculated_width_ratio - margin
-        )  # Align to the right side, with a margin
-        bottom = 0.0 + margin  # Align to the bottom, with a margin
+        # Width constraint (20% to 50%)
+        min_width_ratio = 0.3
+        max_width_ratio = 0.5
+        if calculated_width_ratio < min_width_ratio:
+            calculated_width_ratio = min_width_ratio
+        elif calculated_width_ratio > max_width_ratio:
+            calculated_width_ratio = max_width_ratio
 
-        ax_overlay = fig.add_axes(
-            [left, bottom, calculated_width_ratio, desired_height_ratio]
+        # Recalculate height to maintain ratio
+        calculated_height_ratio = (
+            calculated_width_ratio
+            / aspect_ratio
+            * (fig.get_figwidth() / fig.get_figheight())
         )
 
-        # 4. Hide the frame, ticks, and background of the overlay axes
+        # New axes for overlay, positioned bottom-right ([left, bottom, width, height])
+        margin = 0.02
+        left = 1 - calculated_width_ratio - margin  # Align to right
+        bottom = 0.0 + margin  # Align to bottom
+
+        ax_overlay = fig.add_axes(
+            [left, bottom, calculated_width_ratio, calculated_height_ratio]
+        )
+
+        # HIDE UNNECESSARY FEATURES
         ax_overlay.set_xticks([])
         ax_overlay.set_yticks([])
         ax_overlay.axis("off")
 
-        # 5. Use imshow on the new, dedicated 2D axes
+        # OVERLAY IT
         overlay_array = np.asarray(overlay_image)
         ax_overlay.imshow(overlay_array)
 
+    # POP UP OR SAVE VIS
+    repository_root: Path = Path(__file__).resolve().parent.parent
+    temp_folder_pth = repository_root / "outputs/temp"
     if save_to_file:
         Path(temp_folder_pth).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_pth}/{filename}.png")

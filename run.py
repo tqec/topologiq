@@ -15,6 +15,7 @@ from run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
 from scripts.runner import runner
 from utils.interop_pyzx import pyzx_g_to_simple_g
 from utils.classes import SimpleDictGraph
+from utils.simple_grapher import simple_graph_vis
 
 
 ####################
@@ -60,7 +61,7 @@ def run():
     log_stats: bool = False
     debug: bool = False
     fig_data = None
-    
+
     # READ AND HANDLE ANY ARGS GIVEN IN COMMAND
     for arg in sys.argv:
 
@@ -75,6 +76,7 @@ def run():
         if arg.startswith("--graph:"):
             c_name = arg.replace("--graph:", "")
             c_g_dict = getattr(simple_graphs, c_name)
+            fig_data = simple_graph_vis(c_g_dict)
 
         # Look for name of a PyZX graph
         if arg.startswith("--pyzx:"):
@@ -82,32 +84,31 @@ def run():
             pyzx_function = getattr(pyzx_graphs, c_name)
             g, fig_data = pyzx_function(draw_graph=True)
             c_g_dict = pyzx_g_to_simple_g(g)
-        
+
         # Look for visualisation options
         if arg.startswith("--vis:"):
             vis_0 = arg.replace("--vis:", "")
-        
+
         # Look for animation options
         if arg.startswith("--animate:"):
             vis_1 = arg.replace("--animate:", "")
-        
+
         # Look for log_stats to file flag
         if arg.startswith("--log_stats"):
             log_stats = True
-        
+
         # Look for number of repetitions parameter
         if arg.startswith("--repeat:"):
             num_attempts = int(arg.replace("--repeat:", ""))
             stop_on_first_success = False
-        
-                # Look for number of repetitions parameter
+
+            # Look for number of repetitions parameter
         if arg.startswith("--debug"):
             debug = True
-        
 
     # TRIGGER ALGORITHMIC FLOW
     if c_name and c_g_dict["nodes"] and c_g_dict["edges"]:
-        
+
         _, _, _, _ = runner(
             c_g_dict,
             c_name,
