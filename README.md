@@ -52,7 +52,11 @@ python -m venv .venv
 
 Install dependencies.
 ```
-pip install -r requirements.txt
+# Windows
+pip install -r requirements-win.txt
+
+# Linux
+(Coming soon)
 ```
 
 ## Examples
