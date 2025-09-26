@@ -116,8 +116,11 @@ And it is possible to set several visualisation options also via command.
 
 ``` bash
 
+# No visualisations (best for programmatic use)
+python -m run --pyzx:cnots
+
 # Final outcome visualised.
-python -m run --pyzx:cnot --vis:final
+python -m run --pyzx:cnots --vis:final
 
 # Each edge-placement is visualised / a series of progress visualisations.
 python -m run --pyzx:cnots --vis:detail
