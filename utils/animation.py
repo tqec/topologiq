@@ -36,27 +36,32 @@ def create_animation(
     temp_folder_pth = repository_root / "outputs/temp"
 
     image_filenames = os.listdir(temp_folder_pth)
-    image_filenames = [img for img in image_filenames if img.endswith(".png")]
+    image_filenames = sorted([img for img in image_filenames if img.endswith(".png")])
+    print(image_filenames)
 
     # APPEND IMAGES TO AN IMAGES ARRAY
     for filename in image_filenames:
+        print(filename)
         try:
-            image = iio.imread(f"{temp_folder_pth}/{filename}")
+            image_pth = temp_folder_pth / filename
+            image = iio.imread(image_pth)
             images.append(image)
         except FileNotFoundError:
-            print(f"Error: Image file not found: ./{temp_folder_pth}/{filename}")
             return
 
     # BUILD THE GIF
     if images:
         Path(output_folder_pth).mkdir(parents=True, exist_ok=True)
+        
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
         if video:
+            output_file_pth = Path(output_folder_pth, f"{filename_prefix}.mp4")
             # Important! Videos require FFmpeg (the actual thing, not just the Python wrapper)
-            iio.mimsave(f"./{output_folder_pth}/{filename_prefix}.mp4", images, fps=0.7)
+            iio.mimsave(output_file_pth, images, fps=0.7)
         else:
+            output_file_pth = Path(output_folder_pth, f"{filename_prefix}.gif")
             iio.mimsave(
-                f"./{output_folder_pth}/{filename_prefix}.gif",
+                output_file_pth,
                 images,
                 duration=iter_duration,
                 loop=0,
