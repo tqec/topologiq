@@ -7,7 +7,7 @@ In essence, as illustrated in the GIF animation below (more examples [here](./as
 
 *Figure 1. Algorithmic lattice surgery of a CNOT.*
 
-> ***Note.*** Work in progress. Check "main" for latest stable checkpoint. Check "dev" for latest updates.
+> ***Note.*** Work in progress. Check "main" for latest stable checkpoint, or venture into any other open branches for the latest updates.
 
 > ***Note.*** ***Topologiq*** is compatible with [PyZX](https://github.com/zxcalc/pyzx) (incl. [phases & T-gates](./assets/notebooks/pyzx_phases_t_gates.ipynb), [Pauli webs](./assets/notebooks/pyzx_pauli_webs.ipynb), and [QASM interop](./assets/notebooks/qasm_via_pyzx.ipynb)) and, theoretically, any other ZX tool able to produce a similar ZX graphs.
 
@@ -28,6 +28,8 @@ When you name these "primitives" by reference to both the underlying topological
 ## Install
 Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies.
 
+The process below has been tested on Windows and Linux machines. 
+
 Clone. 
 ```
 git clone https://github.com/jbolns/topologiq.git
@@ -37,10 +39,6 @@ Recreate environment.
 ```
 # In the root of the repository.
 
-## GNU/Linux and MacOS
-python -m venv .venv
-source .venv/bin/activate
-
 ## Windows
 ### CMD
 python -m venv .venv
@@ -48,6 +46,11 @@ python -m venv .venv
 ### PowerShell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
+
+## GNU/Linux and MacOS
+python3 -m venv .venv
+source .venv/bin/activate
+
 ```
 
 Install dependencies.
@@ -56,7 +59,7 @@ Install dependencies.
 pip install -r requirements-win.txt
 
 # Linux
-(Coming soon)
+pip install -r requirements-linux.txt
 ```
 
 ## Examples
@@ -70,27 +73,27 @@ All examples except the random circuit have been validated manually: check the [
 
 ``` bash
 # A CNOT, using PyZX.
-python -m run --pyzx:cnot
+python -m run --pyzx:cnot --vis:final
 
 # Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
-python -m run --pyzx:cnots
+python -m run --pyzx:cnots --vis:final
 
 # A medium-size circuit with three interconnected lines.
-python -m run --pyzx:simple_mess
+python -m run --pyzx:simple_mess --vis:final
 
 # Line of hadamards.
-python -m run --graph:hadamard_line
+python -m run --graph:hadamard_line --vis:final
 
 # Circuit with Hadamards on bends.
-python -m run --graph:hadamard_bend
+python -m run --graph:hadamard_bend --vis:final
 
 # A 7-qubit Steane code, from a non-descript graph. 
 # Ps. This is a tightly-packed circuit with several interconnected nodes, so a few rounds might be needed for success.
-python -m run --graph:steane
+python -m run --graph:steane --vis:final
 
 # A mess of hadamards
 # Ps. This is a tightly-packed circuit with several interconnected nodes and a few Hadamards, so a few rounds might be needed for success.
-python -m run --graph:hadamards_mess
+python -m run --graph:hadamards_mess --vis:final
 
 ```
 
@@ -113,8 +116,11 @@ And it is possible to set several visualisation options also via command.
 
 ``` bash
 
+# No visualisations (best for programmatic use)
+python -m run --pyzx:cnots
+
 # Final outcome visualised.
-python -m run --pyzx:cnot --vis:final
+python -m run --pyzx:cnots --vis:final
 
 # Each edge-placement is visualised / a series of progress visualisations.
 python -m run --pyzx:cnots --vis:detail
@@ -163,12 +169,16 @@ A detailed insight into the algorithm and, hopefully, a paper, is in progress. M
   - An automated approach to discovering optimal hyperparameters will eventually be added, but this is not currently available.
   - To vary hyperparameters manually, edit `run_hyper_params.py`.
 
-## Pending
+## Contributing
 Everything is pending, but below a list of highest priorities:
+- Comprehensive testing, including and starting by a way to easily launch the algorithm for any specific circuit using a pre-specified node processing orders (needed for testing and debugging edge cases). 
+- Up-close table and visualisations of a single pathfinding iteration.
 - Improve PyZX support.
-- Detter documentation.
-- More example notebooks.
-- Improve run-times further.
+- Better documentation.
+- More example scripts (no more notebooks, there's too many already), especially for integration of external systems.
+- Improve run-times further, especially for the inner pathfinder algorithm when two pre-existing nodes are very far from one another.
+
+Having said that, at the moment, a pre-requisite to accepting contributions is to develop all the automated workflows needed to manage contributions robustly. To avoid accidents on "main", other contributions are unlikely to be accepted before these workflows are available. It would be awesome if someone wants to contribute the workflows. Else, they'll be ready when they're ready. 
 
 ## License
 This repository is open source software. All code in the repository is under an Apache 2.0 license.
