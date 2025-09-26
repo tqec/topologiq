@@ -28,6 +28,7 @@ def pthfinder(
     hdm: bool = False,
     min_succ_rate: int = 60,
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
+    u_v_ids: Optional[Tuple[int,int]] = None,
     log_stats_id: Union[str, None] = None,
 ) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
     """
@@ -79,6 +80,7 @@ def pthfinder(
         taken=taken_cc,
         hdm=hdm,
         critical_beams=critical_beams,
+        u_v_ids=u_v_ids,
     )
 
     # LOG STATS IF NEEDED
@@ -131,6 +133,7 @@ def core_pthfinder_bfs(
     taken: List[StandardCoord] = [],
     hdm: bool = False,
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
+    u_v_ids: Optional[Tuple[int,int]] = None,
 ) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
     """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
@@ -253,8 +256,12 @@ def core_pthfinder_bfs(
                         beams_broken_for_node = sum(
                             [nxt_coords in beam for beam in beams]
                         )
-                        if len(beams) - beams_broken_for_node < min_exit_num:
+                        
+                        adjust_for_source_node = 1 if node_id in u_v_ids else 0
+                        if len(beams) - beams_broken_for_node < (min_exit_num - adjust_for_source_node):
                             continue
+
+                        
 
             mid_pos = None
             if "o" in curr_kind and scale == 2:
