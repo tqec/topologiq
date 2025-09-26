@@ -18,12 +18,12 @@ def simple_graph_vis(
 
     # COLOURS
     hex_map = {
-        "X": "#FF6961",
-        "Y": "#A8E6CF",
-        "Z": "#77DD77",
-        "O": "#555555",
-        "SIMPLE": "#000000",
-        "HADAMARD": "#1F2DF1",
+        "X": "#d7a4a1",
+        "Y": "#a8e6cf",
+        "Z": "#b9cdff",
+        "O": "#555",
+        "SIMPLE": "#000",
+        "HADAMARD": "#1f2df1",
     }
 
     # CREATE TEMP NX GRAPH FOR LAYOUT & DETERMINE LAYOUT
