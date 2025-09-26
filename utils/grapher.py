@@ -200,7 +200,6 @@ def figure_to_png(
         if data["type"] == "circle":
             new_x = props["center"][0] - min_x + padding
             new_y = props["center"][1] - min_y + padding
-            print(props["facecolor"])
             new_circle = mpatches.Circle(
                 (new_x, new_y),
                 props["radius"],
