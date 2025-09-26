@@ -37,11 +37,9 @@ def create_animation(
 
     image_filenames = os.listdir(temp_folder_pth)
     image_filenames = sorted([img for img in image_filenames if img.endswith(".png")])
-    print(image_filenames)
 
     # APPEND IMAGES TO AN IMAGES ARRAY
     for filename in image_filenames:
-        print(filename)
         try:
             image_pth = temp_folder_pth / filename
             image = iio.imread(image_pth)
