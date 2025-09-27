@@ -1,3 +1,5 @@
+> **Big note.** Topologiq has just migrated to uv, with a non-standard folder structure. Merging to "main" to run actual usage checks was necessary. If nothing works for you right now, please give it a few days. 
+
 # Topologiq: Algorithmic Lattice Surgery
 ***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
@@ -26,41 +28,52 @@ When you name these "primitives" by reference to both the underlying topological
 ***Topologiq*** uses the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
 
 ## Install
-Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies.
-
-The process below has been tested on Windows and Linux machines. 
+Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies. 
 
 Clone. 
-```
+```bash
 git clone https://github.com/jbolns/topologiq.git
 ```
 
 Recreate environment.
+```bash
+
+# UV 
+## 1. Create & Sync
+`uv sync`
+
+## 2. Install project
+`uv pip install`
+
+## 3. Activate environment (optional)
+## Not needed if using uv for commands, but helpful if running examples (see below) using python/python3.
+.venv\Scripts\activate.bat  # Windows
+python3 -m venv .venv  # Linux
+
+
+# Pip
+## 1. Create environment
+`python -m venv .venv`
+
+## 2. Activate environment
+.venv\Scripts\activate.bat  # Windows
+python3 -m venv .venv  # Linux
+
+## 3. Install dependencies
+pip install -r requirements.txt
+
 ```
-# In the root of the repository.
 
-## Windows
-### CMD
-python -m venv .venv
-.venv\Scripts\activate.bat
-### PowerShell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+Alternatively, contributors can opt for an installable installation. 
 
-## GNU/Linux and MacOS
-python3 -m venv .venv
-source .venv/bin/activate
+```bash
+# After running steps 1 & 2 of your chosen method (above)
+uv pip install -e
+# OR (and never both)
+pip install -e
 
 ```
 
-Install dependencies.
-```
-# Windows
-pip install -r requirements-win.txt
-
-# Linux
-pip install -r requirements-linux.txt
-```
 
 ## Examples
 For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times. 
@@ -117,7 +130,7 @@ And it is possible to set several visualisation options also via command.
 ``` bash
 
 # No visualisations (best for programmatic use)
-python -m run --pyzx:cnots
+python -m run --pyzx:cnot
 
 # Final outcome visualised.
 python -m run --pyzx:cnots --vis:final
@@ -125,18 +138,19 @@ python -m run --pyzx:cnots --vis:final
 # Each edge-placement is visualised / a series of progress visualisations.
 python -m run --pyzx:cnots --vis:detail
 
-# A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
-python -m run --pyzx:cnots --animate:GIF
-python -m run --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)
-
-# Run visualisations on debug mode (additional details shown) (only helpful if combined with detail visualisations or animations).
-python -m run --pyzx:cnots --vis:detail --debug
-
 # "BOUNDARIES" considered by algorithm but NOT shown in visualisations.
 python -m run --pyzx:cnot --vis:final --hide_boundaries
 
 # "BOUNDARIES" stripped prior performing any operations and therefore not considered.
 python -m run --pyzx:cnot --vis:final --strip_boundaries
+
+# Run visualisations on debug mode (additional details shown) (only helpful if combined with detail visualisations or animations).
+python -m run --pyzx:cnots --vis:detail --debug
+
+# A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
+python -m run --pyzx:cnots --animate:GIF
+python -m run --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)
+
 
 ```
 
