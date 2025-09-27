@@ -99,7 +99,6 @@ Issues = "https://github.com/jbolns/topologiq/issues"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["find:"]
 
 [tool.setuptools.packages.find]
 where = ["."]
