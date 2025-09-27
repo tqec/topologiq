@@ -98,5 +98,7 @@ Repository = "https://github.com/jbolns/topologiq"
 Issues = "https://github.com/jbolns/topologiq/issues"
 
 [tool.setuptools]
-packages = ["topologiq", "topologiq.scripts", "topologiq.assets"]
+package-dir = {"" = "."}
+packages = ["find:"] 
 include-package-data = true
+
