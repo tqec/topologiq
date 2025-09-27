@@ -45,8 +45,7 @@ Recreate environment.
 ## 2. Install project
 `uv pip install`
 
-## 3. Activate environment (optional)
-## Not needed if using uv for commands, but helpful if running examples (see below) using python/python3.
+## 3. Activate environment [optional, helpful to run examples (see below) as given].
 .venv\Scripts\activate.bat  # Windows
 source .venv/bin/activate  # Linux
 
