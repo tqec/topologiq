@@ -63,10 +63,10 @@ pip install -r requirements.txt
 
 ```
 
-Alternatively, contributors can opt for an installable installation. 
+Alternatively, contributors should opt for an editable installation. 
 
 ```bash
-# After running steps 1 & 2 of your chosen method (above)
+# After running steps 1 & 2 of your chosen method
 uv pip install -e
 # OR (and never both)
 pip install -e
