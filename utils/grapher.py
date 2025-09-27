@@ -203,7 +203,7 @@ def figure_to_png(
             new_circle = mpatches.Circle(
                 (new_x, new_y),
                 props["radius"],
-                facecolor=props["facecolor"],
+                facecolor=props["facecolor"] if props["facecolor"] != (0.8, 1.0, 0.8, 1.0) else "#b9cdff",
                 edgecolor=props["edgecolor"],
                 transform=new_ax.transData,
                 zorder=1,

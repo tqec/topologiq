@@ -503,8 +503,8 @@ def place_nxt_block(
 
                 critical_beams_broken = False
                 for n_id in nx_g.nodes():
-
-                    if n_id != src_id and nx_g.nodes[n_id]["beams"]:
+                    
+                    if nx_g.nodes[n_id]["beams"]:
                         broken = 0
                         for bm in nx_g.nodes[n_id]["beams"]:
                             critical_beams_broken = False
@@ -512,10 +512,11 @@ def place_nxt_block(
                                 beams_broken_by_pth += 1
                                 broken += 1
 
-                            # beams_broken_by_pth += broken
-                            if broken > 4 - get_node_degree(nx_g, n_id):
-                                critical_beams_broken = True
-
+                        # beams_broken_by_pth += broken
+                        adjust_for_source_node = 1 if n_id == src_id else 0
+                        if broken > 4 - (get_node_degree(nx_g, n_id) - adjust_for_source_node):
+                            critical_beams_broken = True
+                            
                 if critical_beams_broken is not True:
                     all_nodes_in_pth = [p for p in clean_pth]
 
@@ -714,8 +715,8 @@ def second_pass(
                         num_edges_still_to_complete = n_degree - n_edges_completed
                         if num_edges_still_to_complete == 0:
                             pass
-                        elif node_id == u or node_id == v:
-                            pass
+                        #elif node_id == u or node_id == v:
+                            #pass
                         else:
                             critical_beams[node_id] = (
                                 num_edges_still_to_complete,
@@ -740,6 +741,7 @@ def second_pass(
                         min_succ_rate=min_succ_rate,
                         log_stats_id=log_stats_id,
                         critical_beams=critical_beams,
+                        u_v_ids=(u,v)
                     )
 
                     # Write to edge_pths if an edge is found
@@ -944,6 +946,7 @@ def run_pthfinder(
     hdm: bool = False,
     min_succ_rate: int = 50,
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
+    u_v_ids: Optional[Tuple[int,int]] = None,
     log_stats_id: Union[str, None] = None,
 ) -> List[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
@@ -1009,6 +1012,7 @@ def run_pthfinder(
             hdm=hdm,
             min_succ_rate=min_succ_rate,
             critical_beams=critical_beams,
+            u_v_ids=u_v_ids,
             log_stats_id=log_stats_id,
         )
 
