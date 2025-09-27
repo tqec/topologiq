@@ -100,6 +100,3 @@ Issues = "https://github.com/jbolns/topologiq/issues"
 [tool.setuptools]
 packages = ["topologiq", "topologiq.scripts", "topologiq.assets"]
 include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["."]
