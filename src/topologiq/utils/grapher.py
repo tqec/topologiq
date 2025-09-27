@@ -18,8 +18,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 from typing import Annotated, Literal, Any, Optional, Tuple, List, IO, Union
 from numpy.typing import NDArray
 
-from utils.utils_pathfinder import check_is_exit, rot_o_kind
-from utils.classes import StandardBlock, StandardCoord
+from topologiq.utils.utils_pathfinder import check_is_exit, rot_o_kind
+from topologiq.utils.classes import StandardBlock, StandardCoord
 
 # CONSTANTS
 node_hex_map = {

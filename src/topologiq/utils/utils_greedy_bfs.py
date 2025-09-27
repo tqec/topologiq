@@ -3,9 +3,9 @@ import networkx as nx
 
 from typing import Tuple, List, Optional
 
-from utils.animation import create_animation
-from utils.classes import StandardCoord, NodeBeams, StandardBlock
-from utils.grapher import lattice_to_g, vis_3d_g
+from topologiq.utils.animation import create_animation
+from topologiq.utils.classes import StandardCoord, NodeBeams, StandardBlock
+from topologiq.utils.grapher import lattice_to_g, vis_3d_g
 
 
 #######################

@@ -1,4 +1,4 @@
-from utils.classes import SimpleDictGraph
+from topologiq.utils.classes import SimpleDictGraph
 
 cnot: SimpleDictGraph = {
     "nodes": [

@@ -3,7 +3,7 @@ from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType
 
-from utils.classes import SimpleDictGraph
+from topologiq.utils.classes import SimpleDictGraph
 
 
 ########################

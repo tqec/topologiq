@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle
 from matplotlib.figure import Figure
-from utils.classes import SimpleDictGraph
+from topologiq.utils.classes import SimpleDictGraph
 
 
 def simple_graph_vis(

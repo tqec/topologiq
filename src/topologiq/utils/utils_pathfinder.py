@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Tuple, List, Optional
 
-from utils.classes import StandardBlock, StandardCoord, NodeBeams, StandardBeam
+from topologiq.utils.classes import StandardBlock, StandardCoord, NodeBeams, StandardBeam
 
 #############################
 # PATHFINDER AUX OPERATIONS #

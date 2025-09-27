@@ -4,16 +4,16 @@ from datetime import datetime
 from collections import deque
 from typing import List, Tuple, Optional, Union, cast
 
-from utils.classes import NodeBeams, StandardCoord, StandardBlock
-from utils.utils_greedy_bfs import gen_tent_tgt_coords
-from utils.utils_pathfinder import (
+from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
+from topologiq.utils.utils_greedy_bfs import gen_tent_tgt_coords
+from topologiq.utils.utils_pathfinder import (
     check_is_exit,
     flip_hdm,
     prune_visited,
     rot_o_kind,
     nxt_kinds,
 )
-from utils.utils_misc import get_max_manhattan, prep_stats_n_log
+from topologiq.utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
 
 ############################

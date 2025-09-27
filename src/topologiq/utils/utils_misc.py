@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any, List, Tuple, Union
 
-from utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
+from topologiq.utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
 
 
 #############

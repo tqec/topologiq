@@ -2,11 +2,11 @@
 .vscode/
 .archive/
 .admin/
-stats_checks.py
+src/topologiq/stats_checks.py
 
 # Outputs
-outputs/
-assets/stats/*.csv
+src/topologiq/outputs/
+src/topologiq/assets/stats/*.csv
 
 # Python 
 .venv/

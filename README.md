@@ -45,10 +45,6 @@ Recreate environment.
 ## 2. Install project
 `uv pip install`
 
-## 3. Activate environment [optional, helpful to run examples (see below) as given].
-.venv\Scripts\activate.bat  # Windows
-source .venv/bin/activate  # Linux
-
 
 # Pip
 ## 1. Create environment
@@ -85,27 +81,35 @@ All examples except the random circuit have been validated manually: check the [
 
 ``` bash
 # A CNOT, using PyZX.
-python -m run --pyzx:cnot --vis:final
+uv run src/topologiq/run.py --pyzx:cnot --vis:final
+python3 src/topologiq/run.py --pyzx:cnot --vis:final  # Requires active .venv
+
 
 # Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
-python -m run --pyzx:cnots --vis:final
+uv run src/topologiq/run.py --pyzx:cnots --vis:final
+python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
 
 # A medium-size circuit with three interconnected lines.
-python -m run --pyzx:simple_mess --vis:final
+uv run src/topologiq/run.py --pyzx:simple_mess --vis:final
+python3 src/topologiq/run.py --pyzx:simple_mess --vis:final  # Requires active .venv
 
 # Line of hadamards.
-python -m run --graph:hadamard_line --vis:final
+uv run src/topologiq/run.py --graph:hadamard_line --vis:final
+python3 src/topologiq/run.py --graph:hadamard_line --vis:final  # Requires active .venv
 
 # Circuit with Hadamards on bends.
-python -m run --graph:hadamard_bend --vis:final
+uv run src/topologiq/run.py --graph:hadamard_bend --vis:final
+python3 src/topologiq/run.py --graph:hadamard_bend --vis:final  # Requires active .venv
 
 # A 7-qubit Steane code, from a non-descript graph. 
 # Ps. This is a tightly-packed circuit with several interconnected nodes, so a few rounds might be needed for success.
-python -m run --graph:steane --vis:final
+uv run src/topologiq/run.py --graph:steane --vis:final
+python3 src/topologiq/run.py --graph:steane --vis:final  # Requires active .venv
 
 # A mess of hadamards
 # Ps. This is a tightly-packed circuit with several interconnected nodes and a few Hadamards, so a few rounds might be needed for success.
-python -m run --graph:hadamards_mess --vis:final
+uv run src/topologiq/run.py --graph:hadamards_mess --vis:final
+python3 src/topologiq/run.py --graph:hadamards_mess --vis:final  # Requires active .venv
 
 ```
 
@@ -114,13 +118,16 @@ There are also additional options that can be appended to any command for debugg
 ``` bash
 
 # Run a circuit normally and log stats for all attempts to complete the specific circuit.
-python -m run --pyzx:cnots --log_stats
+uv run src/topologiq/run.py --pyzx:cnots --log_stats
+python3 src/topologiq/run.py --pyzx:cnots --log_stats  # Requires active .venv
 
 # Run a specific circuit a single time irrespective of outcome.
-python -m run --graph:steane --repeat:1
+uv run src/topologiq/run.py --graph:steane --repeat:1
+python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
 
 # Run a circuit a given number of times and log log stats for all 50 cycles.
-python -m run --pyzx:cnots --repeat:50
+uv run src/topologiq/run.py --pyzx:cnots --repeat:50
+python3 src/topologiq/run.py --pyzx:cnots --repeat:50  # Requires active .venv
 
 ```
 
@@ -129,26 +136,34 @@ And it is possible to set several visualisation options also via command.
 ``` bash
 
 # No visualisations (best for programmatic use)
-python -m run --pyzx:cnot
+uv run src/topologiq/run.py --pyzx:cnot
+python3 src/topologiq/run.py --pyzx:cnot  # Requires active .venv
 
 # Final outcome visualised.
-python -m run --pyzx:cnots --vis:final
+uv run src/topologiq/run.py --pyzx:cnots --vis:final
+python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
 
 # Each edge-placement is visualised / a series of progress visualisations.
-python -m run --pyzx:cnots --vis:detail
+uv run src/topologiq/run.py --pyzx:cnots --vis:detail
+python3 src/topologiq/run.py --pyzx:cnots --vis:detail  # Requires active .venv
 
 # "BOUNDARIES" considered by algorithm but NOT shown in visualisations.
-python -m run --pyzx:cnot --vis:final --hide_boundaries
+uv run src/topologiq/run.py --pyzx:cnot --vis:final --hide_boundaries
+python3 src/topologiq/run.py --pyzx:cnot --vis:final --hide_boundaries  # Requires active .venv
 
 # "BOUNDARIES" stripped prior performing any operations and therefore not considered.
-python -m run --pyzx:cnot --vis:final --strip_boundaries
+uv run src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries
+python3 src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries  # Requires active .venv
 
 # Run visualisations on debug mode (additional details shown) (only helpful if combined with detail visualisations or animations).
-python -m run --pyzx:cnots --vis:detail --debug
+uv run src/topologiq/run.py --pyzx:cnots --vis:detail --debug
+python3 src/topologiq/run.py --pyzx:cnots --vis:detail --debug  # Requires active .venv
 
 # A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
-python -m run --pyzx:cnots --animate:GIF
-python -m run --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)
+uv run src/topologiq/run.py --pyzx:cnots --animate:GIF
+uv run src/topologiq/run.py --pyzx:cnots --animate:MP4
+python3 src/topologiq/run.py --pyzx:cnots --animate:GIF  # Requires active .venv
+python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)  # Requires active .venv
 
 
 ```

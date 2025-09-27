@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Tuple
-from utils.classes import SimpleDictGraph
+from topologiq.utils.classes import SimpleDictGraph
 
 
 def strip_boundaries(c_g: SimpleDictGraph) -> SimpleDictGraph:

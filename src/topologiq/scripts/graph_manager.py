@@ -6,20 +6,20 @@ from collections import deque
 from typing import Tuple, List, Optional, Any, Union, cast
 
 import matplotlib.figure
-from scripts.pathfinder import pthfinder, get_taken_coords
-from utils.animation import create_animation
-from utils.utils_greedy_bfs import (
+from topologiq.scripts.pathfinder import pthfinder, get_taken_coords
+from topologiq.utils.animation import create_animation
+from topologiq.utils.utils_greedy_bfs import (
     find_start_id,
     get_node_degree,
     gen_tent_tgt_coords,
     prune_beams,
     reindex_pth_dict,
 )
-from utils.utils_pathfinder import check_exits
-from utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
-from utils.grapher import lattice_to_g, vis_3d_g
-from utils.utils_misc import prep_stats_n_log
-from utils.classes import (
+from topologiq.utils.utils_pathfinder import check_exits
+from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
+from topologiq.utils.grapher import lattice_to_g, vis_3d_g
+from topologiq.utils.utils_misc import prep_stats_n_log
+from topologiq.utils.classes import (
     PathBetweenNodes,
     StandardBlock,
     NodeBeams,

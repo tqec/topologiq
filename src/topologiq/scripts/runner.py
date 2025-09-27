@@ -5,12 +5,12 @@ from datetime import datetime
 from typing import List, Optional, Tuple, Union
 import matplotlib.figure
 
-from scripts.graph_manager import graph_manager_bfs
-from utils.utils_misc import write_outputs
-from utils.utils_zx_graphs import strip_boundaries
-from utils.grapher import vis_3d_g, lattice_to_g
-from utils.animation import create_animation
-from utils.classes import Colors, SimpleDictGraph, StandardBlock
+from topologiq.scripts.graph_manager import graph_manager_bfs
+from topologiq.utils.utils_misc import write_outputs
+from topologiq.utils.utils_zx_graphs import strip_boundaries
+from topologiq.utils.grapher import vis_3d_g, lattice_to_g
+from topologiq.utils.animation import create_animation
+from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 
 
 ####################

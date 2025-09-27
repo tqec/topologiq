@@ -9,13 +9,13 @@
 
 import sys
 
-from assets.graphs import simple_graphs, pyzx_graphs
-from run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
+from topologiq.assets.graphs import simple_graphs, pyzx_graphs
+from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
 
-from scripts.runner import runner
-from utils.interop_pyzx import pyzx_g_to_simple_g
-from utils.classes import SimpleDictGraph
-from utils.simple_grapher import simple_graph_vis
+from topologiq.scripts.runner import runner
+from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
+from topologiq.utils.classes import SimpleDictGraph
+from topologiq.utils.simple_grapher import simple_graph_vis
 
 
 ####################
