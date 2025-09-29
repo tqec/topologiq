@@ -42,9 +42,6 @@ Recreate environment.
 ## 1. Create & Sync
 `uv sync`
 
-## 2. Install project
-`uv pip install`
-
 
 # Pip
 ## 1. Create environment
@@ -62,7 +59,7 @@ pip install -r requirements.txt
 Alternatively, contributors should opt for an editable installation. 
 
 ```bash
-# After running steps 1 & 2 of your chosen method
+# After running steps 1 of UV method or steps 1 & 2 of pip method
 uv pip install -e
 # OR (and never both)
 pip install -e

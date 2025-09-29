@@ -9,7 +9,7 @@ description = "An algorithmic lattice surgery tool to automatically convert ZX g
 readme = "README.md"
 license = { file = "LICENSE" }
 keywords = ["topological quantum error correction", "qec", "zx-calculus", "lattice surgery"]
-requires-python = ">=3.13"
+requires-python = ">= 3.10, <3.15"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
