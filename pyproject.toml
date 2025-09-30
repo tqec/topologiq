@@ -37,7 +37,7 @@ dependencies = [
     "debugpy>=1.8.10",
     "decorator==5.2.1",
     "dill==0.4.0",
-    "executing==2.2.0",
+    "executing>=2.2.0",
     "fonttools>=4.50",
     "imageio==2.37.0",
     "imageio-ffmpeg==0.6.0",
