@@ -1,5 +1,3 @@
-> **Big note.** Topologiq has just migrated to uv, with a non-standard folder structure. Merging to "main" to run actual usage checks was necessary. If nothing works for you right now, please give it a few days. 
-
 # Topologiq: Algorithmic Lattice Surgery
 ***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
@@ -28,92 +26,88 @@ When you name these "primitives" by reference to both the underlying topological
 ***Topologiq*** uses the topological properties of these "primitives" to traverse a ZX graph, place its nodes in a 3D space, and devise the operations needed to deliver a topologically-correct space-time diagram.
 
 ## Install
-Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install all dependencies. 
+Currently, the best way to test ***topologiq*** is to clone the repository, recreate the environment, and install dependencies.
 
-Clone. 
+**Step 1.** Clone. 
 ```bash
 git clone https://github.com/jbolns/topologiq.git
 ```
 
-Recreate environment.
+**Step 2.** Recreate environment.
+
+Choose between an UV or a pip installation (one or the other, not both).
+
+*Using UV.*
 ```bash
+# 1. Create & Sync
+uv sync
+```
 
-# UV 
-## 1. Create & Sync
-`uv sync`
+*Using pip.*
+```bash
+# 1. Create environment
+python -m venv .venv
 
-
-# Pip
-## 1. Create environment
-`python -m venv .venv`
-
-## 2. Activate environment
+# 2. Activate environment
 .venv\Scripts\activate.bat  # Windows
 source .venv/bin/activate  # Linux
 
-## 3. Install dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
-
 ```
 
-Alternatively, contributors should opt for an editable installation. 
+**For contributors.** Contributors should opt for an editable installation.
 
 ```bash
 # After running steps 1 of UV method or steps 1 & 2 of pip method
+
 uv pip install -e
+
 # OR (and never both)
+
 pip install -e
 
 ```
 
 
 ## Examples
-For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times. 
+For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times.
 
 A succesfull result will produce a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`) (all information printed to this TXT file is also available for programmatic use). There are also optional parameters to trigger a variety of visualisations and summary animations.
-
-All examples except the random circuit have been validated manually: check the [validation folder](./assets/validation/) for summary documents.
-
-> *NB! The validation documents are currently outdated as recent improvements have fundamentally altered outputs.*
 
 ``` bash
 # A CNOT, using PyZX.
 uv run src/topologiq/run.py --pyzx:cnot --vis:final
 python3 src/topologiq/run.py --pyzx:cnot --vis:final  # Requires active .venv
 
-
-# Random series of CNOTs, using PyZX: CNOT_HAD_PHASE_circuit().
+# Random series of CNOTs, using PyZX.
 uv run src/topologiq/run.py --pyzx:cnots --vis:final
 python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
 
-# A medium-size circuit with three interconnected lines.
+# A medium-size circuit with three interconnected lines, using PyZX.
 uv run src/topologiq/run.py --pyzx:simple_mess --vis:final
 python3 src/topologiq/run.py --pyzx:simple_mess --vis:final  # Requires active .venv
 
-# Line of hadamards.
+# Line of hadamards, using a non-descript ZX-graph.
 uv run src/topologiq/run.py --graph:hadamard_line --vis:final
 python3 src/topologiq/run.py --graph:hadamard_line --vis:final  # Requires active .venv
 
-# Circuit with Hadamards on bends.
+# Circuit with Hadamards on bends, using a non-descript ZX-graph.
 uv run src/topologiq/run.py --graph:hadamard_bend --vis:final
 python3 src/topologiq/run.py --graph:hadamard_bend --vis:final  # Requires active .venv
 
-# A 7-qubit Steane code, from a non-descript graph. 
-# Ps. This is a tightly-packed circuit with several interconnected nodes, so a few rounds might be needed for success.
+# A 7-qubit Steane code, using a non-descript ZX-graph. 
 uv run src/topologiq/run.py --graph:steane --vis:final
 python3 src/topologiq/run.py --graph:steane --vis:final  # Requires active .venv
 
-# A mess of hadamards
-# Ps. This is a tightly-packed circuit with several interconnected nodes and a few Hadamards, so a few rounds might be needed for success.
+# A mess of hadamards, using a non-descript ZX-graph.
 uv run src/topologiq/run.py --graph:hadamards_mess --vis:final
 python3 src/topologiq/run.py --graph:hadamards_mess --vis:final  # Requires active .venv
-
 ```
 
 There are also additional options that can be appended to any command for debugging and statistical purposes.
 
 ``` bash
-
 # Run a circuit normally and log stats for all attempts to complete the specific circuit.
 uv run src/topologiq/run.py --pyzx:cnots --log_stats
 python3 src/topologiq/run.py --pyzx:cnots --log_stats  # Requires active .venv
@@ -125,13 +119,11 @@ python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
 # Run a circuit a given number of times and log log stats for all 50 cycles.
 uv run src/topologiq/run.py --pyzx:cnots --repeat:50
 python3 src/topologiq/run.py --pyzx:cnots --repeat:50  # Requires active .venv
-
 ```
 
 And it is possible to set several visualisation options also via command.
 
 ``` bash
-
 # No visualisations (best for programmatic use)
 uv run src/topologiq/run.py --pyzx:cnot
 python3 src/topologiq/run.py --pyzx:cnot  # Requires active .venv
@@ -160,9 +152,7 @@ python3 src/topologiq/run.py --pyzx:cnots --vis:detail --debug  # Requires activ
 uv run src/topologiq/run.py --pyzx:cnots --animate:GIF
 uv run src/topologiq/run.py --pyzx:cnots --animate:MP4
 python3 src/topologiq/run.py --pyzx:cnots --animate:GIF  # Requires active .venv
-python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires FFmpeg (the actual thing, not just the Python package)  # Requires active .venv
-
-
+python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires active .venv. Requires FFmpeg.
 ```
 
 ## Use your own circuits

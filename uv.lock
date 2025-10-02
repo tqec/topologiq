@@ -1494,7 +1494,7 @@ requires-dist = [
     { name = "debugpy", specifier = ">=1.8.10" },
     { name = "decorator", specifier = "==5.2.1" },
     { name = "dill", specifier = "==0.4.0" },
-    { name = "executing", specifier = "==2.2.0" },
+    { name = "executing", specifier = ">=2.2.0" },
     { name = "fonttools", specifier = ">=4.50" },
     { name = "imageio", specifier = "==2.37.0" },
     { name = "imageio-ffmpeg", specifier = "==0.6.0" },
