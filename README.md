@@ -1,15 +1,15 @@
 # Topologiq: Algorithmic Lattice Surgery
 ***Topologiq*** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
-In essence, as illustrated in the GIF animation below (more examples [here](./assets/media/)), ***topologiq*** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram that can more easily be consumed by other quantum error correction (QEC) software/tools.
+In essence, as illustrated in the GIF animation below (more examples [here](./src/topologiq/assets/media/)), ***topologiq*** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram that can more easily be consumed by other quantum error correction (QEC) software/tools.
 
-![Algorithmic lattice surgery of a CNOT](./assets/media/cnots.gif)
+![Algorithmic lattice surgery of a CNOT](./src/topologiq/assets/media/cnots.gif)
 
 *Figure 1. Algorithmic lattice surgery of a CNOT.*
 
 > ***Note.*** Work in progress. Check "main" for latest stable checkpoint, or venture into any other open branches for the latest updates.
 
-> ***Note.*** ***Topologiq*** is compatible with [PyZX](https://github.com/zxcalc/pyzx) (incl. [phases & T-gates](./assets/notebooks/pyzx_phases_t_gates.ipynb), [Pauli webs](./assets/notebooks/pyzx_pauli_webs.ipynb), and [QASM interop](./assets/notebooks/qasm_via_pyzx.ipynb)) and, theoretically, any other ZX tool able to produce a similar ZX graphs.
+> ***Note.*** ***Topologiq*** is compatible with [PyZX](https://github.com/zxcalc/pyzx) (incl. [phases & T-gates](./src/topologiq/assets/notebooks/pyzx_phases_t_gates.ipynb), [Pauli webs](./src/topologiq/assets/notebooks/pyzx_pauli_webs.ipynb), and [QASM interop](./src/topologiq/assets/notebooks/qasm_via_pyzx.ipynb)) and, theoretically, any other ZX tool able to produce a similar ZX graphs.
 
 ## Background
 ZX-calculus<sup>[1-7]</sup> is a helpful and intuitive way to represent and manipulate design quantum circuits. Virtues notwithstanding, ZX-circuits/graphs are not immediately amicable to QEC. Barring unexpected developments on the hardware front, there is a need to convert them into logical computations resilient to errors.
@@ -73,7 +73,7 @@ pip install -e
 ## Examples
 For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times.
 
-A succesfull result will produce a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./outputs/txt/`) (all information printed to this TXT file is also available for programmatic use). There are also optional parameters to trigger a variety of visualisations and summary animations.
+A succesfull result will produce a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./src/topologiq/outputs/txt/`) (all information printed to this TXT file is also available for programmatic use). There are also optional parameters to trigger a variety of visualisations and summary animations.
 
 ``` bash
 # A CNOT, using PyZX.
@@ -157,17 +157,17 @@ python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires active .venv
 
 ## Use your own circuits
 It would be great to hear of tests using other circuits.
-- You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `assets/graphs/simple_graphs.py` for examples.
+- You can use a non-descript ZX graph defined as a dictionary of nodes and edges. See `./src/topologiq/assets/graphs/simple_graphs.py` for examples.
   - No visualisation of input graphs currently available.
-- You can also use a PyZX graph. See check `run.py` for a blueprint of the process needed and `assets/graphs/pyzx_graphs.py` for examples of graphs.
-  - Feed PyZX's Matplotlib figure (`fig = zx.draw_matplotlib(...)`) to the algorithm using the `fig_data` optional parameter of `scripts/runner.py/`'s `runner()` function to get the PyZX graph overlayed over final output visualisations.
+- You can also use a PyZX graph. See check `run.py` for a blueprint of the process needed and `./src/topologiq/assets/graphs/pyzx_graphs.py` for examples of graphs.
+  - Feed PyZX's Matplotlib figure (`fig = zx.draw_matplotlib(...)`) to the algorithm using the `fig_data` optional parameter of `./src/topologiq/scripts/runner.py/`'s `runner()` function to get the PyZX graph overlayed over final output visualisations.
 
 ## Yeah, but how does it work, really?
 A detailed insight into the algorithm and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of the inner workings of the algorithm. 
 
 **In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
-- ***Native format:*** A simple dictionary of nodes and edges (see `assets/graphs/simple_graphs.py` for examples).
-- ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `assets/graphs/pyzx_graphs.py` for examples).
+- ***Native format:*** A simple dictionary of nodes and edges (see `./src/topologiq/assets/graphs/simple_graphs.py` for examples).
+- ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `./src/topologiq/assets/graphs/pyzx_graphs.py` for examples).
   - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
 
 **After,** the algorithm will traverse the ZX graph transforming each node into an equivalent "primitive" and position it in a way that honours the original graph. This second part of the process is itself divided into several stages:
