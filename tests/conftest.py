@@ -1,11 +1,12 @@
 """Pytest configuration and fixtures for topologiq tests."""
+
 import pytest
 
 
 @pytest.fixture
 def simple_graph():
     """Fixture providing a simple test graph.
-    
+
     Returns a basic graph structure compatible with topologiq's
     SimpleDictGraph format.
     """
