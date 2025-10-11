@@ -91,8 +91,77 @@ dependencies = [
     "widgetsnbextension==4.0.14",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.8.0",
+    "mypy>=1.10.0",
+    "pre-commit>=4.0.0",
+    "types-networkx",
+]
+
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
 [project.urls]
 Website = "https://github.com/jbolns/topologiq"
 Documentation = "https://github.com/jbolns/topologiq"
 Repository = "https://github.com/jbolns/topologiq"
 Issues = "https://github.com/jbolns/topologiq/issues"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["*.ipynb", "*.dae"]
+
+[tool.ruff.lint]
+# Simplified from tqec - topologiq is early stage
+select = ["E", "F", "W", "I", "PL", "RUF"]
+
+ignore = [
+  # PLR091{2,3,5} - Complex functions are acceptable for now
+  # PLR2004 - Magic values acceptable for algorithm development
+  "PLR0912", "PLR0913", "PLR0915", "PLR2004",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests don't need full documentation
+"tests/**/*.py" = ["D"]
+"**/*_test.py" = ["D"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["topologiq"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_return_any = true
+# Lenient for early-stage project
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "pyzx",
+  "pyzx.*",
+  "networkx",
+  "networkx.*",
+  "matplotlib",
+  "matplotlib.*",
+  "scipy",
+  "scipy.*",
+  "pandas",
+  "pandas.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"

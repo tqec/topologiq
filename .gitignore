@@ -11,3 +11,21 @@ src/topologiq/assets/stats/*.csv
 # Python 
 .venv/
 **/__pycache__/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Pre-commit
+.pre-commit-config.yaml.backup
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
