@@ -29,3 +29,11 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+# Personal reference docs (not for commit)
+*_REPORT.md
+*_PLAN.md
+*_VALIDATED.md
+*_REVIEW.md
+*_SUMMARY.md
+QUICK_START*.md
+COMMIT_AND_PR_TEXT.md

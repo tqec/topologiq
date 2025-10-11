@@ -91,19 +91,25 @@ dependencies = [
     "widgetsnbextension==4.0.14",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
-    "ruff>=0.8.0",
-    "mypy>=1.10.0",
-    "pre-commit>=4.0.0",
-    "types-networkx",
+[dependency-groups]
+test = [
+    "pytest<=8.4.1",
+    "pytest-cov<=7.0.0",
+    "types-networkx<=3.5.0.20250918",
 ]
 
-test = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
+dev = [
+    "pytest<=8.4.1",
+    "pytest-cov<=7.0.0",
+    "ruff==0.12.5",  # Fixed version for consistency
+    "mypy<=1.18.0",
+    "pre-commit<=4.3.0",
+    "types-networkx<=3.5.0.20250918",
+]
+
+all = [
+    {include-group = "test"},
+    {include-group = "dev"},
 ]
 
 [project.urls]
