@@ -1,21 +1,19 @@
 import random
+
 import networkx as nx
 
-from typing import Tuple, List, Optional
-
-from topologiq.utils.animation import create_animation
-from topologiq.utils.classes import StandardCoord, NodeBeams, StandardBlock
-from topologiq.utils.grapher import lattice_to_g, vis_3d_g
+from topologiq.utils.classes import NodeBeams, StandardBlock, StandardCoord
 
 
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_start_id(nx_g: nx.Graph) -> int:
+def find_start_id(nx_g: nx.Graph, force_src_id: int | None = None) -> int:
     """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
 
     Args:
         - nx_g: an nx_graph.
+        - force_src_id: optional parameter to force a specific start node ID for reproducible testing (Issue #8).
 
     Returns:
         - src_id: the ID of the node with highest closeness centrality or a random selection from a list of highest degree nodes.
@@ -26,9 +24,16 @@ def find_start_id(nx_g: nx.Graph) -> int:
     if not nx_g.nodes:
         raise ValueError("Start node not found")
 
+    # RETURN FORCED NODE IF PROVIDED (Issue #8)
+    if force_src_id is not None:
+        if force_src_id in nx_g.nodes:
+            return force_src_id
+        else:
+            raise ValueError(f"Forced src_id {force_src_id} not found in graph nodes")
+
     # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
     max_d = -1
-    centr_nodes: List[int] = []
+    centr_nodes: list[int] = []
 
     nodes_ds = nx_g.degree
 
@@ -82,8 +87,8 @@ def get_node_degree(g: nx.Graph, node: int) -> int:
 def gen_tent_tgt_coords(
     src_c: StandardCoord,
     max_manhattan: int = 3,
-    taken: List[StandardCoord] = [],
-) -> List[StandardCoord]:
+    taken: list[StandardCoord] = [],
+) -> list[StandardCoord]:
     """Generates a number of potential placement positions for target node.
 
     Args:
@@ -180,8 +185,8 @@ def gen_tent_tgt_coords(
 
 
 def prune_beams(
-    nx_g: nx.Graph, all_beams: List[NodeBeams], taken: List[StandardCoord]
-) -> Tuple[nx.Graph, List[NodeBeams]]:
+    nx_g: nx.Graph, all_beams: list[NodeBeams], taken: list[StandardCoord]
+) -> tuple[nx.Graph, list[NodeBeams]]:
     """Removes beams that have already been broken, as these are no longer indicative of anything.
     Args:
         - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
@@ -198,7 +203,7 @@ def prune_beams(
             ]
             if iter_beams:
                 new_beams.append(iter_beams)
-    except (IndexError, ValueError, LookupError, KeyError) as e:
+    except (IndexError, ValueError, LookupError, KeyError):
         new_beams = all_beams
 
     try:
@@ -216,7 +221,7 @@ def prune_beams(
                             new_beams.append(beam)
 
                     nx_g.nodes[n_id]["beams"] = new_beams
-    except (IndexError, ValueError, LookupError, KeyError) as e:
+    except (IndexError, ValueError, LookupError, KeyError):
         nx_g = nx_g
 
     return nx_g, new_beams
@@ -224,7 +229,7 @@ def prune_beams(
 
 def reindex_pth_dict(
     edge_pths: dict,
-) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], List[str]]]:
+) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
     """Distils an edge_pth object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
 
     Args:
@@ -281,7 +286,7 @@ def reindex_pth_dict(
                 final_edges[(n1, n2)] = [e_type, orig_key]
 
     lat_nodes: dict[int, StandardBlock] = {}
-    lat_edges: dict[Tuple[int, int], List[str]] = {}
+    lat_edges: dict[tuple[int, int], list[str]] = {}
     for pth in idx_pths.values():
         keys = list(pth.keys())
         i = 0

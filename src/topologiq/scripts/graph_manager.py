@@ -1,32 +1,32 @@
 import random
-import networkx as nx
-
-from datetime import datetime
 from collections import deque
-from typing import Tuple, List, Optional, Any, Union, cast
+from datetime import datetime
+from typing import Any, cast
 
 import matplotlib.figure
-from topologiq.scripts.pathfinder import pthfinder, get_taken_coords
+import networkx as nx
+
+from topologiq.scripts.pathfinder import get_taken_coords, pthfinder
 from topologiq.utils.animation import create_animation
+from topologiq.utils.classes import (
+    Colors,
+    NodeBeams,
+    PathBetweenNodes,
+    SimpleDictGraph,
+    StandardBlock,
+    StandardCoord,
+)
+from topologiq.utils.grapher import lattice_to_g, vis_3d_g
 from topologiq.utils.utils_greedy_bfs import (
     find_start_id,
-    get_node_degree,
     gen_tent_tgt_coords,
+    get_node_degree,
     prune_beams,
     reindex_pth_dict,
 )
+from topologiq.utils.utils_misc import prep_stats_n_log
 from topologiq.utils.utils_pathfinder import check_exits
 from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
-from topologiq.utils.grapher import lattice_to_g, vis_3d_g
-from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.classes import (
-    PathBetweenNodes,
-    StandardBlock,
-    NodeBeams,
-    SimpleDictGraph,
-    StandardCoord,
-    Colors,
-)
 
 
 ###############################
@@ -37,17 +37,19 @@ def graph_manager_bfs(
     c_name: str = "circuit",
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats_id: Union[str, None] = None,
+    visualise: tuple[None | str, None | str] = (None, None),
+    log_stats_id: str | None = None,
     debug: bool = False,
-    fig_data: Optional[matplotlib.figure.Figure] = None,
+    fig_data: matplotlib.figure.Figure | None = None,
+    force_src_id: int | None = None,
+    force_src_kind: str | None = None,
     **kwargs,
-) -> Tuple[
+) -> tuple[
     nx.Graph,
     dict,
     int,
-    Union[None, dict[int, StandardBlock]],
-    Union[None, dict[Tuple[int, int], List[str]]],
+    None | dict[int, StandardBlock],
+    None | dict[tuple[int, int], list[str]],
 ]:
     """Manages the generalities of the BFS process.
 
@@ -74,6 +76,8 @@ def graph_manager_bfs(
             - True: debugging mode on,
             - False: debugging mode off.
         - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
+        - force_src_id: optional parameter to force a specific start node ID for reproducible testing (Issue #8).
+        - force_src_kind: optional parameter to force a specific start node kind for reproducible testing (Issue #8).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -105,13 +109,13 @@ def graph_manager_bfs(
 
     num_nodes_input: int = 0
     num_1st_pass_edges: int = 0
-    lat_nodes: Union[None, dict[int, StandardBlock]] = None
-    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
+    lat_nodes: None | dict[int, StandardBlock] = None
+    lat_edges: None | dict[tuple[int, int], list[str]] = None
 
     # BFS management
-    src: Optional[int] = find_start_id(nx_g)
-    taken: List[StandardCoord] = []
-    all_beams: List[NodeBeams] = []
+    src: int | None = find_start_id(nx_g, force_src_id=force_src_id)
+    taken: list[StandardCoord] = []
+    all_beams: list[NodeBeams] = []
     edge_pths: dict = {}
 
     queue: deque[int] = deque([src])
@@ -131,9 +135,15 @@ def graph_manager_bfs(
     # Place start node at origin
     else:
 
-        # Get kind from type family
-        tent_kinds: Optional[List[str]] = nx_g.nodes[src].get("type_fam")
-        random_kind = random.choice(tent_kinds) if tent_kinds else None
+        # Get kind from type family or use forced kind (Issue #8)
+        tent_kinds: list[str] | None = nx_g.nodes[src].get("type_fam")
+        if force_src_kind is not None:
+            if tent_kinds and force_src_kind in tent_kinds:
+                random_kind = force_src_kind
+            else:
+                raise ValueError(f"Forced src_kind '{force_src_kind}' not valid for node {src}. Available kinds: {tent_kinds}")
+        else:
+            random_kind = random.choice(tent_kinds) if tent_kinds else None
 
         # Update list of taken coords and all_beams with node's position & beams
         taken.append((0, 0, 0))
@@ -164,7 +174,7 @@ def graph_manager_bfs(
         curr_parent: int = queue.popleft()
 
         # Iterate over neighbours of current parent node
-        for neigh_id in cast(List[int], nx_g.neighbors(curr_parent)):
+        for neigh_id in cast(list[int], nx_g.neighbors(curr_parent)):
 
             # Queue and add to visited set if BFS just arrived at node
             if neigh_id not in visited:
@@ -397,14 +407,14 @@ def place_nxt_block(
     src_id: int,
     neigh_id: int,
     nx_g: nx.Graph,
-    taken: List[StandardCoord],
-    all_beams: List[NodeBeams],
+    taken: list[StandardCoord],
+    all_beams: list[NodeBeams],
     edge_pths: dict,
     init_step: int = 3,
     min_succ_rate: int = 50,
-    log_stats_id: Union[str, None] = None,
+    log_stats_id: str | None = None,
     **kwargs,
-) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
+) -> tuple[list[StandardCoord], list[NodeBeams], dict, bool]:
     """Takes care of positioning nodes in the 3D space as part of the outer (graph manager) BFS flow. The function does not explicitly create the paths,
     this is the responsibility of the inner *pathfinder* algorithm. However, the function generates a number of tentative positions
     and calls the pathfinder for each of these positions, to be able to return a best path from many.
@@ -441,15 +451,15 @@ def place_nxt_block(
 
     # EXTRACT STANDARD INFO APPLICABLE TO ALL NODES
     # Previous node data
-    src_coords: Optional[StandardCoord] = nx_g.nodes[src_id].get("pos")
-    src_kind: Optional[str] = nx_g.nodes[src_id].get("kind")
+    src_coords: StandardCoord | None = nx_g.nodes[src_id].get("pos")
+    src_kind: str | None = nx_g.nodes[src_id].get("kind")
 
     if src_coords is None or src_kind is None:
         return taken, all_beams, edge_pths, False
     src: StandardBlock = (src_coords, src_kind)
 
     # Current node data
-    nxt_neigh_coords: Optional[StandardCoord] = nx_g.nodes[neigh_id].get("pos")
+    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[neigh_id].get("pos")
 
     # DEAL WITH CASES WHERE NEW NODE NEEDS TO BE ADDED TO GRID
     if nxt_neigh_coords is None:
@@ -503,7 +513,7 @@ def place_nxt_block(
 
                 critical_beams_broken = False
                 for n_id in nx_g.nodes():
-                    
+
                     if nx_g.nodes[n_id]["beams"]:
                         broken = 0
                         for bm in nx_g.nodes[n_id]["beams"]:
@@ -516,7 +526,7 @@ def place_nxt_block(
                         adjust_for_source_node = 1 if n_id == src_id else 0
                         if broken > 4 - (get_node_degree(nx_g, n_id) - adjust_for_source_node):
                             critical_beams_broken = True
-                            
+
                 if critical_beams_broken is not True:
                     all_nodes_in_pth = [p for p in clean_pth]
 
@@ -537,7 +547,7 @@ def place_nxt_block(
 
                     viable_pths.append(PathBetweenNodes(**pth_data))
 
-        winner_pth: Optional[PathBetweenNodes] = None
+        winner_pth: PathBetweenNodes | None = None
         if viable_pths:
             winner_pth = max(viable_pths, key=lambda pth: pth.weighed_value(**kwargs))
 
@@ -624,18 +634,18 @@ def place_nxt_block(
 
 def second_pass(
     nx_g: nx.Graph,
-    taken: List[StandardCoord],
+    taken: list[StandardCoord],
     edge_pths: dict,
     c_name: str,
     c: int,
-    all_beams: List[NodeBeams],
+    all_beams: list[NodeBeams],
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats_id: Union[str, None] = None,
+    visualise: tuple[None | str, None | str] = (None, None),
+    log_stats_id: str | None = None,
     debug: bool = False,
-    fig_data: Optional[matplotlib.figure.Figure] = None,
-) -> Tuple[dict, int, int]:
+    fig_data: matplotlib.figure.Figure | None = None,
+) -> tuple[dict, int, int]:
     """Undertakes a second pass of the graph to process any edges missed by the original BFS,
     which typically happens when there are multiple interconnected nodes.
 
@@ -683,8 +693,8 @@ def second_pass(
         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
         # Get source and target node for specific edge
-        u_coords: Optional[StandardCoord] = nx_g.nodes[u].get("pos")
-        v_coords: Optional[StandardCoord] = nx_g.nodes[v].get("pos")
+        u_coords: StandardCoord | None = nx_g.nodes[u].get("pos")
+        v_coords: StandardCoord | None = nx_g.nodes[v].get("pos")
 
         if u_coords is not None and v_coords is not None:
 
@@ -705,7 +715,7 @@ def second_pass(
                 # Prune beams to consider recent node placements
                 nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
-                critical_beams: dict[int, Tuple[int, NodeBeams]] = {}
+                critical_beams: dict[int, tuple[int, NodeBeams]] = {}
                 num_edges_still_to_complete = 0
                 for node_id in nx_g.nodes():
                     n_beams = nx_g.nodes[node_id]["beams"]
@@ -729,7 +739,7 @@ def second_pass(
 
                 # Call pathfinder using optional parameters to tell the pathfinding algorithm
                 # to work in pure pathfinding (rather than path creation) mode
-                v_kind: Optional[str] = nx_g.nodes[v].get("kind")
+                v_kind: str | None = nx_g.nodes[v].get("kind")
                 if v_coords and v_kind:
                     clean_pths = run_pthfinder(
                         (u_coords, u_kind),
@@ -817,7 +827,7 @@ def second_pass(
                                         taken=taken,
                                         fig_data=fig_data,
                                     )
-                        
+
                         # Prune beams before moving to next edge
                         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
@@ -850,8 +860,8 @@ def prep_3d_g(g: SimpleDictGraph) -> nx.Graph:
     nx_g = nx.Graph()
 
     # GET NODES AND EDGES FROM INCOMING ZX GRAPH
-    nodes: List[Tuple[int, str]] = g.get("nodes", [])
-    edges: List[Tuple[Tuple[int, int], str]] = g.get("edges", [])
+    nodes: list[tuple[int, str]] = g.get("nodes", [])
+    edges: list[tuple[tuple[int, int], str]] = g.get("edges", [])
 
     # ADD NODES TO NETWORKX GRAPH
     for n_id, n_type in nodes:
@@ -941,14 +951,14 @@ def run_pthfinder(
     src: StandardBlock,
     nxt_zx_type: str,
     init_step: int,
-    taken: List[StandardCoord],
-    tgt: Optional[StandardBlock] = None,
+    taken: list[StandardCoord],
+    tgt: StandardBlock | None = None,
     hdm: bool = False,
     min_succ_rate: int = 50,
-    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
-    u_v_ids: Optional[Tuple[int,int]] = None,
-    log_stats_id: Union[str, None] = None,
-) -> List[Any]:
+    critical_beams: dict[int, tuple[int, NodeBeams]] = {},
+    u_v_ids: tuple[int, int] | None = None,
+    log_stats_id: str | None = None,
+) -> list[Any]:
     """Calls the inner pathfinder algorithm for a combination of source node and potential target position,
     with optional parameters to send the information of a target node that was already placed as part of previous operations.
 
@@ -972,7 +982,7 @@ def run_pthfinder(
     """
 
     # ARRAYS TO HOLD TEMPORARY PATHS
-    valid_pths: Union[dict[StandardBlock, List[StandardBlock]], None] = None
+    valid_pths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_pths = []
 
     # STEP, START, & TARGET COORDS
