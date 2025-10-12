@@ -4,6 +4,18 @@ import heapq
 from datetime import datetime
 from typing import List, Tuple, Optional, Union, cast
 
+# Import exploration tracking for granular visualizations
+try:
+    from .exploration_vis import get_tracker
+except ImportError:
+    # Graceful fallback if visualization module not available
+    def get_tracker():
+        class DummyTracker:
+            def track_step(self, *args, **kwargs): pass
+            def track_path(self, *args, **kwargs): pass
+            def generate_debug_report(self): return "Tracker not available"
+        return DummyTracker()
+
 from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
 from topologiq.utils.utils_greedy_bfs import gen_tent_tgt_coords
 from topologiq.utils.utils_pathfinder import (
@@ -125,6 +137,35 @@ def pthfinder(
 ###############################
 # CORE PATHFINDER SPATIAL BFS #
 ###############################
+def manhattan_heuristic(coord1: StandardCoord, coord2: StandardCoord) -> float:
+    """Calculate Manhattan distance heuristic for A* pathfinding.
+    
+    Args:
+        coord1: Starting coordinate (x, y, z)
+        coord2: Target coordinate (x, y, z)
+        
+    Returns:
+        Manhattan distance between coordinates
+    """
+    return abs(coord1[0] - coord2[0]) + abs(coord1[1] - coord2[1]) + abs(coord1[2] - coord2[2])
+
+
+def find_closest_target(current_coord: StandardCoord, target_coords: List[StandardCoord]) -> StandardCoord:
+    """Find the closest target coordinate for A* heuristic calculation.
+    
+    Args:
+        current_coord: Current position
+        target_coords: List of possible target coordinates
+        
+    Returns:
+        Closest target coordinate
+    """
+    if not target_coords:
+        return (0, 0, 0)
+    
+    return min(target_coords, key=lambda t: manhattan_heuristic(current_coord, t))
+
+
 def core_pthfinder_bfs(
     src: StandardBlock,
     tent_coords: List[StandardCoord],
@@ -135,7 +176,7 @@ def core_pthfinder_bfs(
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     u_v_ids: Optional[Tuple[int,int]] = None,
 ) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
-    """Core pathfinder BFS. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
+    """Core A* pathfinder with Manhattan heuristic. Determines if topologically-correct paths are possible between a source and one or more target coordinates/kinds.
 
     Args:
         - src: source block's coordinates (tuple) and kind (str).
@@ -160,8 +201,13 @@ def core_pthfinder_bfs(
     if len(end_coords) == 1 and len(tent_tgt_kinds) == 1 and end_coords[0] in taken:
         taken.remove(end_coords[0])
 
-    # A* PATHFINDING - priority queue for better performance
-    queue = [(0, 0, src)]  # (f_score, g_score, block)
+    # A* PATHFINDING with Manhattan heuristic
+    closest_target = find_closest_target(s_coords, tent_coords)
+    h_score = manhattan_heuristic(s_coords, closest_target)
+    f_score = 0 + h_score
+    
+    queue = [(f_score, 0, src)]  # (f_score, g_score, block)
+    g_scores = {src: 0}  # Cost from start to each block
     visited: dict[Tuple[StandardBlock, StandardCoord], int] = {(src, (0, 0, 0)): 0}
     visit_attempts = 0
 
@@ -196,18 +242,26 @@ def core_pthfinder_bfs(
 
     src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
     prune_distance = src_tgt_manhattan
-    # CORE LOOP
+    # CORE LOOP with exploration tracking
     once = True
-    # Granular exploration tracking
     step_count = 0
+    tracker = get_tracker()
     
     while queue:
-        _, curr_g, curr = heapq.heappop(queue)
+        f_score, curr_g, curr = heapq.heappop(queue)
         curr_coords, curr_kind = curr
         x, y, z = curr_coords
         
-        # Granular step visualization
+        # Calculate heuristic for current position
+        closest_target = find_closest_target(curr_coords, tent_coords)
+        h_score = manhattan_heuristic(curr_coords, closest_target)
+        
+        # Track exploration step for visualization
         step_count += 1
+        tracker.track_step(step_count, curr, len(queue), len(valid_pths), 
+                          f_score, curr_g, h_score)
+        
+        # Legacy debug output for backward compatibility
         if os.environ.get('PATHFINDER_DEBUG') == '1':
             print(f"Step {step_count:3d}: Exploring {curr_coords} | Queue: {len(queue)} | Targets found: {len(valid_pths)}")
 
@@ -227,6 +281,8 @@ def core_pthfinder_bfs(
             tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds
         ):
             valid_pths[curr] = pth[curr]
+            # Track discovered path for visualization
+            tracker.track_path(curr, pth[curr])
             tgts_filled = len(set([p[0] for p in valid_pths.keys()]))
             if tgts_filled >= tgts_to_fill:
                 break
