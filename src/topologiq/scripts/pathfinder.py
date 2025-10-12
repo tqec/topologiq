@@ -198,10 +198,18 @@ def core_pthfinder_bfs(
     prune_distance = src_tgt_manhattan
     # CORE LOOP
     once = True
+    # Granular exploration tracking
+    step_count = 0
+    
     while queue:
         _, curr_g, curr = heapq.heappop(queue)
         curr_coords, curr_kind = curr
         x, y, z = curr_coords
+        
+        # Granular step visualization
+        step_count += 1
+        if os.environ.get('PATHFINDER_DEBUG') == '1':
+            print(f"Step {step_count:3d}: Exploring {curr_coords} | Queue: {len(queue)} | Targets found: {len(valid_pths)}")
 
         curr_manhattan = abs(x - sx) + abs(y - sy) + abs(z - sz)
 
