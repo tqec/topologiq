@@ -1,7 +1,7 @@
 import os
+import heapq
 
 from datetime import datetime
-from collections import deque
 from typing import List, Tuple, Optional, Union, cast
 
 from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
@@ -160,8 +160,8 @@ def core_pthfinder_bfs(
     if len(end_coords) == 1 and len(tent_tgt_kinds) == 1 and end_coords[0] in taken:
         taken.remove(end_coords[0])
 
-    # KEY BFS VARS
-    queue = deque([src])
+    # A* PATHFINDING - priority queue for better performance
+    queue = [(0, 0, src)]  # (f_score, g_score, block)
     visited: dict[Tuple[StandardBlock, StandardCoord], int] = {(src, (0, 0, 0)): 0}
     visit_attempts = 0
 
@@ -199,7 +199,7 @@ def core_pthfinder_bfs(
     # CORE LOOP
     once = True
     while queue:
-        curr: StandardBlock = queue.popleft()
+        _, curr_g, curr = heapq.heappop(queue)
         curr_coords, curr_kind = curr
         x, y, z = curr_coords
 
@@ -334,7 +334,12 @@ def core_pthfinder_bfs(
                         (nxt_b_info, (dx, dy, dz))
                     ]:
                         visited[(nxt_b_info, (dx, dy, dz))] = new_pth_len
-                        queue.append(nxt_b_info)
+                        
+                        # A* heuristic: Manhattan distance to closest target
+                        min_dist = min(abs(nxt_coords[0] - tc[0]) + abs(nxt_coords[1] - tc[1]) + abs(nxt_coords[2] - tc[2]) for tc in end_coords)
+                        f_score = new_pth_len + min_dist
+                        heapq.heappush(queue, (f_score, new_pth_len, nxt_b_info))
+                        
                         pth_len[nxt_b_info] = new_pth_len
                         pth[nxt_b_info] = pth[curr] + [nxt_b_info]
 

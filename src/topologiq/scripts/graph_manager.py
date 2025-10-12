@@ -41,6 +41,7 @@ def graph_manager_bfs(
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
+    force_src_kind: Optional[str] = None,
     **kwargs,
 ) -> Tuple[
     nx.Graph,
@@ -131,9 +132,12 @@ def graph_manager_bfs(
     # Place start node at origin
     else:
 
-        # Get kind from type family
-        tent_kinds: Optional[List[str]] = nx_g.nodes[src].get("type_fam")
-        random_kind = random.choice(tent_kinds) if tent_kinds else None
+        # Get kind from type family (reproducible if forced)
+        if force_src_kind:
+            random_kind = force_src_kind
+        else:
+            tent_kinds: Optional[List[str]] = nx_g.nodes[src].get("type_fam")
+            random_kind = random.choice(tent_kinds) if tent_kinds else None
 
         # Update list of taken coords and all_beams with node's position & beams
         taken.append((0, 0, 0))

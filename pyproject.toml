@@ -96,3 +96,7 @@ Website = "https://github.com/jbolns/topologiq"
 Documentation = "https://github.com/jbolns/topologiq"
 Repository = "https://github.com/jbolns/topologiq"
 Issues = "https://github.com/jbolns/topologiq/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
