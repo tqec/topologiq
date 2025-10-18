@@ -164,7 +164,13 @@ def prep_stats_n_log(
             op_success,
             c_name,
             (
-                [edge_pth["src_tgt_ids"] for edge_pth in edge_pths.values()]
+                [
+                    {
+                        edge_pth["src_tgt_ids"][0]: edge_pth["pth_nodes"][0][1],
+                        edge_pth["src_tgt_ids"][1]: edge_pth["pth_nodes"][-1][1]
+                    } 
+                    for edge_pth in edge_pths.values()
+                ]
                 if edge_pths
                 else ["error"]
             ),
@@ -172,7 +178,7 @@ def prep_stats_n_log(
 
         log_stats(
             aux_stats,
-            f"outputs{"_tests" if log_stats_id.endswith("*") else ""}",
+            f"outputs{'_tests' if log_stats_id.endswith('*') else ''}",
             opt_header=HEADER_OUTPUT_STATS,
         )
     elif "pathfinder" in stats_type:
@@ -205,7 +211,7 @@ def prep_stats_n_log(
 
     log_stats(
         main_stats,
-        f"{stats_type}{"_tests" if log_stats_id.endswith("*") else ""}",
+        f"{stats_type}{'_tests' if log_stats_id.endswith('*') else ''}",
         opt_header=(
             HEADER_BFS_MANAGER_STATS
             if "graph_manager" in stats_type
