@@ -2,7 +2,7 @@ import os
 
 from datetime import datetime
 from collections import deque
-from typing import List, Tuple, Optional, Union, cast
+from typing import List, Tuple, Optional, Union
 
 from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
 from topologiq.utils.utils_greedy_bfs import gen_tent_tgt_coords
@@ -197,7 +197,7 @@ def core_pthfinder_bfs(
     src_tgt_manhattan = get_max_manhattan(s_coords, tent_coords)
     prune_distance = src_tgt_manhattan
     # CORE LOOP
-    once = True
+
     while queue:
         curr: StandardBlock = queue.popleft()
         curr_coords, curr_kind = curr
