@@ -55,9 +55,9 @@ HEADER_OUTPUT_STATS = [
 ]
 
 
-#####################
-# SIMPLE SHARED OPS #
-#####################
+##############
+# SHARED OPS #
+##############
 def get_manhattan(src_c: StandardCoord, tgt_c: StandardCoord) -> int:
     """Gets the Manhattan distance between any two (x, y, z) coordinates.
     Args:
@@ -85,9 +85,9 @@ def get_max_manhattan(src_c: StandardCoord, all_cs: List[StandardCoord]) -> int:
     return 0
 
 
-############
-# LOGGERS  #
-############
+##################
+# STATS LOGGERS  #
+##################
 def prep_stats_n_log(
     stats_type: str,
     log_stats_id: str,
@@ -293,3 +293,36 @@ def write_outputs(
     with open(f"{out_dir_pth}/{c_name}.txt", "w") as f:
         f.writelines(lines)
         f.close()
+
+
+#################
+# STATS READERS #
+#################
+def get_edge_cases(path_to_output_logs: Path) -> List[Tuple[str, int, str]]:
+    """Get key replicability information for any failed case from output stats.
+
+    Returns
+        - edge_cases: list of (name, first_id, first_kind) for all failed cases in output stats log. 
+
+    """
+
+    # Extract any line in output logs marked as "Fail"
+    edge_cases_full = []
+    try: 
+        with open(path_to_output_logs, "r") as f:
+            entries = csv.reader(f, delimiter=';')
+            for entry in entries:
+                if entry[1] == "False":
+                    edge_cases_full.append(entry)
+        f.close()
+    except FileNotFoundError:
+        print(f"There is no output stats log at:{path_to_output_logs}")
+
+    # Extract name, first_id, and first_kind, which suffice for reproducing case
+    edge_cases = []
+    for case in edge_cases_full:
+        edge_by_edge = eval(case[3])
+        edge_cases.append((case[2], list(edge_by_edge[0].keys())[0], list(edge_by_edge[0].values())[0]))
+
+    return edge_cases
+
