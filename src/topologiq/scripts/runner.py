@@ -28,6 +28,7 @@ def runner(
     log_stats: bool = False,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
+    first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -63,6 +64,7 @@ def runner(
             - True: debugging mode on,
             - False: debugging mode off.
         - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
+        - first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -121,6 +123,7 @@ def runner(
                 log_stats_id=unique_run_id,
                 debug=debug,
                 fig_data=fig_data,
+                first_cube=first_cube,
                 **kwargs,
             )
 

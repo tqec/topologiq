@@ -1,23 +1,5 @@
 from topologiq.utils.classes import SimpleDictGraph
 
-cnot: SimpleDictGraph = {
-    "nodes": [
-        (0, "X"),
-        (1, "Z"),
-        (2, "X"),
-        (3, "Z"),
-        (4, "X"),
-        (5, "Z"),
-    ],
-    "edges": [
-        ((0, 2), "SIMPLE"),
-        ((1, 3), "SIMPLE"),
-        ((2, 3), "SIMPLE"),
-        ((2, 4), "SIMPLE"),
-        ((3, 5), "SIMPLE"),
-    ],
-}
-
 
 steane: SimpleDictGraph = {
     "nodes": [

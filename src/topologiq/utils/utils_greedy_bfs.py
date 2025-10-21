@@ -1,56 +1,49 @@
 import random
 import networkx as nx
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 
-from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import StandardCoord, NodeBeams, StandardBlock
-from topologiq.utils.grapher import lattice_to_g, vis_3d_g
 
 
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_start_id(nx_g: nx.Graph) -> int:
-    """Picks a node from an nx graph based on its centrality, in the context of this algorithm, for use as starting node for a BFS.
+def find_first_id(nx_g: nx.Graph) -> int:
+    """Pick a node for use as starting point for outer graph manager BFS.
 
     Args:
         - nx_g: an nx_graph.
 
     Returns:
-        - src_id: the ID of the node with highest closeness centrality or a random selection from a list of highest degree nodes.
+        - first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
 
     """
 
     # TERMINATE IF THERE ARE NO NODES
     if not nx_g.nodes:
-        raise ValueError("Start node not found")
+        raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
 
     # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
-    max_d = -1
-    centr_nodes: List[int] = []
+    max_degree = -1
+    central_nodes: List[int] = []
 
-    nodes_ds = nx_g.degree
-
-    if isinstance(nodes_ds, int):
-        print(
-            "Warning: nx_g.degree() returned an integer. Cannot determine start node."
-        )
-        raise ValueError("Start node not found")
-
+    node_degrees = nx_g.degree
+    if isinstance(node_degrees, int):
+        raise ValueError("ERROR: nx_g.degree() returned int. Cannot determine first ID.")
     else:
-        for n, d in nodes_ds:
-            if d > max_d:
-                max_d = d
-                centr_nodes = [n]
-            elif d == max_d:
-                centr_nodes.append(n)
+        for node, degree in node_degrees:
+            if degree > max_degree:
+                max_degree = degree
+                central_nodes = [node]
+            elif degree == max_degree:
+                central_nodes.append(node)
 
     # PICK A HIGHEST DEGREE NODE
-    src_id: int = random.choice(centr_nodes)
+    first_id: int = random.choice(central_nodes)
 
-    # RETURN START NODE
-    return src_id
+    # RETURN FIRST NODE
+    return first_id
 
 
 def get_node_degree(g: nx.Graph, node: int) -> int:
@@ -198,7 +191,7 @@ def prune_beams(
             ]
             if iter_beams:
                 new_beams.append(iter_beams)
-    except (IndexError, ValueError, LookupError, KeyError) as e:
+    except (IndexError, ValueError, LookupError, KeyError):
         new_beams = all_beams
 
     try:
@@ -216,7 +209,7 @@ def prune_beams(
                             new_beams.append(beam)
 
                     nx_g.nodes[n_id]["beams"] = new_beams
-    except (IndexError, ValueError, LookupError, KeyError) as e:
+    except (IndexError, ValueError, LookupError, KeyError):
         nx_g = nx_g
 
     return nx_g, new_beams

@@ -9,7 +9,7 @@ import matplotlib.figure
 from topologiq.scripts.pathfinder import pthfinder, get_taken_coords
 from topologiq.utils.animation import create_animation
 from topologiq.utils.utils_greedy_bfs import (
-    find_start_id,
+    find_first_id,
     get_node_degree,
     gen_tent_tgt_coords,
     prune_beams,
@@ -41,6 +41,7 @@ def graph_manager_bfs(
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
+    first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
     **kwargs,
 ) -> Tuple[
     nx.Graph,
@@ -74,6 +75,7 @@ def graph_manager_bfs(
             - True: debugging mode on,
             - False: debugging mode off.
         - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
+        - first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -109,13 +111,13 @@ def graph_manager_bfs(
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # BFS management
-    src: Optional[int] = find_start_id(nx_g)
+    first_id: Optional[int] = find_first_id(nx_g) if first_cube[0] is None else first_cube[0]
     taken: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
     edge_pths: dict = {}
 
-    queue: deque[int] = deque([src])
-    visited: set = {src}
+    queue: deque[int] = deque([first_id])
+    visited: set = {first_id}
 
     # VALIDITY CHECKS
     if not check_zx_types(g):
@@ -123,32 +125,32 @@ def graph_manager_bfs(
         return (nx_g, edge_pths, 0, lat_nodes, lat_edges)
 
     # SPECIAL PROCESS FOR CENTRAL NODE
-    # Terminate if there is no start node
-    if src is None:
+    # Terminate if there is no first node
+    if first_id is None:
         print(Colors.RED + "Graph has no nodes." + Colors.RESET)
         return nx_g, edge_pths, 0, lat_nodes, lat_edges
 
-    # Place start node at origin
+    # Place first node at origin
     else:
 
         # Get kind from type family
-        tent_kinds: Optional[List[str]] = nx_g.nodes[src].get("type_fam")
-        random_kind = random.choice(tent_kinds) if tent_kinds else None
+        tentative_kinds: Optional[List[str]] = nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
+        first_kind = random.choice(tentative_kinds) if tentative_kinds else None
 
         # Update list of taken coords and all_beams with node's position & beams
         taken.append((0, 0, 0))
         _, src_beams = check_exits(
             (0, 0, 0),
-            random_kind,
+            first_kind,
             taken,
             all_beams,
             kwargs["length_of_beams"],
         )
 
         # Write info of node
-        nx_g.nodes[src]["pos"] = (0, 0, 0)
-        nx_g.nodes[src]["kind"] = random_kind
-        nx_g.nodes[src]["beams"] = src_beams
+        nx_g.nodes[first_id]["pos"] = (0, 0, 0)
+        nx_g.nodes[first_id]["kind"] = first_kind
+        nx_g.nodes[first_id]["beams"] = src_beams
 
         # Update global beams array
         all_beams.append(src_beams)

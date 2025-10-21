@@ -316,7 +316,9 @@ def get_edge_cases(path_to_output_logs: Path) -> List[Tuple[str, int, str]]:
                     edge_cases_full.append(entry)
         f.close()
     except FileNotFoundError:
-        print(f"There is no output stats log at:{path_to_output_logs}")
+        raise FileNotFoundError("File `./assets/stats/outputs.csv` must exist.\n")
+    except (IOError, OSError, ValueError):
+        raise ValueError("Uknown error while reading `./assets/stats/outputs.csv`")
 
     # Extract name, first_id, and first_kind, which suffice for reproducing case
     edge_cases = []
