@@ -81,8 +81,6 @@ def runner(
     # PRELIMINARIES
     unique_run_id = None
     t1 = datetime.now()
-    if log_stats:
-        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     out_dir_pth = repo_root / "outputs/txt"
@@ -106,9 +104,10 @@ def runner(
         t1_inner = datetime.now()
         i += 1
 
-        # Update user
+        # Unique run ID if stats logging is on
         if log_stats:
             print(f"\nAttempt {i} of {max_attempts}:")
+            unique_run_id = t1_inner.strftime("%Y%m%d_%H%M%S_%f")
         else: 
             print(".")
 
