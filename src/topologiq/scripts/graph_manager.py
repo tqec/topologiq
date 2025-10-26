@@ -275,16 +275,16 @@ def graph_manager_bfs(
                                 }
 
                                 prep_stats_n_log(
-                                    "graph_manager_cycle",
+                                    "graph_manager",
                                     log_stats_id,
                                     run_success,
                                     counts,
                                     times,
                                     c_name=c_name,
-                                    len_beams=kwargs["length_of_beams"],
                                     edge_pths=edge_pths,
                                     lat_nodes=lat_nodes,
                                     lat_edges=lat_edges,
+                                    run_params={"min_succ_rate": min_succ_rate, **kwargs},
                                 )
 
                             raise ValueError(
@@ -342,16 +342,16 @@ def graph_manager_bfs(
             }
 
             prep_stats_n_log(
-                "graph_manager_cycle",
+                "graph_manager",
                 log_stats_id,
                 run_success,
                 counts,
                 times,
                 c_name=c_name,
-                len_beams=kwargs["length_of_beams"],
                 edge_pths=edge_pths,
                 lat_nodes=lat_nodes,
                 lat_edges=lat_edges,
+                run_params={"min_succ_rate": min_succ_rate, **kwargs},
             )
 
         # FORCE FAILURE
@@ -376,16 +376,16 @@ def graph_manager_bfs(
         }
 
         prep_stats_n_log(
-            "graph_manager_cycle",
+            "graph_manager",
             log_stats_id,
             run_success,
             counts,
             times,
             c_name=c_name,
-            len_beams=kwargs["length_of_beams"],
             edge_pths=edge_pths,
             lat_nodes=lat_nodes,
             lat_edges=lat_edges,
+            run_params={"min_succ_rate": min_succ_rate, **kwargs},
         )
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE

@@ -47,10 +47,11 @@ HEADER_PATHFINDER_STATS = [
     "iter_duration",
 ]
 
-HEADER_OUTPUT_STATS = [
+HEADER_PARAMS_STATS = [
     "unique_run_id",
     "circuit_name",
     "run_success",
+    "run_params",
     "edge_paths",
 ]
 
@@ -95,7 +96,6 @@ def prep_stats_n_log(
     counts: dict[str, int],
     times: dict[str, Union[datetime, None]],
     c_name: str = "unknown",
-    len_beams: int = 0,
     edge_pths: Union[None, dict] = None,
     lat_nodes: Union[None, dict[int, StandardBlock]] = None,
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
@@ -103,6 +103,7 @@ def prep_stats_n_log(
     tgt: Tuple[Union[None, StandardCoord], Union[None, str]] = (None, None),
     tgt_zx_type: Union[None, str] = None,
     visit_stats: Tuple[int, int] = (0, 0),
+    run_params: dict[str, Any] = {},
 ):
     """Takes a list of arguments and assembles them in the appropriate order needed to log stats to file. Uses the type of stats to determine appropriate order
 
@@ -146,7 +147,7 @@ def prep_stats_n_log(
             log_stats_id,
             op_success,
             c_name,
-            len_beams,
+            run_params["length_of_beams"],
             counts["num_input_nodes_processed"] if op_success else 0,
             counts["num_input_edges_processed"] if op_success else 0,
             counts["num_1st_pass_edges_processed"] if op_success else 0,
@@ -163,7 +164,8 @@ def prep_stats_n_log(
             log_stats_id,
             op_success,
             c_name,
-            (
+            run_params,
+                        (
                 [
                     {
                         edge_pth["src_tgt_ids"][0]: edge_pth["pth_nodes"][0][1],
@@ -178,9 +180,17 @@ def prep_stats_n_log(
 
         log_stats(
             aux_stats,
-            f"outputs{'_tests' if log_stats_id.endswith('*') else ''}",
-            opt_header=HEADER_OUTPUT_STATS,
+            f"params{'_tests' if log_stats_id.endswith('*') else ''}",
+            opt_header=HEADER_PARAMS_STATS,
         )
+
+        if op_success is not True or run_params["length_of_beams"] != 9 or run_params["weights"] != (-1, -1):
+            log_stats(
+                aux_stats,
+                f"debug{'_tests' if log_stats_id.endswith('*') else ''}",
+                opt_header=HEADER_PARAMS_STATS,
+            )
+
     elif "pathfinder" in stats_type:
         op_type = "creation" if not tgt[1] else "discovery"
         durations = {
@@ -298,33 +308,33 @@ def write_outputs(
 #################
 # STATS READERS #
 #################
-def get_edge_cases(path_to_output_logs: Path) -> List[Tuple[str, int, str]]:
+def get_debug_cases(path_to_stats: Path) -> List[Tuple[str, int, str]]:
     """Get key replicability information for any failed case from output stats.
 
     Returns
-        - edge_cases: list of (name, first_id, first_kind) for all failed cases in output stats log. 
+        - debug_cases: list of (name, first_id, first_kind) for all failed cases in output stats log. 
 
     """
 
-    # Extract any line in output logs marked as "Fail"
-    edge_cases_full = []
+    # EXTRACT CASES FROM DEBUG CASES LOG FILE
+    debug_cases_full = []
     try: 
-        with open(path_to_output_logs, "r") as f:
-            entries = csv.reader(f, delimiter=';')
+        with open(path_to_stats, "r") as f:
+            entries = list(csv.reader(f, delimiter=';'))[1:]
             for entry in entries:
-                if entry[1] == "False":
-                    edge_cases_full.append(entry)
+                debug_cases_full.append(entry)
         f.close()
     except FileNotFoundError:
-        raise FileNotFoundError("File `./assets/stats/outputs.csv` must exist.\n")
+        raise FileNotFoundError(f"File `{path_to_stats}` must exist.\n")
     except (IOError, OSError, ValueError):
-        raise ValueError("Uknown error while reading `./assets/stats/outputs.csv`")
+        raise ValueError(f"Uknown error while reading `{path_to_stats}`")
 
-    # Extract name, first_id, and first_kind, which suffice for reproducing case
-    edge_cases = []
-    for case in edge_cases_full:
-        edge_by_edge = eval(case[3])
-        edge_cases.append((case[2], list(edge_by_edge[0].keys())[0], list(edge_by_edge[0].values())[0]))
+    # EXTRACT PARAMS NEEDED TO REPRODUCE CASE
+    debug_cases = []
+    for case in debug_cases_full:
+        circuit_name = case[2]
+        min_success_rate, weights, len_of_beams = eval(case[3]).values()
+        first_id, first_kind = list(eval(case[4])[0].items())[0]
+        debug_cases.append((circuit_name, first_id, first_kind, min_success_rate, weights, len_of_beams))
 
-    return edge_cases
-
+    return debug_cases

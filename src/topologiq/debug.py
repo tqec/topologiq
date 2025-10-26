@@ -19,7 +19,7 @@ from topologiq.scripts.runner import runner
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.simple_grapher import simple_graph_vis
-from topologiq.utils.utils_misc import get_edge_cases
+from topologiq.utils.utils_misc import get_debug_cases
 
 
 ####################
@@ -38,36 +38,37 @@ def run_debug():
     """
 
     # ASSEMBLE KWARGS
-    kwargs = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
-    }
+    
 
-    # HELPER VARIABLES
+    # DEFAULTS
     circuit_name: str = None
     circuit_as_graph_dict: SimpleDictGraph = {"nodes": [], "edges": []}
+    first_id, first_kind = (None, None)
+    min_success_rate = 60
+    value_fn_weights = VALUE_FUNCTION_HYPERPARAMS,
+    len_of_beams = LENGTH_OF_BEAMS
 
     # GET LIST OF EDGE CASES CURRENTLY IN OUTPUT STATS LOG
     # Path to file 
-    path_to_output_logs = Path(__file__).parent.resolve() / "assets/stats/outputs.csv"
+    path_to_stats = Path(__file__).parent.resolve() / "assets/stats/debug.csv"
 
     # Raise if file does not exist at specified location
-    if not path_to_output_logs.exists():
-        raise FileNotFoundError("File `assets/stats/outputs.csv` must exist.\n")
+    if not path_to_stats.exists():
+        raise FileNotFoundError(f"File `{path_to_stats}` must exist.\n")
     
     # Read all edge cases in outputs log
-    edge_cases = list(set(get_edge_cases(path_to_output_logs)))
+    debug_cases = list(set(get_debug_cases(path_to_stats)))
 
     # Announce no edge cases found if no edge cases found
-    if not edge_cases:
-        print("\nNO EDGE CASES FOUND IN `assets/stats/outputs.csv`.\n")
+    if not debug_cases:
+        print(f"\nNO EDGE CASES FOUND IN `{path_to_stats}`.\n")
     
     # Print list of edge cases and ask users to select case to run
     else:    
         print("\n==> EDGE CASES AVAILABLE FOR DIRECT RUN")
-        print("[case number] name_of_circuit, first_id, first_kind.")
-        for i, case in enumerate(edge_cases):
-            print(f"[{i}] {case[0]}, {case[1]}, {case[2]}.")
+        print("[case number] circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams.")
+        for i, case in enumerate(debug_cases):
+            print(f"[{i}] {str(case)[1:-1]}.")
         print(f"[{i+1}] Exit debug mode.")
         # Loop until user chooses to exit or selects a valid case
         while True:
@@ -80,16 +81,26 @@ def run_debug():
                     print("Exiting debug mode.\n")
                     break
                 
-                circuit_name, first_id, first_kind = edge_cases[case_number]
+                circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams = debug_cases[case_number]
                 break
 
             except (ValueError, KeyError, IndexError):
                 print("You must choose a valid [case number] or type 'EXIT' to exit")        
-
+        
 
         if circuit_name is not None:
 
-            print(f"\nLAUNCHING CASE\nName: {circuit_name} (first_id:{first_id}, first_kind:{first_kind}).\n")
+            # UPDATE USER
+            print("\nLAUNCHING CASE")
+            print("[case number] circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams.")
+            print(f"[{case_number}]",circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams)
+
+            # ASSEMBLE KWARGS
+            kwargs = {
+                "weights": value_fn_weights,
+                "length_of_beams": len_of_beams,
+            }
+
             # FIND AND RETRIEVE THE APPROPRIATE CIRCUIT
             # Look for name match in circuits saved as simple graphs
             if circuit_name in dir(simple_graphs):
@@ -99,7 +110,6 @@ def run_debug():
 
             # Look for name match in pyzx circuits/graphs
             if circuit_name in dir(pyzx_graphs):
-                print("pyzx graph")
                 pyzx_function = getattr(pyzx_graphs, circuit_name)
                 g, fig_data = pyzx_function(draw_graph=True)
                 circuit_as_graph_dict = pyzx_g_to_simple_g(g)
@@ -110,13 +120,13 @@ def run_debug():
                 _, _, _, _ = runner(
                     circuit_as_graph_dict,
                     circuit_name,
-                    min_succ_rate=60,
+                    min_succ_rate=min_success_rate,
                     strip_ports=False,
                     hide_ports=False,
                     max_attempts=1,
                     stop_on_first_success=True,
                     visualise=("detail", "GIF"),
-                    log_stats=True,
+                    log_stats=False,
                     debug=True,
                     fig_data=fig_data,
                     first_cube=(first_id, first_kind),

@@ -107,7 +107,7 @@ def pthfinder(
         }
 
         prep_stats_n_log(
-            "pathfinder_iterations",
+            "pathfinder",
             log_stats_id,
             iter_success,
             counts,
@@ -464,8 +464,8 @@ def test_pthfinder(
 
     """
 
-    if os.path.exists(f"{stats_dir}/pathfinder_iterations_tests.csv"):
-        os.remove(f"{stats_dir}/pathfinder_iterations_tests.csv")
+    if os.path.exists(f"{stats_dir}/pathfinder_tests.csv"):
+        os.remove(f"{stats_dir}/pathfinder_tests.csv")
 
     taken: List[StandardCoord] = []
     hdm: bool = False
