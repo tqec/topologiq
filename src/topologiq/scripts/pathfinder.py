@@ -227,6 +227,7 @@ def core_pthfinder_bfs(
 
         moves_adjusted = []
         remaining_moves = []
+
         for move in moves_unadjusted:
             valid_exit = check_is_exit((0, 0, 0), curr_kind, move)
             if valid_exit:
@@ -239,6 +240,7 @@ def core_pthfinder_bfs(
         else: 
             moves = moves_unadjusted
         moves = moves_unadjusted
+
         for dx, dy, dz in moves:
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
@@ -250,18 +252,19 @@ def core_pthfinder_bfs(
             if critical_beams:
                 nodes_with_critical_beams_id = critical_beams.keys()
                 if nodes_with_critical_beams_id:
+                    continue_flag = False
                     for node_id in nodes_with_critical_beams_id:
                         min_exit_num = critical_beams[node_id][0]
-                        beams = critical_beams[node_id][1][:3]
+                        beams = critical_beams[node_id][1]
                         beams_broken_for_node = sum(
                             [nxt_coords in beam for beam in beams]
                         )
-                        
                         adjust_for_source_node = 1 if node_id in u_v_ids else 0
                         if len(beams) - beams_broken_for_node < (min_exit_num - adjust_for_source_node):
-                            continue
-
-                        
+                            continue_flag = True
+                            break
+                    if continue_flag:
+                        continue
 
             mid_pos = None
             if "o" in curr_kind and scale == 2:
@@ -275,14 +278,19 @@ def core_pthfinder_bfs(
                 if critical_beams:
                     nodes_with_critical_beams_id = critical_beams.keys()
                     if nodes_with_critical_beams_id:
+                        continue_flag = False
                         for node_id in nodes_with_critical_beams_id:
                             min_exit_num = critical_beams[node_id][0]
-                            beams = critical_beams[node_id][1][:3]
+                            beams = critical_beams[node_id][1]
                             beams_broken_for_node = sum(
-                                [mid_pos in beam for beam in beams]
+                                [mid_pos in beam[:3] for beam in beams]
                             )
-                            if len(beams) - beams_broken_for_node < min_exit_num:
-                                continue
+                            adjust_for_source_node = 1 if node_id in u_v_ids else 0
+                            if len(beams) - beams_broken_for_node < (min_exit_num - adjust_for_source_node):
+                                continue_flag = True
+                                break
+                        if continue_flag:
+                            continue
 
             if "h" in curr_kind:
                 hdm = False

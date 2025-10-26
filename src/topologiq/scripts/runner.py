@@ -6,10 +6,12 @@ from typing import List, Optional, Tuple, Union
 import matplotlib.figure
 
 from topologiq.scripts.graph_manager import graph_manager_bfs
+from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import write_outputs
 from topologiq.utils.utils_zx_graphs import strip_boundaries
 from topologiq.utils.grapher import vis_3d_g, lattice_to_g
 from topologiq.utils.animation import create_animation
+from topologiq.utils.utils_zx_graphs import break_single_spider_graph
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 
 
@@ -17,8 +19,8 @@ from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 # MAIN RUN MANAGER #
 ####################
 def runner(
-    c_g_dict: SimpleDictGraph,
-    c_name: str,
+    simple_graph: SimpleDictGraph,
+    circuit_name: str,
     min_succ_rate: int = 50,
     strip_ports: bool = False,
     hide_ports: bool = False,
@@ -39,8 +41,8 @@ def runner(
     """Runs the algorithm on any circuit given to it
 
     Args:
-        - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges.
-        - c_name: name of ZX circuit.
+        - simple_graph: a ZX circuit as a simple dictionary of nodes and edges.
+        - circuit_name: name of ZX circuit.
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - strip_ports:
             - true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
@@ -71,12 +73,31 @@ def runner(
         - length_of_beams: length of each of the beams coming out of open nodes.
 
     Returns:
-        - c_g_dict: original circuit given to function returns for easy traceability.
+        - simple_graph: original circuit given to function returns for easy traceability.
         - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
         - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
 
     """
+
+    # OPTIMISE SIMPLE GRAPH IF POSSIBLE
+    # The following operations return the same simple_graph is no optimisation is available
+    # Eventually, there should be a manager that calls only applicable optimisation
+    # But there are not enough optimisations currently available for this
+    simple_graph_optimised = break_single_spider_graph(simple_graph)
+
+    # Update user if graph was auto-optimised
+    if simple_graph != simple_graph_optimised:  
+
+        # Override simple graph
+        simple_graph = simple_graph_optimised
+        
+        # Nullify any pre-existing fig_data as overlay would no longer correspond
+        fig_data = None
+        print("Note! Graph auto-optimised to reduce final volume.")
+        simple_graph_vis(simple_graph, layout_method="planar")
+        
+
 
     # PRELIMINARIES
     unique_run_id = None
@@ -89,7 +110,7 @@ def runner(
 
     # APPLICABLE GRAPH TRANSFORMATIONS
     if strip_ports:
-        c_g_dict = strip_boundaries(c_g_dict)
+        simple_graph = strip_boundaries(simple_graph)
 
     # VARS TO HOLD RESULTS
     edge_pths: Union[None, dict] = None
@@ -114,8 +135,8 @@ def runner(
         # Call algorithm
         try:
             nx_g, edge_pths, c, lat_nodes, lat_edges = graph_manager_bfs(
-                c_g_dict,
-                c_name=c_name,
+                simple_graph,
+                circuit_name=circuit_name,
                 min_succ_rate=min_succ_rate,
                 hide_ports=hide_ports,
                 visualise=visualise,
@@ -146,7 +167,7 @@ def runner(
 
                 # Write outputs
                 write_outputs(
-                    c_g_dict, c_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
+                    simple_graph, circuit_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
                 )
 
                 # Visualise result
@@ -178,12 +199,12 @@ def runner(
                                 edge_pths,
                                 hide_ports=hide_ports,
                                 save_to_file=True,
-                                filename=f"{c_name}{c:03d}",
+                                filename=f"{circuit_name}{c:03d}",
                                 fig_data=fig_data,
                             )
 
                             create_animation(
-                                filename_prefix=c_name,
+                                filename_prefix=circuit_name,
                                 restart_delay=5000,
                                 duration=2500,
                                 video=True if visualise[1] == "MP4" else False,
@@ -217,5 +238,5 @@ def runner(
         except (ValueError, FileNotFoundError) as e:
             print("Unable to delete temp files or temp folder does not exist", e)
 
-    # RETURN: original ZX graph, edge_pths, nodes and edges of result
-    return c_g_dict, edge_pths, lat_nodes, lat_edges
+    # RETURN: simple_graph, edge_pths, nodes and edges of result
+    return simple_graph, edge_pths, lat_nodes, lat_edges

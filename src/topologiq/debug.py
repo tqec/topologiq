@@ -104,7 +104,6 @@ def run_debug():
             # FIND AND RETRIEVE THE APPROPRIATE CIRCUIT
             # Look for name match in circuits saved as simple graphs
             if circuit_name in dir(simple_graphs):
-                print("simple graph")
                 circuit_as_graph_dict = getattr(simple_graphs, circuit_name)
                 fig_data = simple_graph_vis(circuit_as_graph_dict)
 
@@ -126,7 +125,7 @@ def run_debug():
                     max_attempts=1,
                     stop_on_first_success=True,
                     visualise=("detail", "GIF"),
-                    log_stats=False,
+                    log_stats=True,
                     debug=True,
                     fig_data=fig_data,
                     first_cube=(first_id, first_kind),

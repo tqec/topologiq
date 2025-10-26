@@ -53,15 +53,6 @@ def simple_mess(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Opt
 
     return g, fig
 
-def steane(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
-    
-    c = zx.Circuit(2)
-    g = c.to_graph()
-    fig = None
-    if draw_graph:
-        fig = zx.draw(g, labels=True)
-
-    return g, fig
 
 def random_graph(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
 
