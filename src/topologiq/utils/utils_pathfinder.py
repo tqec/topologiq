@@ -256,6 +256,9 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[
     p_ks = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
     # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
+    # Remove Hadamard flag if present
+    if "h" in src_k:
+        src_k = src_k[:3]
     # If current kind has an "o", the next kind is a cube
     if "o" in src_k:                
         ok = [tgt_k for tgt_k in c_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]            

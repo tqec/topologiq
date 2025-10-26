@@ -87,7 +87,7 @@ def zx_graph_to_simple_graph(zx_graph: BaseGraph) -> SimpleDictGraph:
 def run_topologiq(simple_graph: SimpleDictGraph, circuit_name:str) -> Tuple[Union[None, dict[int, StandardBlock]], Union[None, dict[Tuple[int, int], List[str]]]]:
     
     # PARAMS & HYPERPARAMS
-    vis = "detail"  # Calls 3D visualisation at the end. `None` to deactivate.
+    vis = "final"  # Calls 3D visualisation at the end. `None` to deactivate.
     anim = None  # Best to avoid in a public notebook. Animation support depends a lot on the machine and rights.
 
     VALUE_FUNCTION_HYPERPARAMS = (
@@ -112,8 +112,8 @@ def run_topologiq(simple_graph: SimpleDictGraph, circuit_name:str) -> Tuple[Unio
         max_attempts = 10,  # Maximum # of attempts to find a successful solution
         stop_on_first_success = True,  # Exit when any attempt is successful (False useful for automating stats)
         visualise = (vis, anim),  # (Visualisation mode, Animation mode)
-        log_stats = True,  # Automatically log stats for all runs (requires writing privileges)
-        debug = True,  # Enter debug mode (additional detail in visualisation)
+        log_stats = False,  # Automatically log stats for all runs (requires writing privileges)
+        debug = False,  # Enter debug mode (additional detail in visualisation)
         fig_data = None,  # Matplotlib object containing input ZX graph (to overlay over visualisations)
         **kwargs,  # {Weights for value function, Length of beams}
     )
