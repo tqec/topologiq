@@ -1,26 +1,22 @@
 # What is this folder?
-This folder is meant to contain performange log files that can be used to understand ***topologiq***'s runtimes and space-time volume performance.
+This folder is only used locally. It contains data files which are helpful to:
+- understand and improve runtimes
+- understand and improve space-time volume performance
+- understand edge cases that might helpf in debugging.
 
-## Why are there no stats or data files in the folder?
-There is a .IPYNB notebook in this folder, which can be used to to undertake analysis of stats files in the folder. 
+## Why are there no data files in the folder?
+The actual .CSV files with data for analytics remain local.
 
-Having said that, the actual .CSV stats files are and remain local. If you want to run the notebook, you will need to run ***topologiq*** with log_stats enabled to generate data for analysis. 
+To create data files, give the main `runner.py` function the optional parameter `log_stats: bool = True`. This will trigger the creation a unique identifier for the run, and automated logging to the following files:
+- graph_manager.csv: statistics about the outer BFS cycle,
+- pathfinder.csv: statistics about each individual edge path sent to the inner pathfinder algorithm,
+- params.csv: outputs and run parameters for specific runs.
+- debug.csv: output and run parameters for specific runs that can assist debugging (failed runs or runs using atypical beam lengths or atypical hyperparameters).
 
-## How to generate stats for analysis?
-To prompt ***topologiq*** to log stats to file, you can give the main `runner.py` function the optional parameter `log_stats: bool = True`. This will trigger the creation a unique identifier for the run, and automated logging for all runs of the inner pathfinder algorithm and the full BFS graph manager cycle. 
+Please note. Statistics are NOT logged by default. A regular failed run will NOT be logged unless `log_stats` is set to `True`.
 
-## What types of statistics will be logged?
-Statistics are logged to three different files:
-- graph_manager_cycle.csv: statistics about the full cycle by the outer graph manager BFS algorithm,
-- pathfinder_iterations.csv: statistics about each individual edge path sent to the inner pathfinder algorithm,
-- outputs.csv: statistics about the final output, currently mostly just a breakdown of the edges processed and the order of processing.
-
-You can also run tests directly by calling `graph_manager_bfs` (which manager the outer BFS manager) or `pthfinder` (which manages the inner pathfinder algorithm) directly with a unique identifier for the run ending in an asterisk ("*"). This will prompt saving of statistics to a separate version of each of the statistics files:
-- graph_manager_cycle_tests.csv: statistics about the full cycle by the outer graph manager BFS algorithm,
-- pathfinder_iterations_tests.csv: statistics about each individual edge path sent to the inner pathfinder algorithm,
-- outputs.csv: statistics about the final output, currently mostly just a breakdown of the edges processed and the order of processing.
-
-The schemas are as follows:
+## Schemas
+Schemas are as follows:
 
 ### Graph manager (one log per cycle/circuit run)
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,
@@ -55,9 +51,12 @@ The schemas are as follows:
 - num_sites_visited: the number of times that, having tested a given site, the algorithm "visited" the site,
 - iter_duration: the total duration of the specific iteration of the pathfinder algorithm (and to be clear, there will be many iterations of the pathfinder algorithm per circuit run).
 
-
-### Outputs  (one log per cycle/circuit run)
+### Params (one log per cycle/circuit run)
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,
 - run_success: whether the process was successful, i.e., it produced a complete lattice surgery/space-time diagram of the original circuit,
 - circuit_name: the name of the circuit,
+- run_params: the main parameters needed to replicate the run.
 - edge_paths: a list of the original ZX edges processed successfully in the order in which the algorithm processed them.
+
+### Debug (optional logs as needed)
+Same as "params" but only for runs identified as edge cases.

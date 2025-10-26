@@ -119,6 +119,10 @@ python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
 # Run a circuit a given number of times and log log stats for all 50 cycles.
 uv run src/topologiq/run.py --pyzx:cnots --repeat:50
 python3 src/topologiq/run.py --pyzx:cnots --repeat:50  # Requires active .venv
+
+# Run topologiq in full debug mode (output logs must exist).
+uv run src/topologiq/debug.py
+python3 src/topologiq/debug.py  # Requires active .venv
 ```
 
 And it is possible to set several visualisation options also via command.

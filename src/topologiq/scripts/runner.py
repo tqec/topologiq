@@ -28,6 +28,7 @@ def runner(
     log_stats: bool = False,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
+    first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
     **kwargs,
 ) -> Tuple[
     SimpleDictGraph,
@@ -63,6 +64,7 @@ def runner(
             - True: debugging mode on,
             - False: debugging mode off.
         - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
+        - first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
 
     Keyword arguments (**kwargs):
         - weights: weights for the value function to pick best of many paths.
@@ -79,8 +81,6 @@ def runner(
     # PRELIMINARIES
     unique_run_id = None
     t1 = datetime.now()
-    if log_stats:
-        unique_run_id = t1.strftime("%Y%m%d_%H%M%S_%f") if log_stats else None
 
     repo_root: Path = Path(__file__).resolve().parent.parent
     out_dir_pth = repo_root / "outputs/txt"
@@ -104,9 +104,10 @@ def runner(
         t1_inner = datetime.now()
         i += 1
 
-        # Update user
+        # Unique run ID if stats logging is on
         if log_stats:
             print(f"\nAttempt {i} of {max_attempts}:")
+            unique_run_id = t1_inner.strftime("%Y%m%d_%H%M%S_%f")
         else: 
             print(".")
 
@@ -121,6 +122,7 @@ def runner(
                 log_stats_id=unique_run_id,
                 debug=debug,
                 fig_data=fig_data,
+                first_cube=first_cube,
                 **kwargs,
             )
 
