@@ -1,11 +1,11 @@
 import random
 import networkx as nx
+import matplotlib.figure
 
 from datetime import datetime
 from collections import deque
 from typing import Tuple, List, Optional, Any, Union, cast
 
-import matplotlib.figure
 from topologiq.scripts.pathfinder import pthfinder, get_taken_coords
 from topologiq.utils.animation import create_animation
 from topologiq.utils.utils_greedy_bfs import (
@@ -34,7 +34,7 @@ from topologiq.utils.classes import (
 ###############################
 def graph_manager_bfs(
     g: SimpleDictGraph,
-    c_name: str = "circuit",
+    circuit_name: str = "circuit",
     min_succ_rate: int = 50,
     hide_ports: bool = False,
     visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
@@ -54,7 +54,7 @@ def graph_manager_bfs(
 
     Args:
         - g: a ZX circuit as a simple dictionary of nodes and edges.
-        - c_name: name of ZX circuit.
+        - circuit_name: name of ZX circuit.
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - hide_ports:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
@@ -102,22 +102,23 @@ def graph_manager_bfs(
     if log_stats_id is not None:
         t1 = datetime.now()
 
-    # Variables to hold results
+    # PARAMS & AUX VARIABLES
+    # Graph management
     nx_g = prep_3d_g(g)
-
     num_nodes_input: int = 0
     num_1st_pass_edges: int = 0
-    lat_nodes: Union[None, dict[int, StandardBlock]] = None
-    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # BFS management
     first_id: Optional[int] = find_first_id(nx_g) if first_cube[0] is None else first_cube[0]
     taken: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
     edge_pths: dict = {}
-
     queue: deque[int] = deque([first_id])
     visited: set = {first_id}
+
+    # Topologiq outputs
+    lat_nodes: Union[None, dict[int, StandardBlock]] = None
+    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
 
     # VALIDITY CHECKS
     if not check_zx_types(g):
@@ -236,7 +237,7 @@ def graph_manager_bfs(
                                                 current_nodes=current_nodes,
                                                 hide_ports=hide_ports,
                                                 save_to_file=True,
-                                                filename=f"{c_name}{c:03d}",
+                                                filename=f"{circuit_name}{c:03d}",
                                                 debug=debug,
                                                 taken=taken,
                                                 fig_data=fig_data,
@@ -256,7 +257,7 @@ def graph_manager_bfs(
                             # CREATE ANIMATION OF FAILED ATTEMPT
                             if visualise[1]:
                                 create_animation(
-                                    filename_prefix=f"FAIL_{c_name}",
+                                    filename_prefix=f"FAIL_{circuit_name}",
                                     restart_delay=5000,
                                     duration=2500,
                                     video=True if visualise[1] == "MP4" else False,
@@ -280,7 +281,7 @@ def graph_manager_bfs(
                                     run_success,
                                     counts,
                                     times,
-                                    c_name=c_name,
+                                    circuit_name=circuit_name,
                                     edge_pths=edge_pths,
                                     lat_nodes=lat_nodes,
                                     lat_edges=lat_edges,
@@ -308,7 +309,7 @@ def graph_manager_bfs(
             nx_g,
             taken,
             edge_pths,
-            c_name,
+            circuit_name,
             c,
             all_beams,
             min_succ_rate=min_succ_rate,
@@ -323,7 +324,7 @@ def graph_manager_bfs(
         # CREATE ANIMATION OF FAILED ATTEMPT
         if visualise[1]:
             create_animation(
-                filename_prefix=f"FAIL_{c_name}",
+                filename_prefix=f"FAIL_{circuit_name}",
                 restart_delay=5000,
                 duration=2500,
                 video=True if visualise[1] == "MP4" else False,
@@ -347,7 +348,7 @@ def graph_manager_bfs(
                 run_success,
                 counts,
                 times,
-                c_name=c_name,
+                circuit_name=circuit_name,
                 edge_pths=edge_pths,
                 lat_nodes=lat_nodes,
                 lat_edges=lat_edges,
@@ -381,7 +382,7 @@ def graph_manager_bfs(
             run_success,
             counts,
             times,
-            c_name=c_name,
+            circuit_name=circuit_name,
             edge_pths=edge_pths,
             lat_nodes=lat_nodes,
             lat_edges=lat_edges,
@@ -500,7 +501,7 @@ def place_nxt_block(
             if nxt_neigh_zx_type == "O":
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
-            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n:
+            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1:
                 beams_broken_by_pth = 0
 
                 critical_beams_broken = False
@@ -518,7 +519,7 @@ def place_nxt_block(
                         adjust_for_source_node = 1 if n_id == src_id else 0
                         if broken > 4 - (get_node_degree(nx_g, n_id) - adjust_for_source_node):
                             critical_beams_broken = True
-                            
+
                 if critical_beams_broken is not True:
                     all_nodes_in_pth = [p for p in clean_pth]
 
@@ -628,7 +629,7 @@ def second_pass(
     nx_g: nx.Graph,
     taken: List[StandardCoord],
     edge_pths: dict,
-    c_name: str,
+    circuit_name: str,
     c: int,
     all_beams: List[NodeBeams],
     min_succ_rate: int = 50,
@@ -647,7 +648,7 @@ def second_pass(
             and updated regularly over the course of the process.
         - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
-        - c_name: name of ZX circuit.
+        - circuit_name: name of ZX circuit.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations).
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - visualise: a tuple with visualisation settings:
@@ -717,8 +718,6 @@ def second_pass(
                         num_edges_still_to_complete = n_degree - n_edges_completed
                         if num_edges_still_to_complete == 0:
                             pass
-                        #elif node_id == u or node_id == v:
-                            #pass
                         else:
                             critical_beams[node_id] = (
                                 num_edges_still_to_complete,
@@ -773,6 +772,9 @@ def second_pass(
                         # Add path to position to list of graphs' occupied positions
                         all_coords_in_pth = get_taken_coords(clean_pths[0])
                         taken.extend(all_coords_in_pth)
+                        
+                        # Prune beams before moving to next edge
+                        nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
                         if log_stats_id:
                             print(f"Path discovery: {u} -> {v}. SUCCESS.")
@@ -814,7 +816,7 @@ def second_pass(
                                         current_nodes,
                                         hide_ports=hide_ports,
                                         save_to_file=True,
-                                        filename=f"{c_name}{c:03d}",
+                                        filename=f"{circuit_name}{c:03d}",
                                         debug=debug,
                                         taken=taken,
                                         fig_data=fig_data,

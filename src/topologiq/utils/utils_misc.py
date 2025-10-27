@@ -95,7 +95,7 @@ def prep_stats_n_log(
     op_success: bool,
     counts: dict[str, int],
     times: dict[str, Union[datetime, None]],
-    c_name: str = "unknown",
+    circuit_name: str = "unknown",
     edge_pths: Union[None, dict] = None,
     lat_nodes: Union[None, dict[int, StandardBlock]] = None,
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
@@ -146,7 +146,7 @@ def prep_stats_n_log(
         main_stats = [
             log_stats_id,
             op_success,
-            c_name,
+            circuit_name,
             run_params["length_of_beams"],
             counts["num_input_nodes_processed"] if op_success else 0,
             counts["num_input_edges_processed"] if op_success else 0,
@@ -163,7 +163,7 @@ def prep_stats_n_log(
         aux_stats = [
             log_stats_id,
             op_success,
-            c_name,
+            circuit_name,
             run_params,
                         (
                 [
@@ -256,7 +256,7 @@ def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []
 
 def write_outputs(
     c_g_dict: SimpleDictGraph,
-    c_name: str,
+    circuit_name: str,
     edge_pths: dict,
     lat_nodes: dict[int, StandardBlock],
     lat_edges: dict[Tuple[int, int], List[str]],
@@ -265,7 +265,7 @@ def write_outputs(
     """Writes the final results of the run to TXT file.
     Args:
         - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges
-        - c_name: name of ZX circuit
+        - circuit_name: name of ZX circuit
         - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
         - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
         - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
@@ -277,7 +277,7 @@ def write_outputs(
 
     lines: List[str] = []
 
-    lines.append(f"RESULT SHEET. CIRCUIT NAME: {c_name}\n")
+    lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
     lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
     for node in c_g_dict["nodes"]:
         lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
@@ -300,7 +300,7 @@ def write_outputs(
             f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
         )
 
-    with open(f"{out_dir_pth}/{c_name}.txt", "w") as f:
+    with open(f"{out_dir_pth}/{circuit_name}.txt", "w") as f:
         f.writelines(lines)
         f.close()
 
