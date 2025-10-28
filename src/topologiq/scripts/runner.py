@@ -146,6 +146,7 @@ def runner(
                 first_cube=first_cube,
                 **kwargs,
             )
+            lat_volume = sum([1 for node in lat_nodes.values() if node[1] != "ooo"])
 
             # Return result if any
             if lat_nodes is not None and lat_edges is not None:
@@ -157,7 +158,8 @@ def runner(
                 # Update user
                 print(
                     Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
-                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
+                    f"Volume: {lat_volume}.",
+                    f"Duration: {duration_iter:.2f}s (attempt), {duration_all:.2f}s (total).",
                 )
 
                 if visualise[0] is not None or visualise[1] is not None:

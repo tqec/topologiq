@@ -38,6 +38,44 @@ steane: SimpleDictGraph = {
     ],
 }
 
+steane_obfs: SimpleDictGraph = {
+    "nodes": [
+        (1, "Z"),
+        (2, "X"),
+        (3, "X"),
+        (4, "X"),
+        (5, "Z"),
+        (6, "Z"),
+        (7, "Z"),
+        (8, "X"),
+        (9, "O"),
+        (10, "O"),
+        (11, "O"),
+        (12, "O"),
+        (13, "O"),
+        (14, "O"),
+        (15, "O"),
+    ],
+    "edges": [
+        ((1, 2), "SIMPLE"),
+        ((1, 3), "SIMPLE"),
+        ((1, 4), "SIMPLE"),
+        ((1, 9), "SIMPLE"),
+        ((2, 5), "SIMPLE"),
+        ((2, 10), "SIMPLE"),
+        ((3, 6), "SIMPLE"),
+        ((3, 11), "SIMPLE"),
+        ((4, 7), "SIMPLE"),
+        ((4, 12), "SIMPLE"),
+        ((5, 8), "SIMPLE"),
+        ((5, 13), "SIMPLE"),
+        ((6, 8), "SIMPLE"),
+        ((6, 14), "SIMPLE"),
+        ((7, 8), "SIMPLE"),
+        ((7, 15), "SIMPLE"),
+    ],
+}
+
 hadamard_line: SimpleDictGraph = {
     "nodes": [
         (0, "Z"),
