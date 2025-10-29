@@ -216,12 +216,12 @@ def prune_beams(
 
 
 def reindex_pth_dict(
-    edge_pths: dict,
+    edge_paths: dict,
 ) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], List[str]]]:
     """Distils an edge_pth object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
 
     Args:
-        - edge_pths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
 
     Returns:
         - lat_nodes: the nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
@@ -231,11 +231,11 @@ def reindex_pth_dict(
 
     max_id = 0
     idx_pths = {}
-    for pth in edge_pths.values():
+    for pth in edge_paths.values():
         max_id = max(max_id, pth["src_tgt_ids"][0], pth["src_tgt_ids"][1])
     nxt_id = max_id + 1
 
-    for pth in edge_pths.values():
+    for pth in edge_paths.values():
 
         idxd_pth = {}
         key_1, key_2 = pth["src_tgt_ids"]

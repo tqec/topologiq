@@ -11,7 +11,7 @@ def create_animation(
     remove_temp_images: bool = True,
     video: bool = False,
 ):
-    """Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `.outputs/temp/`).
+    """Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `.output/temp/`).
 
     Args:
         - filename_prefix: filename to use for animation.
@@ -25,15 +25,15 @@ def create_animation(
             - True: save the animation as MP4 (requires FFmpeg)
 
     Returns
-        - n/a. The animation is not returned but saved to `./outputs/media/` folder.
+        - n/a. The animation is not returned but saved to `./output/media/` folder.
 
     """
 
     # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
     images = []
     repository_root: Path = Path(__file__).resolve().parent.parent
-    output_folder_pth = repository_root / "outputs/media"
-    temp_folder_pth = repository_root / "outputs/temp"
+    output_folder_pth = repository_root / "output/media"
+    temp_folder_pth = repository_root / "output/temp"
 
     image_filenames = os.listdir(temp_folder_pth)
     image_filenames = sorted([img for img in image_filenames if img.endswith(".png")])

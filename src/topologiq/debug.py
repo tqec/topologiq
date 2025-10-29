@@ -31,8 +31,8 @@ def run_debug():
     Returns:
         - n/a. All outputs below result from separate functions at different parts of the process.
             - Pops up an interactive 3D viewer for user to examine the space-time diagram produced as output.
-            - Saves a TXT file with detailed results to `.outputs/txt/` folder.
-            - Saves a GIF or MP4 animation to `.outputs/media/` folder.
+            - Saves a TXT file with detailed results to `.output/txt/` folder.
+            - Saves a GIF or MP4 animation to `.output/media/` folder.
             - IMPORTANT! This is NOT the function needed for programmatic use – see `./scripts/runner.py` for that.
 
     """
@@ -124,8 +124,8 @@ def run_debug():
                     hide_ports=False,
                     max_attempts=1,
                     stop_on_first_success=True,
-                    visualise=("detail", "GIF"),
-                    log_stats=True,
+                    vis_options=("detail", "GIF"),
+                    log_stats=False,
                     debug=True,
                     fig_data=fig_data,
                     first_cube=(first_id, first_kind),

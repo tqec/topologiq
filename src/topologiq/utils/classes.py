@@ -1,6 +1,5 @@
 from typing import List, Tuple, TypedDict
 from dataclasses import dataclass
-from typing import Tuple, List
 
 # TYPES FOR INCOMING 2D GRAPH
 GraphNode = Tuple[int, str]

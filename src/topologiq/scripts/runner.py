@@ -32,7 +32,7 @@ from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 def runner(
     simple_graph: SimpleDictGraph,
     circuit_name: str,
-    min_succ_rate: int = 50,
+    min_succ_rate: int = 60,
     strip_ports: bool = False,
     hide_ports: bool = False,
     max_attempts: int = 10,
@@ -49,52 +49,51 @@ def runner(
     Union[None, dict[int, StandardBlock]],
     Union[None, dict[Tuple[int, int], List[str]]],
 ]:
-    """Runs the algorithm on any circuit given to it
+    """Run Topologiq on an arbitrary circuit provided as `simple_graph`.
 
     Args:
-        simple_graph: a ZX circuit provided as a simple dictionary of nodes and edges.
-        circuit_name: the name of the ZX circuit.
-        min_succ_rate: min % of tent_coords that need to be filled for each edge (used as exit condition).
-        strip_ports: whether to 
-            true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
-            false: nodes are factored into the process and shown on visualisation.
-        hide_ports:
-            true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
-            false: boundary nodes are factored into the process and shown on visualisation.
-        vis_options: a tuple with visualisation settings:
-            vis_options[0]:
-                None: no visualisation whatsoever,
-                "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
-                "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
-            vis_options[1]:
-                None: no animation whatsoever,
-                "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
-                "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
-        log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
-            True: log stats to file
-            False: do NOT log stats to file
-        debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
-            True: debugging mode on,
-            False: debugging mode off.
-        fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
-        first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
+        simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
+        circuit_name: The name of the ZX circuit.
+        min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
+        strip_ports (optional): If True, boundary spiders are removed from the `simple_graph` prior to calling Topologiq.
+        hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
+        max_attempts (optional): The maximum number of times to repeat-call the algorithm on a given circuit.
+        stop_on_first_success (boolean): If True, forces exit on first successful outcome irrespective of `max_attempts`.
+        vis_options (optional): Visualisation settings provided as a Tuple.
+            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
+                (None): No visualisation.
+                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
+            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
+                (None): No animation.
+                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
+        log_stats (optional): If True, triggers automated stats logging to CSV files in `.assets/stats/`.
+        debug (optional): If True, turns debugging mode on (enable verbose logging and added details in visualisations).
+        fig_data (optional): passes the input graph visualisation to Topologiq (to overlay it over other visualisations).
+        first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
 
     Keyword arguments (**kwargs):
-        weights: weights for the value function to pick best of many paths.
-        length_of_beams: length of each of the beams coming out of open nodes.
+        weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
+        length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
 
     Returns:
-        simple_graph: original circuit given to function returns for easy traceability.
-        edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
-        lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
-        lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
+        simple_graph: The original `simple_graph` given to function (returned for ease of use and traceability).
+        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
 
     """
 
-    # OPTIMISE SIMPLE GRAPH IF POSSIBLE
-    # The following operations return the same simple_graph is no optimisation is available
-    # Eventually, there should be a manager that calls only applicable optimisation
-    # But there are not enough optimisations currently available for this
+    # Preliminaries
+    t1 = datetime.now()
+    repo_root: Path = Path(__file__).resolve().parent.parent
+    output_dir_path = repo_root / "output/txt"
+    temp_dir_pth = repo_root / "output/temp"
+    Path(output_dir_path).mkdir(parents=True, exist_ok=True)
+    unique_run_id = None
+
+    # Optimise incoming graph if applicable
+    # The following operations leave the simple_graph unchanged if no optimisation is available
+    # Eventually, there should be a manager that calls only applicable optimisations
     simple_graph_optimised = break_single_spider_graph(simple_graph)
 
     # Update user if graph was auto-optimised
@@ -107,45 +106,34 @@ def runner(
         fig_data = None
         print("Note! Graph auto-optimised to reduce final volume.")
         simple_graph_vis(simple_graph, layout_method="planar")
-        
 
-
-    # PRELIMINARIES
-    unique_run_id = None
-    t1 = datetime.now()
-
-    repo_root: Path = Path(__file__).resolve().parent.parent
-    out_dir_pth = repo_root / "outputs/txt"
-    temp_dir_pth = repo_root / "outputs/temp"
-    Path(out_dir_pth).mkdir(parents=True, exist_ok=True)
-
-    # APPLICABLE GRAPH TRANSFORMATIONS
+    # Optional graph transformations
     if strip_ports:
         simple_graph = strip_boundaries(simple_graph)
 
-    # VARS TO HOLD RESULTS
-    edge_pths: Union[None, dict] = None
-    lat_nodes: Union[None, dict[int, StandardBlock]] = None
-    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
-
-    # LOOP UNTIL SUCCESS OR LIMIT
+    # Call algorithm on a loop up to `max_attempts` tries
     i: int = 0
     while i < max_attempts:
-
         # Update counters
         t1_inner = datetime.now()
         i += 1
 
-        # Unique run ID if stats logging is on
-        if log_stats:
+        # Verbose updates if log_stats or debug mode is on
+        if log_stats or debug:
             print(f"\nAttempt {i} of {max_attempts}:")
+        
+        # Create unique run ID if stats logging is on
+        if log_stats:
             unique_run_id = t1_inner.strftime("%Y%m%d_%H%M%S_%f")
         else: 
             print(".")
 
         # Call algorithm
+        edge_paths = None
+        lat_nodes = None
+        lat_edges = None
         try:
-            nx_g, edge_pths, c, lat_nodes, lat_edges = graph_manager_bfs(
+            nx_g, edge_paths, c, lat_nodes, lat_edges = graph_manager_bfs(
                 simple_graph,
                 circuit_name=circuit_name,
                 min_succ_rate=min_succ_rate,
@@ -161,7 +149,6 @@ def runner(
 
             # Return result if any
             if lat_nodes is not None and lat_edges is not None:
-
                 # Stop timer
                 duration_iter = (datetime.now() - t1_inner).total_seconds()
                 duration_all = (datetime.now() - t1).total_seconds()
@@ -180,36 +167,29 @@ def runner(
 
                 # Write outputs
                 write_outputs(
-                    simple_graph, circuit_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
+                    simple_graph, circuit_name, edge_paths, lat_nodes, lat_edges, output_dir_path
                 )
 
                 # vis_options result
                 if vis_options[0] or vis_options[1]:
-
                     final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
+                    # 3D interactive visualisation
                     if vis_options[0]:
-                        if (
-                            vis_options[0].lower() == "final"
-                            or vis_options[0].lower() == "detail"
-                        ):
-
+                        if vis_options[0].lower() in ["final", "details"]:
                             vis_3d_g(
                                 final_nx_g,
-                                edge_pths,
+                                edge_paths,
                                 hide_ports=hide_ports,
                                 fig_data=fig_data,
                             )
 
-                    # Animate
+                    # Animation
                     if vis_options[1]:
-                        if (
-                            vis_options[1].lower() == "gif"
-                            or vis_options[1].lower() == "mp4"
-                        ):
+                        if vis_options[1].lower() in ["gif", "mp4"]:
                             vis_3d_g(
                                 final_nx_g,
-                                edge_pths,
+                                edge_paths,
                                 hide_ports=hide_ports,
                                 save_to_file=True,
                                 filename=f"{circuit_name}{c:03d}",
@@ -228,13 +208,12 @@ def runner(
                     break
 
         except ValueError as e:
-
             # Stop timer
             duration_iter = (datetime.now() - t1_inner).total_seconds()
             duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
-            if log_stats:
+            if log_stats or debug:
                 print(
                     Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
                     f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
@@ -251,5 +230,4 @@ def runner(
         except (ValueError, FileNotFoundError) as e:
             print("Unable to delete temp files or temp folder does not exist", e)
 
-    # RETURN: simple_graph, edge_pths, nodes and edges of result
-    return simple_graph, edge_pths, lat_nodes, lat_edges
+    return simple_graph, edge_paths, lat_nodes, lat_edges

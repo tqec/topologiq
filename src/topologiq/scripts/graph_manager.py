@@ -85,7 +85,7 @@ def graph_manager_bfs(
     Returns:
         - nx_g: a nx_graph with the nodes and edges in the incoming ZX graph formatted to facilitate positioning of 3D blocks and pipes,
             updated regularly over the course of the process.
-        - edge_pths: the raw set of 3D edges found (with redundant blocks for start and end positions of some edges),
+        - edge_paths: the raw set of 3D edges found (with redundant blocks for start and end positions of some edges),
             updated regularly over the course of the process.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations),
             updated regularly over the course of the process.
@@ -112,7 +112,7 @@ def graph_manager_bfs(
     first_id: Optional[int] = find_first_id(nx_g) if first_cube[0] is None else first_cube[0]
     taken: List[StandardCoord] = []
     all_beams: List[NodeBeams] = []
-    edge_pths: dict = {}
+    edge_paths: dict = {}
     queue: deque[int] = deque([first_id])
     visited: set = {first_id}
 
@@ -123,13 +123,13 @@ def graph_manager_bfs(
     # VALIDITY CHECKS
     if not check_zx_types(g):
         print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
-        return (nx_g, edge_pths, 0, lat_nodes, lat_edges)
+        return (nx_g, edge_paths, 0, lat_nodes, lat_edges)
 
     # SPECIAL PROCESS FOR CENTRAL NODE
     # Terminate if there is no first node
     if first_id is None:
         print(Colors.RED + "Graph has no nodes." + Colors.RESET)
-        return nx_g, edge_pths, 0, lat_nodes, lat_edges
+        return nx_g, edge_paths, 0, lat_nodes, lat_edges
 
     # Place first node at origin
     else:
@@ -181,30 +181,31 @@ def graph_manager_bfs(
                 step: int = 3
                 while step <= 9:
 
-                    taken, all_beams, edge_pths, edge_success = place_nxt_block(
+                    taken, all_beams, edge_paths, edge_success = place_nxt_block(
                         curr_parent,
                         neigh_id,
                         nx_g,
                         taken,
                         all_beams,
-                        edge_pths,
+                        edge_paths,
                         init_step=step,
                         min_succ_rate=min_succ_rate,
                         log_stats_id=log_stats_id,
+                        debug=debug,
                         **kwargs,
                     )
 
                     # For visualisation purposes, on each step,
-                    # create a new graph from edge_pths
-                    if edge_pths:
-                        if c < int(len(edge_pths)):
-                            if list(edge_pths.values())[-1]["pth_nodes"] != "error":
+                    # create a new graph from edge_paths
+                    if edge_paths:
+                        if c < int(len(edge_paths)):
+                            if list(edge_paths.values())[-1]["pth_nodes"] != "error":
 
                                 if vis_options[0] or vis_options[1]:
 
                                     # Create graph from existing edges
                                     partial_lat_nodes, partial_lat_edges = (
-                                        reindex_pth_dict(edge_pths)
+                                        reindex_pth_dict(edge_paths)
                                     )
                                     partial_nx_g, _ = lattice_to_g(
                                         partial_lat_nodes, partial_lat_edges, nx_g
@@ -216,7 +217,7 @@ def graph_manager_bfs(
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
                                                 partial_nx_g,
-                                                edge_pths,
+                                                edge_paths,
                                                 current_nodes=current_nodes,
                                                 hide_ports=hide_ports,
                                                 debug=debug,
@@ -233,7 +234,7 @@ def graph_manager_bfs(
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
                                                 partial_nx_g,
-                                                edge_pths,
+                                                edge_paths,
                                                 current_nodes=current_nodes,
                                                 hide_ports=hide_ports,
                                                 save_to_file=True,
@@ -243,7 +244,7 @@ def graph_manager_bfs(
                                                 fig_data=fig_data,
                                             )
 
-                                c = len(edge_pths)
+                                c = len(edge_paths)
 
                     # Move to next if there is a succesful placement
                     if edge_success:
@@ -282,7 +283,7 @@ def graph_manager_bfs(
                                     counts,
                                     times,
                                     circuit_name=circuit_name,
-                                    edge_pths=edge_pths,
+                                    edge_paths=edge_paths,
                                     lat_nodes=lat_nodes,
                                     lat_edges=lat_edges,
                                     run_params={"min_succ_rate": min_succ_rate, **kwargs},
@@ -302,13 +303,13 @@ def graph_manager_bfs(
     # RUN OVER GRAPH AGAIN IN CASE SOME EDGES WHERE NOT BUILT AS A RESULT OF MAIN LOOP
     if log_stats_id is not None:
         t2 = datetime.now()
-    num_2n_pass_edges = 0
 
+    num_2n_pass_edges = 0
     try:
-        edge_pths, c, num_2n_pass_edges = second_pass(
+        edge_paths, c, num_2n_pass_edges = second_pass(
             nx_g,
             taken,
-            edge_pths,
+            edge_paths,
             circuit_name,
             c,
             all_beams,
@@ -349,7 +350,7 @@ def graph_manager_bfs(
                 counts,
                 times,
                 circuit_name=circuit_name,
-                edge_pths=edge_pths,
+                edge_paths=edge_paths,
                 lat_nodes=lat_nodes,
                 lat_edges=lat_edges,
                 run_params={"min_succ_rate": min_succ_rate, **kwargs},
@@ -360,7 +361,7 @@ def graph_manager_bfs(
 
     # IF WE MADE IT HERE, ALL EDGES CLEARED
     # ASSEMBLE FINAL LATTICE SURGERY
-    lat_nodes, lat_edges = reindex_pth_dict(edge_pths)
+    lat_nodes, lat_edges = reindex_pth_dict(edge_paths)
 
     # LOG STATS OF SUCCESS
     # Note. Whereas failure logging requires two log stats blocks because failures can arise in two places,
@@ -383,14 +384,14 @@ def graph_manager_bfs(
             counts,
             times,
             circuit_name=circuit_name,
-            edge_pths=edge_pths,
+            edge_paths=edge_paths,
             lat_nodes=lat_nodes,
             lat_edges=lat_edges,
             run_params={"min_succ_rate": min_succ_rate, **kwargs},
         )
 
     # RETURN THE GRAPHS AND EDGE PATHS FOR ANY SUBSEQUENT USE
-    return nx_g, edge_pths, c, lat_nodes, lat_edges
+    return nx_g, edge_paths, c, lat_nodes, lat_edges
 
 
 ##################
@@ -402,10 +403,11 @@ def place_nxt_block(
     nx_g: nx.Graph,
     taken: List[StandardCoord],
     all_beams: List[NodeBeams],
-    edge_pths: dict,
+    edge_paths: dict,
     init_step: int = 3,
     min_succ_rate: int = 50,
     log_stats_id: Union[str, None] = None,
+    debug: bool = False,
     **kwargs,
 ) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
     """Takes care of positioning nodes in the 3D space as part of the outer (graph manager) BFS flow. The function does not explicitly create the paths,
@@ -419,7 +421,7 @@ def place_nxt_block(
             updated regularly over the course of the process.
         - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - all_beams: list of coordinates occupied by the beams of all blocks in original ZX graph.
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - init_step: intended (Manhattan) distance between origin and target blocks.
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
         - log_stats_id: unique identifier for logging stats to CSV files in `.assets/stats/` (`None` keeps logging is off).
@@ -432,7 +434,7 @@ def place_nxt_block(
     Returns:
         - taken: updated list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
         - all_beams: updated list of coordinates occupied by the beams of all blocks in original ZX graph.
-        - edge_pths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - edge_paths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - bool:
             - True: placement succesful
             - False: placement not succesful
@@ -448,7 +450,7 @@ def place_nxt_block(
     src_kind: Optional[str] = nx_g.nodes[src_id].get("kind")
 
     if src_coords is None or src_kind is None:
-        return taken, all_beams, edge_pths, False
+        return taken, all_beams, edge_paths, False
     src: StandardBlock = (src_coords, src_kind)
 
     # Current node data
@@ -582,7 +584,7 @@ def place_nxt_block(
             edge_type = nx_g.get_edge_data(src_id, neigh_id).get(
                 "type", "SIMPLE"
             )  # Default to "SIMPLE" if type is not found
-            edge_pths[edge] = {
+            edge_paths[edge] = {
                 "src_tgt_ids": (src_id, neigh_id),
                 "pth_coordinates": winner_pth.coords_in_pth,
                 "pth_nodes": winner_pth.all_nodes_in_pth,
@@ -593,19 +595,19 @@ def place_nxt_block(
             all_coords_in_pth = get_taken_coords(winner_pth.all_nodes_in_pth)
             taken.extend(all_coords_in_pth)
 
-            if log_stats_id:
+            if log_stats_id or debug:
                 print(f"Path creation: {src_id} -> {neigh_id}. SUCCESS.")
 
             # Return updated list of taken coords and all_beams, with success code
             nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
-            return taken, all_beams, edge_pths, True
+            return taken, all_beams, edge_paths, True
 
         # Handle cases where no winner is found
         if not winner_pth:
 
             # Fill edge_pth with error (allows process to move on but error is easy to spot)
             edge = tuple(sorted((src_id, neigh_id)))
-            edge_pths[edge] = {
+            edge_paths[edge] = {
                 "src_tgt_ids": "error",
                 "pth_coordinates": "error",
                 "pth_nodes": "error",
@@ -613,22 +615,22 @@ def place_nxt_block(
             }
 
             # Explicit warning
-            if log_stats_id:
+            if log_stats_id or debug:
                 print(f"Path creation: {src_id} -> {neigh_id}. FAIL.")
 
             # Return unchanged list of taken coords and all_beams, with failure boolean
             nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
-            return taken, all_beams, edge_pths, False
+            return taken, all_beams, edge_paths, False
 
     # FAIL SAFE RETURN TO AVOID TYPE ERRORS
     nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
-    return taken, all_beams, edge_pths, False
+    return taken, all_beams, edge_paths, False
 
 
 def second_pass(
     nx_g: nx.Graph,
     taken: List[StandardCoord],
-    edge_pths: dict,
+    edge_paths: dict,
     circuit_name: str,
     c: int,
     all_beams: List[NodeBeams],
@@ -647,7 +649,7 @@ def second_pass(
             formatted to facilitate positioning of 3D blocks and pipes,
             and updated regularly over the course of the process.
         - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - circuit_name: name of ZX circuit.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations).
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
@@ -672,7 +674,7 @@ def second_pass(
         - max_search_space: maximum size of 3D space to generate paths for.
 
     Returns:
-        - edge_pths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - edge_paths: updated raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
         - c: updated counter for the number of top-level iterations by BFS (used to organise visualisations)
 
     """
@@ -699,8 +701,8 @@ def second_pass(
             v_zx_type = cast(str, nx_g.nodes[v].get("type"))
             edge = tuple(sorted((u, v)))
 
-            # Call pathfinder on any graph edge that does not have an entry in edge_pths
-            if edge not in edge_pths:
+            # Call pathfinder on any graph edge that does not have an entry in edge_paths
+            if edge not in edge_paths:
 
                 # Update edge counter
                 num_2n_pass_edges += 1
@@ -745,13 +747,13 @@ def second_pass(
                         u_v_ids=(u,v)
                     )
 
-                    # Write to edge_pths if an edge is found
+                    # Write to edge_paths if an edge is found
                     if clean_pths:
 
                         # Update edge paths
                         coords_in_pth = [p[0] for p in clean_pths[0]]  # Take the first path
                         edge_type = data.get("type", "SIMPLE")
-                        edge_pths[edge] = {
+                        edge_paths[edge] = {
                             "src_tgt_ids": (u, v),
                             "pth_coordinates": coords_in_pth,
                             "pth_nodes": clean_pths[0],
@@ -776,7 +778,7 @@ def second_pass(
                         # Prune beams before moving to next edge
                         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
-                        if log_stats_id:
+                        if log_stats_id or debug:
                             print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
                         # Create visualisation
@@ -784,7 +786,7 @@ def second_pass(
 
                             # Create graph from existing edges
                             partial_lat_nodes, partial_lat_edges = reindex_pth_dict(
-                                edge_pths
+                                edge_paths
                             )
                             partial_nx_g, _ = lattice_to_g(
                                 partial_lat_nodes, partial_lat_edges, nx_g
@@ -795,7 +797,7 @@ def second_pass(
                                     current_nodes = (u, v)
                                     vis_3d_g(
                                         partial_nx_g,
-                                        edge_pths,
+                                        edge_paths,
                                         current_nodes,
                                         hide_ports=hide_ports,
                                         debug=debug,
@@ -812,7 +814,7 @@ def second_pass(
                                     current_nodes = (u, v)
                                     vis_3d_g(
                                         partial_nx_g,
-                                        edge_pths,
+                                        edge_paths,
                                         current_nodes,
                                         hide_ports=hide_ports,
                                         save_to_file=True,
@@ -825,12 +827,12 @@ def second_pass(
                         # Prune beams before moving to next edge
                         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
-                    # Write an error to edge_pths if edge not found
+                    # Write an error to edge_paths if edge not found
                     else:
                         raise ValueError(f"Path discovery. Error with edge: {u} -> {v}.")
 
     # RETURN EDGE PATHS FOR FINAL CONSUMPTION
-    return edge_pths, c, num_2n_pass_edges
+    return edge_paths, c, num_2n_pass_edges
 
 
 #######################

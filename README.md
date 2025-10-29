@@ -128,7 +128,7 @@ python3 src/topologiq/debug.py  # Requires active .venv
 And it is possible to set several visualisation options also via command.
 
 ``` bash
-# No visualisations (best for programmatic use)
+# No visualisations
 uv run src/topologiq/run.py --pyzx:cnot
 python3 src/topologiq/run.py --pyzx:cnot  # Requires active .venv
 

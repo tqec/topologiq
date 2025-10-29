@@ -12,7 +12,6 @@ import matplotlib.text as mtext
 import matplotlib.path as mpath
 
 import matplotlib.figure
-import matplotlib.pyplot as plt
 from matplotlib.text import Text
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 from typing import Annotated, Literal, Any, Optional, Tuple, List, IO, Union
@@ -361,7 +360,7 @@ def figure_to_png(
 # MAIN VISUALISATION FUNCTION
 def vis_3d_g(
     graph: nx.Graph,
-    edge_pths: dict,
+    edge_paths: dict,
     current_nodes: Optional[Tuple[int, int]] = None,
     hide_ports: bool = False,
     node_hex_map: dict[str, list[str]] = node_hex_map,
@@ -376,7 +375,7 @@ def vis_3d_g(
 
     Args:
         - graph: incoming graph formatted as an nx.Graph.
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
         - current_nodes: ID of the last (src, tgt) nodes connected by the algorithm.
         - hide_ports:
             - True: do not display boundary nodes even if present in the incoming graph,
@@ -642,7 +641,7 @@ def vis_3d_g(
         png_buffer = figure_to_png(
             fig_data,
             processed_ids=list(graph),
-            processed_edges=list(edge_pths.keys()),
+            processed_edges=list(edge_paths.keys()),
         )
         overlay_image = Image.open(png_buffer)
         img_width, img_height = overlay_image.size
@@ -691,7 +690,7 @@ def vis_3d_g(
 
     # POP UP OR SAVE VIS
     repository_root: Path = Path(__file__).resolve().parent.parent
-    temp_folder_pth = repository_root / "outputs/temp"
+    temp_folder_pth = repository_root / "output/temp"
     if save_to_file:
         Path(temp_folder_pth).mkdir(parents=True, exist_ok=True)
         plt.savefig(f"{temp_folder_pth}/{filename}.png")
@@ -702,22 +701,22 @@ def vis_3d_g(
 
 
 # TOP LEVEL FUNCTIONS TO PREPARE OBJECTS FOR VISUALISATION
-def edge_pths_to_g(edge_pths: dict[Any, Any]) -> nx.Graph:
-    """Converts an edge_pths object into an nx.Graph that can be visualised with `vis_3d_g`. It is worth noting
+def edge_paths_to_g(edge_paths: dict[Any, Any]) -> nx.Graph:
+    """Converts an edge_paths object into an nx.Graph that can be visualised with `vis_3d_g`. It is worth noting
     that the function will create a graph with potentially redundant blocks, which is irrelevant for visualisation purposes
     but does mean the function should not be used when producing final results.
 
     Args:
-        - edge_pths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
 
     Returns:
-        - final_graph: an nx.Graph with all the information in edge_pths but in a format more amicable for visualisation
+        - final_graph: an nx.Graph with all the information in edge_paths but in a format more amicable for visualisation
 
     """
 
     final_graph = nx.Graph()
     node_counter = 0
-    for edge, pth_data in edge_pths.items():
+    for edge, pth_data in edge_paths.items():
         primary_node_and_edges = []
         pth_nodes = pth_data["pth_nodes"]
         if pth_nodes == "error":

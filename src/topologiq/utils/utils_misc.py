@@ -96,7 +96,7 @@ def prep_stats_n_log(
     counts: dict[str, int],
     times: dict[str, Union[datetime, None]],
     circuit_name: str = "unknown",
-    edge_pths: Union[None, dict] = None,
+    edge_paths: Union[None, dict] = None,
     lat_nodes: Union[None, dict[int, StandardBlock]] = None,
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
     src: Union[None, StandardBlock] = None,
@@ -152,7 +152,7 @@ def prep_stats_n_log(
             counts["num_input_edges_processed"] if op_success else 0,
             counts["num_1st_pass_edges_processed"] if op_success else 0,
             counts["num_2n_pass_edges_processed"] if op_success else 0,
-            len(edge_pths) if edge_pths else 0,
+            len(edge_paths) if edge_paths else 0,
             len(lat_nodes.keys()) if lat_nodes else 0,
             len(lat_edges.keys()) if lat_edges else 0,
             durations["first_pass"],
@@ -171,9 +171,9 @@ def prep_stats_n_log(
                         edge_pth["src_tgt_ids"][0]: edge_pth["pth_nodes"][0][1],
                         edge_pth["src_tgt_ids"][1]: edge_pth["pth_nodes"][-1][1]
                     } 
-                    for edge_pth in edge_pths.values()
+                    for edge_pth in edge_paths.values()
                 ]
-                if edge_pths
+                if edge_paths
                 else ["error"]
             ),
         ]
@@ -257,22 +257,22 @@ def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []
 def write_outputs(
     c_g_dict: SimpleDictGraph,
     circuit_name: str,
-    edge_pths: dict,
+    edge_paths: dict,
     lat_nodes: dict[int, StandardBlock],
     lat_edges: dict[Tuple[int, int], List[str]],
-    out_dir_pth: Path,
+    output_dir_path: Path,
 ):
     """Writes the final results of the run to TXT file.
     Args:
         - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges
         - circuit_name: name of ZX circuit
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
+        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
         - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
         - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
-        - out_dir_pth: the directory where outputs are saved.
+        - output_dir_path: the directory where outputs are saved.
 
     Returns
-        - n/a: stats are written to .csv files in `out_dir_pth`
+        - n/a: stats are written to .csv files in `output_dir_path`
     """
 
     lines: List[str] = []
@@ -289,7 +289,7 @@ def write_outputs(
         '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
     )
 
-    for key, edge_pth in edge_pths.items():
+    for key, edge_pth in edge_paths.items():
         lines.append(f"Edge {edge_pth['src_tgt_ids']}: {edge_pth['pth_nodes']}\n")
 
     lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
@@ -300,7 +300,7 @@ def write_outputs(
             f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
         )
 
-    with open(f"{out_dir_pth}/{circuit_name}.txt", "w") as f:
+    with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
         f.writelines(lines)
         f.close()
 
