@@ -12,7 +12,7 @@ Usage:
 
 Options:
     -h, --help              Show this help message and exit.
-    --vis:<final|detail>    Visualise only the final space-time diagram.
+    --vis:<final|detail>    Visualise the "final" output or "detail" visualisations for each edge.
     --repeat:<n>            Repeat for <n> (integer) times.
     --animate:<GIF|MP4>     Create animation of the entire algorithmic process in GIF or MP4 format.
     --strip_boundaries      Eliminate boundary nodes from graph before running algorithm
