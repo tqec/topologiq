@@ -37,7 +37,7 @@ def graph_manager_bfs(
     circuit_name: str = "circuit",
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
@@ -59,12 +59,12 @@ def graph_manager_bfs(
         - hide_ports:
             - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
             - false: boundary nodes are factored into the process and shown on visualisation.
-        - visualise: a tuple with visualisation settings:
-            - visualise[0]:
+        - vis_options: a tuple with visualisation settings:
+            - vis_options[0]:
                 - None: no visualisation whatsoever,
                 - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
                 - "detail" (str): triggers on-screen visualisation for each edge in the original ZX graph (medium performance trade-off).
-            - visualise[1]:
+            - vis_options[1]:
                 - None: no animation whatsoever,
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
@@ -200,7 +200,7 @@ def graph_manager_bfs(
                         if c < int(len(edge_pths)):
                             if list(edge_pths.values())[-1]["pth_nodes"] != "error":
 
-                                if visualise[0] or visualise[1]:
+                                if vis_options[0] or vis_options[1]:
 
                                     # Create graph from existing edges
                                     partial_lat_nodes, partial_lat_edges = (
@@ -211,8 +211,8 @@ def graph_manager_bfs(
                                     )
 
                                     # Create visualisation
-                                    if visualise[0]:
-                                        if visualise[0].lower() == "detail":
+                                    if vis_options[0]:
+                                        if vis_options[0].lower() == "detail":
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
                                                 partial_nx_g,
@@ -225,10 +225,10 @@ def graph_manager_bfs(
                                             )
 
                                     # Save visualisation for later animation
-                                    if visualise[1]:
+                                    if vis_options[1]:
                                         if (
-                                            visualise[1] == "GIF"
-                                            or visualise[1] == "MP4"
+                                            vis_options[1] == "GIF"
+                                            or vis_options[1] == "MP4"
                                         ):
                                             current_nodes = (curr_parent, neigh_id)
                                             vis_3d_g(
@@ -255,12 +255,12 @@ def graph_manager_bfs(
                         if step == 9:
 
                             # CREATE ANIMATION OF FAILED ATTEMPT
-                            if visualise[1]:
+                            if vis_options[1]:
                                 create_animation(
                                     filename_prefix=f"FAIL_{circuit_name}",
                                     restart_delay=5000,
                                     duration=2500,
-                                    video=True if visualise[1] == "MP4" else False,
+                                    video=True if vis_options[1] == "MP4" else False,
                                 )
 
                             # LOG STATS OF FAILED ATTEMPT
@@ -314,7 +314,7 @@ def graph_manager_bfs(
             all_beams,
             min_succ_rate=min_succ_rate,
             hide_ports=hide_ports,
-            visualise=visualise,
+            vis_options=vis_options,
             log_stats_id=log_stats_id,
             debug=debug,
             fig_data=fig_data,
@@ -322,12 +322,12 @@ def graph_manager_bfs(
     except ValueError as e:
 
         # CREATE ANIMATION OF FAILED ATTEMPT
-        if visualise[1]:
+        if vis_options[1]:
             create_animation(
                 filename_prefix=f"FAIL_{circuit_name}",
                 restart_delay=5000,
                 duration=2500,
-                video=True if visualise[1] == "MP4" else False,
+                video=True if vis_options[1] == "MP4" else False,
             )
 
         # LOG STATS OF FAILED ATTEMPT
@@ -634,7 +634,7 @@ def second_pass(
     all_beams: List[NodeBeams],
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats_id: Union[str, None] = None,
     debug: bool = False,
     fig_data: Optional[matplotlib.figure.Figure] = None,
@@ -651,12 +651,12 @@ def second_pass(
         - circuit_name: name of ZX circuit.
         - c: a counter for the number of top-level iterations by BFS (used to organise visualisations).
         - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
-        - visualise: a tuple with visualisation settings:
-            - visualise[0]:
+        - vis_options: a tuple with visualisation settings:
+            - vis_options[0]:
                 - None: no visualisation whatsoever,
                 - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
                 - "detail" (str): triggers on-screen visualisation for each edge in the original ZX graph (medium performance trade-off).
-            - visualise[1]:
+            - vis_options[1]:
                 - None: no animation whatsoever,
                 - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
                 - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
@@ -780,7 +780,7 @@ def second_pass(
                             print(f"Path discovery: {u} -> {v}. SUCCESS.")
 
                         # Create visualisation
-                        if visualise[0] or visualise[1]:
+                        if vis_options[0] or vis_options[1]:
 
                             # Create graph from existing edges
                             partial_lat_nodes, partial_lat_edges = reindex_pth_dict(
@@ -790,8 +790,8 @@ def second_pass(
                                 partial_lat_nodes, partial_lat_edges, nx_g
                             )
 
-                            if visualise[0]:
-                                if visualise[0].lower() == "detail":
+                            if vis_options[0]:
+                                if vis_options[0].lower() == "detail":
                                     current_nodes = (u, v)
                                     vis_3d_g(
                                         partial_nx_g,
@@ -804,10 +804,10 @@ def second_pass(
                                     )
 
                             # Save visualisation for later animation
-                            if visualise[1]:
+                            if vis_options[1]:
                                 if (
-                                    visualise[1].lower() == "gif"
-                                    or visualise[1].lower() == "mp4"
+                                    vis_options[1].lower() == "gif"
+                                    or vis_options[1].lower() == "mp4"
                                 ):
                                     current_nodes = (u, v)
                                     vis_3d_g(

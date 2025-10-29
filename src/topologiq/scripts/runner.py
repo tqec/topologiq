@@ -1,9 +1,20 @@
+"""
+Run Topologiq programmatically using an arbitrary circuit provided as a `simple_graph`.
+
+Usage:
+    Call `runner()` programmatically from a separate script. 
+
+Notes:
+    Examples of how to run this file using combined options are available in `./docs`.
+    MP4 animations require FFmpeg (the actual thing, not just the Python wrapper).
+"""
+
 import shutil
+import matplotlib.figure
 
 from pathlib import Path
 from datetime import datetime
-from typing import List, Optional, Tuple, Union
-import matplotlib.figure
+from typing import List, Tuple, Union
 
 from topologiq.scripts.graph_manager import graph_manager_bfs
 from topologiq.utils.simple_grapher import simple_graph_vis
@@ -26,10 +37,10 @@ def runner(
     hide_ports: bool = False,
     max_attempts: int = 10,
     stop_on_first_success: bool = True,
-    visualise: Tuple[Union[None, str], Union[None, str]] = (None, None),
+    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
     debug: bool = False,
-    fig_data: Optional[matplotlib.figure.Figure] = None,
+    fig_data: matplotlib.figure.Figure | None = None,
     first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
     **kwargs,
 ) -> Tuple[
@@ -41,42 +52,42 @@ def runner(
     """Runs the algorithm on any circuit given to it
 
     Args:
-        - simple_graph: a ZX circuit as a simple dictionary of nodes and edges.
-        - circuit_name: name of ZX circuit.
-        - min_succ_rate: min % of tent_coords that need to be filled on each run of the pathfinder, used as exit condition.
-        - strip_ports:
-            - true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
-            - false: nodes are factored into the process and shown on visualisation.
-        - hide_ports:
-            - true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
-            - false: boundary nodes are factored into the process and shown on visualisation.
-        - visualise: a tuple with visualisation settings:
-            - visualise[0]:
-                - None: no visualisation whatsoever,
-                - "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
-                - "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
-            - visualise[1]:
-                - None: no animation whatsoever,
-                - "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
-                - "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
-        - log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
-            - True: log stats to file
-            - False: do NOT log stats to file
-        - debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
-            - True: debugging mode on,
-            - False: debugging mode off.
-        - fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
-        - first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
+        simple_graph: a ZX circuit provided as a simple dictionary of nodes and edges.
+        circuit_name: the name of the ZX circuit.
+        min_succ_rate: min % of tent_coords that need to be filled for each edge (used as exit condition).
+        strip_ports: whether to 
+            true: instructs the algorithm to eliminate any boundary nodes and their corresponding edges,
+            false: nodes are factored into the process and shown on visualisation.
+        hide_ports:
+            true: instructs the algorithm to use boundary nodes but do not display them in visualisation,
+            false: boundary nodes are factored into the process and shown on visualisation.
+        vis_options: a tuple with visualisation settings:
+            vis_options[0]:
+                None: no visualisation whatsoever,
+                "final" (str): triggers a single on-screen visualisation of the final result (small performance trade-off),
+                "detail" (str): triggers on-screen visualisation for each edge in the original ZX-graph (medium performance trade-off).
+            vis_options[1]:
+                None: no animation whatsoever,
+                "GIF": saves step-by-step visualisation of the process in GIF format (huge performance trade-off),
+                "MP4": saves a PNG of each step/edge in the visualisation process and joins them into a GIF at the end (huge performance trade-off).
+        log_stats: boolean to determine if to log stats to CSV files in `.assets/stats/`.
+            True: log stats to file
+            False: do NOT log stats to file
+        debug: optional parameter to turn debugging mode on (added details will be visualised on each step).
+            True: debugging mode on,
+            False: debugging mode off.
+        fig_data: optional parameter to pass the original visualisation for input graph (currently only available for PyZX graphs).
+        first_cube: ID and kind of the first cube to place in 3D space (which can be used to replicate specific cases).
 
     Keyword arguments (**kwargs):
-        - weights: weights for the value function to pick best of many paths.
-        - length_of_beams: length of each of the beams coming out of open nodes.
+        weights: weights for the value function to pick best of many paths.
+        length_of_beams: length of each of the beams coming out of open nodes.
 
     Returns:
-        - simple_graph: original circuit given to function returns for easy traceability.
-        - edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
-        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
-        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
+        simple_graph: original circuit given to function returns for easy traceability.
+        edge_pths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges).
+        lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks).
+        lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes).
 
     """
 
@@ -139,7 +150,7 @@ def runner(
                 circuit_name=circuit_name,
                 min_succ_rate=min_succ_rate,
                 hide_ports=hide_ports,
-                visualise=visualise,
+                vis_options=vis_options,
                 log_stats_id=unique_run_id,
                 debug=debug,
                 fig_data=fig_data,
@@ -162,7 +173,7 @@ def runner(
                     f"Duration: {duration_iter:.2f}s (attempt), {duration_all:.2f}s (total).",
                 )
 
-                if visualise[0] is not None or visualise[1] is not None:
+                if vis_options[0] is not None or vis_options[1] is not None:
                     print(
                         "Visualisations enabled. For faster runtimes, disable visualisations."
                     )
@@ -172,15 +183,15 @@ def runner(
                     simple_graph, circuit_name, edge_pths, lat_nodes, lat_edges, out_dir_pth
                 )
 
-                # Visualise result
-                if visualise[0] or visualise[1]:
+                # vis_options result
+                if vis_options[0] or vis_options[1]:
 
                     final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
-                    if visualise[0]:
+                    if vis_options[0]:
                         if (
-                            visualise[0].lower() == "final"
-                            or visualise[0].lower() == "detail"
+                            vis_options[0].lower() == "final"
+                            or vis_options[0].lower() == "detail"
                         ):
 
                             vis_3d_g(
@@ -191,10 +202,10 @@ def runner(
                             )
 
                     # Animate
-                    if visualise[1]:
+                    if vis_options[1]:
                         if (
-                            visualise[1].lower() == "gif"
-                            or visualise[1].lower() == "mp4"
+                            vis_options[1].lower() == "gif"
+                            or vis_options[1].lower() == "mp4"
                         ):
                             vis_3d_g(
                                 final_nx_g,
@@ -209,7 +220,7 @@ def runner(
                                 filename_prefix=circuit_name,
                                 restart_delay=5000,
                                 duration=2500,
-                                video=True if visualise[1] == "MP4" else False,
+                                video=True if vis_options[1] == "MP4" else False,
                             )
 
                 # End loop
@@ -228,7 +239,7 @@ def runner(
                     Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
                     f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
                 )
-                if visualise[0] is not None or visualise[1] is not None:
+                if vis_options[0] is not None or vis_options[1] is not None:
                     print(
                         "Visualisations enabled. For faster runtimes, disable visualisations."
                     )
