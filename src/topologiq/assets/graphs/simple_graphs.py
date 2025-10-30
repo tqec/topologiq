@@ -112,7 +112,7 @@ hadamard_bend: SimpleDictGraph = {
     ],
 }
 
-hadamards_mess: SimpleDictGraph = {
+hadamard_mess: SimpleDictGraph = {
     "nodes": [
         (1, "X"),
         (2, "Z"),

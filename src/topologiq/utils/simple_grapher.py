@@ -35,36 +35,36 @@ def simple_graph_vis(
         G_temp.add_edge(u, v)
 
     # Layout
-    pos = {}
+    positions = {}
     if layout_method == "spring":
-        pos = nx.spring_layout(G_temp, iterations=100)
+        positions = nx.spring_layout(G_temp, iterations=100)
     elif layout_method == "circular":
-        pos = nx.circular_layout(G_temp)
+        positions = nx.circular_layout(G_temp)
     elif layout_method == "shell":
-        pos = nx.shell_layout(G_temp)
+        positions = nx.shell_layout(G_temp)
     elif layout_method == "kamada_kawai":
-        pos = nx.kamada_kawai_layout(G_temp)
+        positions = nx.kamada_kawai_layout(G_temp)
     elif layout_method == "spectral":
-        pos_spectral = nx.spectral_layout(G_temp)
-        pos = nx.kamada_kawai_layout(G_temp, pos=pos_spectral)
+        positions_spectral = nx.spectral_layout(G_temp)
+        positions = nx.kamada_kawai_layout(G_temp, pos=positions_spectral)
     elif layout_method == "planar":
         if not nx.is_planar(G_temp):
             print("Warning: Graph is not planar. Falling back to 'spring' layout.")
-            pos = nx.spring_layout(G_temp, iterations=100)
+            positions = nx.spring_layout(G_temp, iterations=100)
         else:
-            pos_spring = nx.spring_layout(G_temp, iterations=100)
-            pos = pos_spring
+            positions_spring = nx.spring_layout(G_temp, iterations=100)
+            positions = positions_spring
     else:
         print(f"Warning: Unknown layout '{layout_method}'. Using 'spring' as default.")
-        pos = nx.spring_layout(G_temp, iterations=100)
+        positions = nx.spring_layout(G_temp, iterations=100)
 
     # ASSEMBLE FIGURE
     fig, ax = plt.subplots()
 
     # Edges with low z-order
     for (u, v), edge_type in simple_graph["edges"]:
-        x1, y1 = pos[u]
-        x2, y2 = pos[v]
+        x1, y1 = positions[u]
+        x2, y2 = positions[v]
         line = Line2D(
             [float(x1), float(x2)],
             [float(y1), float(y2)],
@@ -78,7 +78,7 @@ def simple_graph_vis(
     # Nodes with higher z-order
     node_radius = 0.05
     for node_id, node_type in simple_graph["nodes"]:
-        x, y = pos[node_id]
+        x, y = positions[node_id]
         circle = Circle(
             (float(x), float(y)),
             radius=node_radius,
@@ -90,7 +90,7 @@ def simple_graph_vis(
     # Labels with highest z-order
     label_offset = 0.04
     for node_id, node_type in simple_graph["nodes"]:
-        x, y = pos[node_id]
+        x, y = positions[node_id]
         ax.text(
             float(x + label_offset),
             float(y + label_offset),

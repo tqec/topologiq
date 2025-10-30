@@ -21,13 +21,13 @@ NodeBeams = List[StandardBeam]
 # MAIN DATA CLASS TO STORE PATHS AND ENABLE COMPARISONS
 @dataclass(order=True)
 class PathBetweenNodes:
-    tgt_pos: StandardCoord
+    tgt_coords: StandardCoord
     tgt_kind: str
     tgt_beams: NodeBeams
-    coords_in_pth: List[StandardCoord]
-    all_nodes_in_pth: List[StandardBlock]
-    beams_broken_by_pth: int
-    len_of_pth: int
+    coords_in_path: List[StandardCoord]
+    all_nodes_in_path: List[StandardBlock]
+    beams_broken_by_path: int
+    len_of_path: int
     tgt_unobstr_exit_n: int
 
     def weighed_value(self, **kwargs) -> int:
@@ -45,9 +45,9 @@ class PathBetweenNodes:
 
         """
 
-        pth_len_hp, beams_broken_hp = kwargs["weights"]
+        path_len_hp, beams_broken_hp = kwargs["weights"]
 
-        return self.len_of_pth * pth_len_hp + self.beams_broken_by_pth * beams_broken_hp
+        return self.len_of_path * path_len_hp + self.beams_broken_by_path * beams_broken_hp
 
 
 # LET'S ADD SOME COLOUR TO PRINTS BECAUSE, WHY NOT

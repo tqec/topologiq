@@ -85,7 +85,7 @@ def run():
     vis_0: str | None = None
     vis_1: str | None = None
     stop_on_first_success: bool = True
-    min_pthfinder_success_rate: int = 60
+    min_pathfinder_success_rate: int = 60
     strip_ports: bool = False
     hide_ports: bool = False
     log_stats: bool = False
@@ -141,7 +141,7 @@ def run():
         _, _, _, _ = runner(
             simple_graph,
             circuit_name,
-            min_succ_rate=min_pthfinder_success_rate,
+            min_succ_rate=min_pathfinder_success_rate,
             strip_ports=strip_ports,
             hide_ports=hide_ports,
             max_attempts=num_attempts,

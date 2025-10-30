@@ -419,7 +419,7 @@ def vis_3d_g(
     ax = fig.add_subplot(111, projection="3d")
 
     # GET POSITIONS AND TYPES
-    node_positions = nx.get_node_attributes(graph, "pos")
+    node_positions = nx.get_node_attributes(graph, "coords")
     node_types = nx.get_node_attributes(graph, "type")
     edge_types = nx.get_edge_attributes(graph, "pipe_type")
 
@@ -432,8 +432,8 @@ def vis_3d_g(
             and "o" not in node_type
             or (not hide_ports and node_type == "ooo")
         ):
-            position = node_positions.get(node_id)
-            if position:
+            node_coords = node_positions.get(node_id)
+            if node_coords:
                 size = [1.0, 1.0, 1.0]
                 edge_col = "black"
                 alpha = 0.5 if debug else 0.7 if pauli_webs_graph else 1
@@ -445,7 +445,7 @@ def vis_3d_g(
                 render_block(
                     ax,
                     node_id,
-                    position,
+                    node_coords,
                     size,
                     node_type[:3],
                     node_hex_map,
@@ -459,12 +459,12 @@ def vis_3d_g(
 
     # RENDER PIPES (EDGES)
     for u, v in graph.edges():
-        pos_u = np.array(node_positions.get(u))
-        pos_v = np.array(node_positions.get(v))
-        if pos_u is not None and pos_v is not None:
-            midpoint = (pos_u + pos_v) / 2
+        u_coords = np.array(node_positions.get(u))
+        v_coords = np.array(node_positions.get(v))
+        if u_coords is not None and v_coords is not None:
+            midpoint = (u_coords + v_coords) / 2
 
-            delta = pos_v - pos_u
+            delta = v_coords - u_coords
             original_length = np.linalg.norm(delta)
             adjusted_length = original_length - 1.0
 
@@ -577,11 +577,11 @@ def vis_3d_g(
             node_beams = graph.nodes()[node_id]["beams"]
             if node_beams:
                 for beam in node_beams:
-                    for beam_pos in beam:
+                    for beam_coords in beam:
                         ax.scatter(
-                            beam_pos[0],
-                            beam_pos[1],
-                            beam_pos[2],
+                            beam_coords[0],
+                            beam_coords[1],
+                            beam_coords[2],
                             c="yellow",
                             s=10,
                             edgecolors="black",
@@ -594,11 +594,11 @@ def vis_3d_g(
 
         # Cubes (nodes)
         for node_id in pauli_webs_graph.nodes:
-            pos = node_positions[node_id]
+            node_coords = node_positions[node_id]
             ax.scatter(
-                pos[0],
-                pos[1],
-                pos[2],
+                node_coords[0],
+                node_coords[1],
+                node_coords[2],
                 c="black",
                 s=0,
                 edgecolors="white",
@@ -607,22 +607,22 @@ def vis_3d_g(
 
         # Pipes (edges)
         for (u, v), node_info in pauli_webs_graph.edges().items():
-            pos_u = node_positions[u]
-            pos_v = node_positions[v]
+            u_coords = node_positions[u]
+            v_coords = node_positions[v]
             col = node_hex_map[node_info["pipe_type"]][0]
             ax.plot(
-                [pos_u[0], pos_v[0]],
-                [pos_u[1], pos_v[1]],
-                [pos_u[2], pos_v[2]],
+                [u_coords[0], v_coords[0]],
+                [u_coords[1], v_coords[1]],
+                [u_coords[2], v_coords[2]],
                 c=col,
                 linewidth=3,
             )
 
     # ADJUST PLOT LIMITS
-    all_positions = np.array(list(node_positions.values()))
-    if all_positions.size > 0:
-        max_range = np.ptp(all_positions, axis=0).max() / 2.0
-        mid = np.mean(all_positions, axis=0)
+    all_coords = np.array(list(node_positions.values()))
+    if all_coords.size > 0:
+        max_range = np.ptp(all_coords, axis=0).max() / 2.0
+        mid = np.mean(all_coords, axis=0)
         ax.set_xlim(mid[0] - max_range - 1, mid[0] + max_range + 1)
         ax.set_ylim(mid[1] - max_range - 1, mid[1] + max_range + 1)
         ax.set_zlim(mid[2] - max_range - 1, mid[2] + max_range + 1)
@@ -689,11 +689,11 @@ def vis_3d_g(
         ax_overlay.imshow(overlay_array)
 
     # POP UP OR SAVE VIS
-    repository_root: Path = Path(__file__).resolve().parent.parent
-    temp_folder_pth = repository_root / "output/temp"
+    repo_root: Path = Path(__file__).resolve().parent.parent
+    temp_folder_path = repo_root / "output/temp"
     if save_to_file:
-        Path(temp_folder_pth).mkdir(parents=True, exist_ok=True)
-        plt.savefig(f"{temp_folder_pth}/{filename}.png")
+        Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
+        plt.savefig(f"{temp_folder_path}/{filename}.png")
         plt.close()
     else:
         fig.canvas.mpl_connect("pick_event", onpick)
@@ -716,47 +716,47 @@ def edge_paths_to_g(edge_paths: dict[Any, Any]) -> nx.Graph:
 
     final_graph = nx.Graph()
     node_counter = 0
-    for edge, pth_data in edge_paths.items():
+    for _, path_data in edge_paths.items():
         primary_node_and_edges = []
-        pth_nodes = pth_data["pth_nodes"]
-        if pth_nodes == "error":
+        path_nodes = path_data["path_nodes"]
+        if path_nodes == "error":
             continue
         node_index_map = {}
 
-        for pos, kind in pth_nodes:
-            if (pos, kind) not in node_index_map:
-                node_index_map[(pos, kind)] = node_counter
-                primary_node_and_edges.append([node_counter, pos, kind])
+        for coords, kind in path_nodes:
+            if (coords, kind) not in node_index_map:
+                node_index_map[(coords, kind)] = node_counter
+                primary_node_and_edges.append([node_counter, coords, kind])
                 node_counter += 1
             else:
 
-                index_to_use = node_index_map[(pos, kind)]
+                index_to_use = node_index_map[(coords, kind)]
 
                 found = False
                 for entry in primary_node_and_edges:
                     if entry[0] == index_to_use:
-                        entry[1] = pos
+                        entry[1] = coords
                         found = True
                         break
                 if not found:
-                    primary_node_and_edges.append([index_to_use, pos, kind])
+                    primary_node_and_edges.append([index_to_use, coords, kind])
 
         # Add nodes
-        for index, pos, node_type in primary_node_and_edges:
+        for index, coords, node_type in primary_node_and_edges:
             if index not in final_graph:
-                final_graph.add_node(index, pos=pos, type=node_type)
+                final_graph.add_node(index, coords=coords, type=node_type)
 
         # Add edges
         for i in range(len(primary_node_and_edges)):
-            index, pos, node_type = primary_node_and_edges[i]
+            index, coords, node_type = primary_node_and_edges[i]
             if "o" in node_type:
-                prev_index_pth = i - 1
-                next_index_pth = i + 1
-                if 0 <= prev_index_pth < len(
+                prev_index_path = i - 1
+                next_index_path = i + 1
+                if 0 <= prev_index_path < len(
                     primary_node_and_edges
-                ) and 0 <= next_index_pth < len(primary_node_and_edges):
-                    prev_node_index = primary_node_and_edges[prev_index_pth][0]
-                    next_node_index = primary_node_and_edges[next_index_pth][0]
+                ) and 0 <= next_index_path < len(primary_node_and_edges):
+                    prev_node_index = primary_node_and_edges[prev_index_path][0]
+                    next_node_index = primary_node_and_edges[next_index_path][0]
                     if (
                         prev_node_index in final_graph
                         and next_node_index in final_graph
@@ -789,7 +789,7 @@ def lattice_to_g(
     pauli_webs_graph = nx.Graph()
 
     for key, node_info in lat_nodes.items():
-        lattice_g.add_node(key, pos=node_info[0], type=node_info[1])
+        lattice_g.add_node(key, coords=node_info[0], type=node_info[1])
         if key in nx_g.nodes():
             lattice_g.nodes()[key]["beams"] = nx_g.nodes()[key]["beams"]
         else:
@@ -807,7 +807,7 @@ def lattice_to_g(
 
         for node_id in nodes_in_web:
             pauli_webs_graph.add_node(
-                node_id, pos=lat_nodes[node_id][0], type=lat_nodes[node_id][1]
+                node_id, coords=lat_nodes[node_id][0], type=lat_nodes[node_id][1]
             )
 
     return lattice_g, pauli_webs_graph
@@ -874,7 +874,7 @@ def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
 def render_block(
     ax: Any,
     node_id: int,
-    position: Tuple[int, int, int],
+    coords: Tuple[int, int, int],
     size: list[float],
     node_type: str,
     node_hex_map: dict[str, list[str]],
@@ -890,7 +890,7 @@ def render_block(
     Args:
         - ax: Matplotlib's 3D subplot object.
         - node_id: the ID of the node
-        - position: (x, y, z) coordinates of the block.
+        - coords: (x, y, z) coordinates of the block.
         - size: (size_x, size_y, size_z) of the block.
         - node_type: block's kind.
         - node_hex_map: map of (HEX) colours for block.
@@ -900,7 +900,7 @@ def render_block(
         - taken: list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
     """
 
-    x, y, z = position
+    x, y, z = coords
     size_x, size_y, size_z = size
 
     vertices = get_vertices(x, y, z, size_x, size_y, size_z)
@@ -932,13 +932,13 @@ def render_block(
 
     for d in diffs:
         label_pos = (
-            position[0] + d[0],
-            position[1] + d[1],
-            position[2] + d[2],
+            coords[0] + d[0],
+            coords[1] + d[1],
+            coords[2] + d[2],
         )
 
         if (
-            check_is_exit(position, node_type, label_pos) is not True
+            check_is_exit(coords, node_type, label_pos) is not True
             or node_type == "ooo"
         ) and label_pos not in taken:
             ax.text(
@@ -951,12 +951,12 @@ def render_block(
             )
 
             ax.quiver(
-                position[0],
-                position[1],
-                position[2],
-                label_pos[0] - position[0],
-                label_pos[1] - position[1],
-                label_pos[2] - position[2],
+                coords[0],
+                coords[1],
+                coords[2],
+                label_pos[0] - coords[0],
+                label_pos[1] - coords[1],
+                label_pos[2] - coords[2],
                 color="black",
                 lw=1,
                 label=node_id,

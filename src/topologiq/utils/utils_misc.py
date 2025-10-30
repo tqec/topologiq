@@ -99,8 +99,8 @@ def prep_stats_n_log(
     edge_paths: Union[None, dict] = None,
     lat_nodes: Union[None, dict[int, StandardBlock]] = None,
     lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
-    src: Union[None, StandardBlock] = None,
-    tgt: Tuple[Union[None, StandardCoord], Union[None, str]] = (None, None),
+    src_block_info: Union[None, StandardBlock] = None,
+    tgt_block_info: Tuple[Union[None, StandardCoord], Union[None, str]] = (None, None),
     tgt_zx_type: Union[None, str] = None,
     visit_stats: Tuple[int, int] = (0, 0),
     run_params: dict[str, Any] = {},
@@ -168,10 +168,10 @@ def prep_stats_n_log(
                         (
                 [
                     {
-                        edge_pth["src_tgt_ids"][0]: edge_pth["pth_nodes"][0][1],
-                        edge_pth["src_tgt_ids"][1]: edge_pth["pth_nodes"][-1][1]
+                        edge_path["src_tgt_ids"][0]: edge_path["path_nodes"][0][1],
+                        edge_path["src_tgt_ids"][1]: edge_path["path_nodes"][-1][1]
                     } 
-                    for edge_pth in edge_paths.values()
+                    for edge_path in edge_paths.values()
                 ]
                 if edge_paths
                 else ["error"]
@@ -192,7 +192,7 @@ def prep_stats_n_log(
             )
 
     elif "pathfinder" in stats_type:
-        op_type = "creation" if not tgt[1] else "discovery"
+        op_type = "creation" if not tgt_block_info[1] else "discovery"
         durations = {
             "total": (
                 (times["t_end"] - times["t1"]).total_seconds()
@@ -205,11 +205,11 @@ def prep_stats_n_log(
             log_stats_id,
             op_type,
             op_success,
-            src[0] if src else "error",
-            src[1] if src else "error",
-            tgt[0] if tgt[0] else "TBD",
+            src_block_info[0] if src_block_info else "error",
+            src_block_info[1] if src_block_info else "error",
+            tgt_block_info[0] if tgt_block_info[0] else "TBD",
             tgt_zx_type,
-            tgt[1] if tgt[1] else "TBD",
+            tgt_block_info[1] if tgt_block_info[1] else "TBD",
             counts["num_tent_coords"],
             counts["num_tent_coords_filled"],
             counts["max_manhattan"],
@@ -289,8 +289,8 @@ def write_outputs(
         '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
     )
 
-    for key, edge_pth in edge_paths.items():
-        lines.append(f"Edge {edge_pth['src_tgt_ids']}: {edge_pth['pth_nodes']}\n")
+    for key, edge_path in edge_paths.items():
+        lines.append(f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n")
 
     lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
     for key, node in lat_nodes.items():

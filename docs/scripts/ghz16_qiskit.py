@@ -13,8 +13,6 @@ from qiskit import qasm2
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph, StandardBlock
 from topologiq.scripts.runner import runner
-
-
 from topologiq.assets.graphs.qiskit import ghz_qiskit
 
 
@@ -45,7 +43,7 @@ def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
     zx_graph = zx_circuit.to_graph()
 
     # DRAW INITIAL GRAPH
-    #zx.draw(zx_graph, labels = True)
+    zx.draw(zx_graph, labels = True)
 
     return zx_graph
 
@@ -67,7 +65,7 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
     zx.full_reduce(zx_graph_copy)
 
     # DRAW REDUCED GRAPH
-    #zx.draw(zx_graph_copy, labels = True)
+    zx.draw(zx_graph_copy, labels = True)
 
     # RETURN REDUCED GRAPH
     return zx_graph_copy
@@ -111,7 +109,7 @@ def run_topologiq(simple_graph: SimpleDictGraph, circuit_name:str) -> Tuple[Unio
         hide_ports = False,  # Leave open boundaries in graph object but hide in visualisations
         max_attempts = 10,  # Maximum # of attempts to find a successful solution
         stop_on_first_success = True,  # Exit when any attempt is successful (False useful for automating stats)
-        visualise = (vis, anim),  # (Visualisation mode, Animation mode)
+        vis_options = (vis, anim),  # (Visualisation mode, Animation mode)
         log_stats = False,  # Automatically log stats for all runs (requires writing privileges)
         debug = False,  # Enter debug mode (additional detail in visualisation)
         fig_data = None,  # Matplotlib object containing input ZX graph (to overlay over visualisations)

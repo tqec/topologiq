@@ -51,6 +51,10 @@ def runner(
 ]:
     """Run Topologiq on an arbitrary circuit provided as `simple_graph`.
 
+    This function calls any available and applicable pre-processing on the input `simple_graph`,
+    then sends the graph for processing by Topologiq. If the algorith succeeds, the function 
+    gathers and returns the main outputs produced by Topologiq.
+
     Args:
         simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
         circuit_name: The name of the ZX circuit.
@@ -68,8 +72,8 @@ def runner(
                 (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
         log_stats (optional): If True, triggers automated stats logging to CSV files in `.assets/stats/`.
         debug (optional): If True, turns debugging mode on (enable verbose logging and added details in visualisations).
-        fig_data (optional): passes the input graph visualisation to Topologiq (to overlay it over other visualisations).
-        first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
+        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+        first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
 
     Keyword arguments (**kwargs):
         weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
@@ -87,7 +91,7 @@ def runner(
     t1 = datetime.now()
     repo_root: Path = Path(__file__).resolve().parent.parent
     output_dir_path = repo_root / "output/txt"
-    temp_dir_pth = repo_root / "output/temp"
+    temp_dir_path = repo_root / "output/temp"
     Path(output_dir_path).mkdir(parents=True, exist_ok=True)
     unique_run_id = None
 
@@ -225,8 +229,8 @@ def runner(
 
         # Delete temporary files
         try:
-            if temp_dir_pth.exists():
-                shutil.rmtree(temp_dir_pth)
+            if temp_dir_path.exists():
+                shutil.rmtree(temp_dir_path)
         except (ValueError, FileNotFoundError) as e:
             print("Unable to delete temp files or temp folder does not exist", e)
 

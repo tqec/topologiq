@@ -36,7 +36,7 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
         # Add nodes
         for v in g.vertices():
             g_dict["nodes"][v] = {
-                "pos": (0, 0, 0),
+                "coords": (0, 0, 0),
                 "rot": (0, 0, 0),
                 "scale": (0, 0, 0),
                 "type": g.type(v).name,
