@@ -5,7 +5,8 @@
 src/topologiq/stats_checks.py
 
 # Outputs
-src/topologiq/outputs/
+/output/
+**/output
 src/topologiq/assets/stats/*.csv
 
 # Python 

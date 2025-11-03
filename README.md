@@ -101,19 +101,19 @@ uv run src/topologiq/run.py --graph:steane --vis:final
 python3 src/topologiq/run.py --graph:steane --vis:final  # Requires active .venv
 
 # A mess of hadamards, using a non-descript ZX-graph.
-uv run src/topologiq/run.py --graph:hadamards_mess --vis:final
-python3 src/topologiq/run.py --graph:hadamards_mess --vis:final  # Requires active .venv
+uv run src/topologiq/run.py --graph:hadamard_mess --vis:final
+python3 src/topologiq/run.py --graph:hadamard_mess --vis:final  # Requires active .venv
 ```
 
 There are also additional options that can be appended to any command for debugging and statistical purposes.
 
 ``` bash
 # Run a circuit normally and log stats for all attempts to complete the specific circuit.
-uv run src/topologiq/run.py --pyzx:cnots --log_stats
-python3 src/topologiq/run.py --pyzx:cnots --log_stats  # Requires active .venv
+uv run src/topologiq/run.py --pyzx:simple_mess --log_stats
+python3 src/topologiq/run.py --pyzx:simple_mess --log_stats  # Requires active .venv
 
 # Run a specific circuit a single time irrespective of outcome.
-uv run src/topologiq/run.py --graph:steane --repeat:1
+uv run src/topologiq/run.py --graph:hadamard_mess --repeat:1
 python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
 
 # Run a circuit a given number of times and log log stats for all 50 cycles.
@@ -128,7 +128,7 @@ python3 src/topologiq/debug.py  # Requires active .venv
 And it is possible to set several visualisation options also via command.
 
 ``` bash
-# No visualisations (best for programmatic use)
+# No visualisations
 uv run src/topologiq/run.py --pyzx:cnot
 python3 src/topologiq/run.py --pyzx:cnot  # Requires active .venv
 

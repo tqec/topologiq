@@ -215,13 +215,13 @@ def prune_beams(
     return nx_g, new_beams
 
 
-def reindex_pth_dict(
-    edge_pths: dict,
+def reindex_path_dict(
+    edge_paths: dict,
 ) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], List[str]]]:
-    """Distils an edge_pth object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
+    """Distils an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
 
     Args:
-        - edge_pths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
 
     Returns:
         - lat_nodes: the nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
@@ -230,32 +230,32 @@ def reindex_pth_dict(
     """
 
     max_id = 0
-    idx_pths = {}
-    for pth in edge_pths.values():
-        max_id = max(max_id, pth["src_tgt_ids"][0], pth["src_tgt_ids"][1])
+    idx_paths = {}
+    for path in edge_paths.values():
+        max_id = max(max_id, path["src_tgt_ids"][0], path["src_tgt_ids"][1])
     nxt_id = max_id + 1
 
-    for pth in edge_pths.values():
+    for path in edge_paths.values():
 
-        idxd_pth = {}
-        key_1, key_2 = pth["src_tgt_ids"]
-        pth_nodes = pth["pth_nodes"]
+        idxd_path = {}
+        key_1, key_2 = path["src_tgt_ids"]
+        path_nodes = path["path_nodes"]
 
-        idxd_pth[key_1] = pth_nodes[0]
+        idxd_path[key_1] = path_nodes[0]
 
-        for i in range(1, len(pth_nodes) - 1):
-            mid_node = pth_nodes[i]
-            idxd_pth[nxt_id] = mid_node
+        for i in range(1, len(path_nodes) - 1):
+            mid_node = path_nodes[i]
+            idxd_path[nxt_id] = mid_node
             nxt_id += 1
 
-        if len(pth_nodes) > 1:
-            idxd_pth[key_2] = pth_nodes[-1]
+        if len(path_nodes) > 1:
+            idxd_path[key_2] = path_nodes[-1]
 
-        idx_pths[(key_1, key_2)] = idxd_pth
+        idx_paths[(key_1, key_2)] = idxd_path
 
     final_edges = {}
-    for orig_key, pth_id_value_map in idx_pths.items():
-        n_ids = list(pth_id_value_map.keys())
+    for orig_key, path_id_value_map in idx_paths.items():
+        n_ids = list(path_id_value_map.keys())
         b_ids = []
         e_ids = []
 
@@ -269,16 +269,16 @@ def reindex_pth_dict(
             for i in range(len(b_ids) - 1):
                 n1 = b_ids[i]
                 n2 = b_ids[i + 1]
-                e_type = pth_id_value_map[e_ids[i]][1]
+                e_type = path_id_value_map[e_ids[i]][1]
 
                 final_edges[(n1, n2)] = [e_type, orig_key]
 
     lat_nodes: dict[int, StandardBlock] = {}
     lat_edges: dict[Tuple[int, int], List[str]] = {}
-    for pth in idx_pths.values():
-        keys = list(pth.keys())
+    for path in idx_paths.values():
+        keys = list(path.keys())
         i = 0
-        for key, info in pth.items():
+        for key, info in path.items():
             if i % 2 == 0:
                 lat_nodes[key] = info
             else:
