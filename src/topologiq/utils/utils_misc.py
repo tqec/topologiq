@@ -165,7 +165,7 @@ def prep_stats_n_log(
             op_success,
             circuit_name,
             run_params,
-                        (
+            (
                 [
                     {
                         edge_path["src_tgt_ids"][0]: edge_path["path_nodes"][0][1],
@@ -185,11 +185,20 @@ def prep_stats_n_log(
         )
 
         if op_success is not True or run_params["length_of_beams"] != 9 or run_params["weights"] != (-1, -1):
-            log_stats(
-                aux_stats,
-                f"debug{'_tests' if log_stats_id.endswith('*') else ''}",
-                opt_header=HEADER_PARAMS_STATS,
-            )
+
+            repo_root: Path = Path(__file__).resolve().parent.parent
+            stats_dir_path = repo_root / "assets/stats"
+            path_to_debug_file = stats_dir_path / f"debug{'_tests' if log_stats_id.endswith('*') else ''}.csv"
+
+            if path_to_debug_file.is_file():
+                debug_cases = list(set(get_debug_cases(path_to_debug_file)))
+                new_case_info = tuple([circuit_name] + [list(aux_stats[4][0].keys())[0], list(aux_stats[4][0].values())[0]] + list(run_params.values()))
+            if not path_to_debug_file.is_file() or (new_case_info not in debug_cases):
+                log_stats(
+                    aux_stats,
+                    f"debug{'_tests' if log_stats_id.endswith('*') else ''}",
+                    opt_header=HEADER_PARAMS_STATS,
+                )
 
     elif "pathfinder" in stats_type:
         op_type = "creation" if not tgt_block_info[1] else "discovery"
