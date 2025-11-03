@@ -601,7 +601,7 @@ def place_nxt_block(
                 "edge_type": edge_type,
             }
 
-            # Add path to position to list of graphs' occupied positions
+            # Add path to position to list of graphs' occupied coordinates
             all_coords_in_path = get_taken_coords(winner_path.all_nodes_in_path)
             taken.extend(all_coords_in_path)
 
@@ -865,7 +865,7 @@ def run_pathfinder(
     
     This function calls the inner pathfinder algorith with the information using a variable combination of parameters. 
     If the function does not get information about the desired target, it assumes it is creating a path between an 
-    already-placed cube and a new cube. In such case, the function generates a list of tentative target positions, 
+    already-placed cube and a new cube. In such case, the function generates a list of tentative target coordinates, 
     which the inner pathfinder algorithm fulfills up to `min_succ_rate` percent. Once the inner pathfinder algorithm
     returns all paths fulfilled, this function eliminates paths not meeting key heuristics and chooses the best 
     amongst all surviving paths. 
@@ -903,7 +903,7 @@ def run_pathfinder(
     # Loop call the inner pathfinder in case there is a need to re-run the pathfinder
     max_step = 2 * init_step if tgt_block_info else 9
     while step <= max_step:
-        # Generate tentative positions for current step or use target node
+        # Generate tentative coordinates for current step or use target node
         if tgt_coords:
             tent_coords = [tgt_coords]
         else:
@@ -913,7 +913,7 @@ def run_pathfinder(
                 taken,  # Real occupied coords: position cannot overlap start node
             )
 
-        # Try finding paths to each tentative positions
+        # Try finding paths to each tentative coordinates
         valid_paths = pathfinder(
             src_block_info,
             tent_coords,
