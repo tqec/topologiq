@@ -29,7 +29,7 @@ def check_is_exit(src_c: StandardCoord, src_k: Optional[str], tgt_c: StandardCoo
     if "o" in kind_3D:
         marker = "o"
     else:
-        marker = [i for i in set(kind_3D) if kind_3D.count(i) == 2][0]
+        marker = [i for i in set(kind_3D) if kind_3D.count(i) >= 2][0]
 
     exit_idxs = [i for i, char in enumerate(kind_3D) if char == marker]
     diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]

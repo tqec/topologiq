@@ -27,6 +27,7 @@ from typing import List, Tuple, Optional, Union
 from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
 from topologiq.utils.utils_pathfinder import check_is_exit, prune_visited, rot_o_kind, nxt_kinds
 from topologiq.utils.utils_misc import get_max_manhattan, prep_stats_n_log
+from topologiq.utils.grapher_pathfinder import visualise_pathfinder_evolution
 
 
 ############################
@@ -157,13 +158,13 @@ def core_pathfinder_bfs(
     Args:
         src_block_info: The coords and kind of the source block.
         tent_coords: A list of tentative target coordinates to find paths to.
-        tent_tgt_kinds: list of kinds matching the zx-type of target block
+        tent_tgt_kinds: list of kinds matching the zx-type of target block.
         min_succ_rate: Minimum % of tentative coordinates that must be filled for each edge.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process (updated regularly).
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
 
     Returns:
-        valid_paths: All paths found in round, covering some or all tent_coords.
+        valid_paths: All paths found in round covering some or all tent_coords.
 
     """
 
@@ -184,6 +185,7 @@ def core_pathfinder_bfs(
     path_len = {src_block_info: 0}
     path = {src_block_info: [src_block_info]}
     valid_paths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
+    all_paths_in_round: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
     moves_unadjusted = [
         (1, 0, 0),
         (-1, 0, 0),
@@ -221,7 +223,7 @@ def core_pathfinder_bfs(
         # Check exit conditions in case something's gone wrong
         curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
         if curr_manhattan < prune_distance - 6:
-            visited = prune_visited(visited)
+            #visited = prune_visited(visited)
             prune_distance = curr_manhattan
         if curr_manhattan > src_tgt_manhattan + 6:
             continue
@@ -359,12 +361,19 @@ def core_pathfinder_bfs(
                             tent_tgt_kinds == ["ooo"] or nxt_type in tent_tgt_kinds
                         ):
                             valid_paths[nxt_b_info] = path[nxt_b_info]
+                            all_paths_in_round[nxt_b_info] = path[nxt_b_info]
                             tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
                             if tgts_filled >= tgts_to_fill:
                                 break
+                        else:
+                            all_paths_in_round[nxt_b_info] = path[nxt_b_info]
 
             # Increase counter of times pathfinder tries visits something new
             visit_attempts += 1
+
+    if 1 == 1:  # Placeholder to add condition to visualise path
+        visualise_pathfinder_evolution(valid_paths, all_paths_in_round, src_block_info, tent_coords, tent_tgt_kinds, taken)
+        
 
     return valid_paths, (visit_attempts, len(visited))
 
