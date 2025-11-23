@@ -21,7 +21,7 @@ from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import write_outputs
 from topologiq.utils.utils_zx_graphs import strip_boundaries
 from topologiq.utils.grapher_common import lattice_to_g
-from topologiq.utils.grapher_pathfinder import vis_3d
+from topologiq.utils.grapher import vis_3d
 from topologiq.utils.animation import create_animation
 from topologiq.utils.utils_zx_graphs import break_single_spider_graph
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock

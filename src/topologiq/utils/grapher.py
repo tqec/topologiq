@@ -253,7 +253,7 @@ def vis_3d(
         
         # Show/hide beams
         ax_beams = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD)*3, BTN_W, BTN_H])
-        btn_beams = Button(ax_beams, 'Hide Beams')
+        btn_beams = Button(ax_beams, 'Show Beams')
         btn_beams.on_clicked(
             lambda e: toggle_beams_handler(
                 e,
@@ -404,7 +404,7 @@ def _init_vis(
 
     # Beams
     fig.beam_artists = []
-    fig.show_beams = True
+    fig.show_beams = False
 
     # Winner paths
     fig.winner_path_artists = []

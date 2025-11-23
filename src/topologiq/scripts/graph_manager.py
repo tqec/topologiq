@@ -35,7 +35,7 @@ from topologiq.utils.utils_greedy_bfs import (
 from topologiq.utils.utils_pathfinder import check_exits
 from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
 from topologiq.utils.grapher_common import lattice_to_g
-from topologiq.utils.grapher_pathfinder import vis_3d
+from topologiq.utils.grapher import vis_3d
 from topologiq.utils.utils_misc import prep_stats_n_log
 from topologiq.utils.classes import (
     PathBetweenNodes,
