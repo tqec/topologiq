@@ -11,38 +11,31 @@ from pyzx.graph.base import BaseGraph
 from qiskit import qasm2
 
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
-from topologiq.utils.classes import SimpleDictGraph, StandardBlock
+from topologiq.utils.classes import StandardBlock
 from topologiq.scripts.runner import runner
 from topologiq.assets.graphs.qiskit import ghz_qiskit
 
 
 def ghz16_to_qasm(circuit_name: str) -> str:
     
-    # CREATE THE FOUNDATIONAL CIRCUIT
+    # Create foundational circuit
     qc = ghz_qiskit(16)
+    print(f"\n======> Foundational {circuit_name.upper()}:\n", qc)
 
-    # PRINT CIRCUIT FOR INSPECTION
-    print(f"\n======> Foundational {circuit_name.upper()}:\n")
-    print(qc)
-
-    # CONVERT CIRCUIT TO QASM
+    # Convert to QASM
     qasm_str = qasm2.dumps(qc)
-    print("\n======> QASM string of circuit:\n")
-    print(qasm_str)
+    print("\n======> QASM string of circuit:\n", qasm_str)
 
-    # RETURN QASM STRING
     return qasm_str
 
 
 def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
     
-    # QASM TO PYZX
+    # QASM --> PyZX circuit --> PyZX graph
     zx_circuit = zx.Circuit.from_qasm(qasm_str)
-
-    # PYZX CIRCUIT TO PYZX GRAPH
     zx_graph = zx_circuit.to_graph()
 
-    # DRAW INITIAL GRAPH
+    # Draw
     zx.draw(zx_graph, labels = True)
 
     return zx_graph
@@ -50,78 +43,49 @@ def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
 
 def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
 
-    # MAKE COPY TO WORK WITH COPY
+    # Work with copy
     zx_graph_copy = zx_graph
-    # APPLY STATES AND POST-SELECT
-    # States
+    
+    # Apply states
     num_apply_state = zx_graph_copy.num_inputs()
     zx_graph_copy.apply_state('0' * num_apply_state)
 
-    # No post-select needed
-    # Here only to signal place where operation would fall
+    # No post-select needed (here to signal where operation would fall if needed)
     zx_graph_copy.apply_effect('////////////////')
 
-    # REDUCE
+    # Reduce & draw
     zx.full_reduce(zx_graph_copy)
-
-    # DRAW REDUCED GRAPH
     zx.draw(zx_graph_copy, labels = True)
 
-    # RETURN REDUCED GRAPH
     return zx_graph_copy
 
-def zx_graph_to_simple_graph(zx_graph: BaseGraph) -> SimpleDictGraph:
-    
-    # CONVERT TO TOPOLOGIQ'S NATIVE FORMAR
-    simple_graph = pyzx_g_to_simple_g(zx_graph)
 
-    #PRINT SIMPLE GRAPH
-    print("\n======> Initial simple graph:")
-    print(simple_graph)
+def run_topologiq(zx_graph: BaseGraph, circuit_name:str) -> Tuple[Union[None, dict[int, StandardBlock]], Union[None, dict[Tuple[int, int], List[str]]]]:
 
-    # RETURN SIMPLE GRAPH
-    return simple_graph
-
-def run_topologiq(simple_graph: SimpleDictGraph, circuit_name:str) -> Tuple[Union[None, dict[int, StandardBlock]], Union[None, dict[Tuple[int, int], List[str]]]]:
-    
-    # PARAMS & HYPERPARAMS
+    # Key editable params    
     vis = "final"  # Calls 3D visualisation at the end. `None` to deactivate.
-    anim = None  # Best to avoid in a public notebook. Animation support depends a lot on the machine and rights.
-
-    VALUE_FUNCTION_HYPERPARAMS = (
-        -1,  # Weight for length of path
-        -1,  # Weight for number of "beams" broken by path
-    )
-
-    kwargs = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": 9,
-    }
-
-    # Run topologiq
-    random.seed(11)
+    debug = 2  # Sets debug mode to "off"
+    
+    # Call Topologiq
     print("\n======> Now calling Topologiq:")
+    random.seed(11)
+    simple_graph = pyzx_g_to_simple_g(zx_graph)  # PyZX graph --> Topologiq's native format
     _, _, lattice_nodes, lattice_edges = runner(
         simple_graph,  # The simple_graph to be processed by Topologiq
         circuit_name,  # Name of the circuit
-        min_succ_rate = 80,  # Runtime saving parameter (min % of total possible paths per edge)
-        strip_ports = False,  # Remove open boundaries from an incoming graph
-        hide_ports = False,  # Leave open boundaries in graph object but hide in visualisations
-        max_attempts = 10,  # Maximum # of attempts to find a successful solution
-        stop_on_first_success = True,  # Exit when any attempt is successful (False useful for automating stats)
-        vis_options = (vis, anim),  # (Visualisation mode, Animation mode)
-        log_stats = False,  # Automatically log stats for all runs (requires writing privileges)
-        debug = False,  # Enter debug mode (additional detail in visualisation)
-        fig_data = None,  # Matplotlib object containing input ZX graph (to overlay over visualisations)
-        **kwargs,  # {Weights for value function, Length of beams}
+        min_succ_rate=80,  # Runtime saving parameter (min % of total possible paths per edge)
+        max_attempts=10,  # Maximum # of attempts to find a successful solution
+        stop_on_first_success=True,  # Exit when any attempt is successful (False useful for automating stats)
+        vis_options=(vis, None),  # (Visualisation mode, Animation mode)
+        debug=debug,  # Enter debug mode (additional detail in visualisation)
     )
 
     return lattice_nodes, lattice_edges
+
 
 if __name__ == "__main__":
     circuit_name = "ghz16"
     qasm_str = ghz16_to_qasm(circuit_name)
     zx_graph_init = qasm_to_pyzx(qasm_str)
     zx_graph_reduced = pyzx_reduce(zx_graph_init)
-    simple_graph = zx_graph_to_simple_graph(zx_graph_reduced)
-    lattice_nodes, lattice_edges = run_topologiq(simple_graph, circuit_name)
+    lattice_nodes, lattice_edges = run_topologiq(zx_graph_reduced, circuit_name)
