@@ -89,7 +89,7 @@ def run():
     strip_ports: bool = False
     hide_ports: bool = False
     log_stats: bool = False
-    debug: bool = False
+    debug: int = 0
     fig_data: Figure | None = None
 
     # Handle any arguments passed via the command
@@ -134,7 +134,7 @@ def run():
 
             # Look for number of repetitions parameter
         if arg.startswith("--debug"):
-            debug = True
+            debug = int(arg.replace("--debug:", ""))
 
     # Call Topologiq on `simple_graph` of circuit
     if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:

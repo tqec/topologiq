@@ -139,9 +139,9 @@ def run_debug():
                     hide_ports=False,
                     max_attempts=1,
                     stop_on_first_success=True,
-                    vis_options=("detail", "GIF"),
+                    vis_options=("final", "GIF"),
                     log_stats=False,
-                    debug=True,
+                    debug=3,
                     fig_data=fig_data,
                     first_cube=(first_id, first_kind),
                     **kwargs
