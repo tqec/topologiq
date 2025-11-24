@@ -60,7 +60,7 @@ def vis_3d(
     debug: int = 2,
     src_tgt_ids: Tuple[int, int] | None = None,
     fig_data: matplotlib.figure.Figure | None = None,
-    filename: str | None = None,
+    filename_info: Tuple[str, int] | None = None,
 ):
     """Create a granular visualisation of a single iteration of the inner pathfinder algorithm.
 
@@ -329,9 +329,54 @@ def vis_3d(
     # Save to file if applicable
     repo_root: Path = Path(__file__).resolve().parent.parent
     temp_folder_path = repo_root / "output/temp"
-    if filename:
+    if filename_info:
+        circuit_name, c = filename_info
         Path(temp_folder_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig(f"{temp_folder_path}/{filename}.png")
+        plt.savefig(f"{temp_folder_path}/{circuit_name}{c:03d}.png")
+
+        # Save visualisation data to TXT file if debug mode is at max (4).
+        if debug == 4:
+            temp_folder_path = repo_root / "output/txt"
+            file_path = f"{temp_folder_path}/{circuit_name}-last-edge.txt"
+            
+            with open(file_path, "w") as f:
+                f.write("# PATHFINDER ITERATION SUMMARY\n")
+                f.write(f"Circuit name: {circuit_name if circuit_name else 'None'}\n")
+                f.write(f"Edge: {src_tgt_ids if src_tgt_ids else 'None'}\n")
+
+                f.write("\n## Iteration params\n")
+                f.write(f"src_tgt_ids: {src_tgt_ids if src_tgt_ids else 'None'}\n")
+                f.write(f"src_block_info: {src_block_info if src_block_info else 'None'}\n")
+                f.write(f"tent_coords: {tent_coords if tent_coords else 'None'}\n")
+                f.write(f"tent_tgt_kinds: {tent_tgt_kinds if tent_tgt_kinds else 'None'}\n")
+                f.write(f"taken: {taken if taken else 'None'}\n")
+
+                f.write("\n## Pre-existent paths at time of iteration\n")
+                if edge_paths:
+                    for k, edge_path in edge_paths.items():
+                        f.write(f"{k}: {edge_path}\n")
+                else:
+                    f.write("None\n")
+
+                f.write("\n## winner_path\n")
+                f.write(repr(winner_path) if winner_path else "None")
+
+                f.write("\n\n## valid_paths\n")
+                if valid_paths:
+                    for path in valid_paths.values():
+                        f.write(f"{str(path)}\n")
+                else:
+                    f.write("None\n")
+
+                f.write("\n## all_search_paths\n")
+                if all_search_paths:
+                    for path in all_search_paths.values():
+                        f.write(f"{str(path)}\n")
+                else:
+                    f.write("None\n")
+                f.write("\n")
+
+                f.close()
 
     # Show
     plt.show()

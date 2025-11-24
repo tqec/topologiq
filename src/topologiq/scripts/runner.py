@@ -200,9 +200,9 @@ def runner(
                                 None,
                                 None,
                                 hide_ports=hide_ports,
-                                debug=0,
+                                debug=1,
                                 fig_data=fig_data,
-                                filename=f"{circuit_name}{c:03d}" if vis_options[1] else None,
+                                filename_info=(circuit_name, c) if vis_options[1] else None,
                             )
 
                     # Animation

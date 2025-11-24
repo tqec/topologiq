@@ -196,6 +196,7 @@ def graph_manager_bfs(
                         taken,
                         all_beams,
                         edge_paths,
+                        circuit_name=circuit_name,
                         init_step=step,
                         min_succ_rate=min_succ_rate,
                         hide_ports=hide_ports,
@@ -274,6 +275,7 @@ def graph_manager_bfs(
             edge_paths,
             c,
             all_beams,
+            circuit_name=circuit_name,
             min_succ_rate=min_succ_rate,
             hide_ports=hide_ports,
             vis_options=vis_options,
@@ -528,7 +530,7 @@ def place_nxt_block(
             winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
             
             # For visualisation, create a new graph on each step
-            if debug in [1, 2, 3]:
+            if debug > 0:
                 # Number of edges in current lattice
                 c = len(edge_paths)
 
@@ -552,7 +554,7 @@ def place_nxt_block(
                     debug=debug,
                     src_tgt_ids=(src_id, tgt_id),
                     fig_data=fig_data,
-                    filename=f"{circuit_name}{c:03d}" if vis_options[1] else None,
+                    filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
                 )
 
         # Write winner path and related info
@@ -760,7 +762,7 @@ def second_pass(
                     )
 
                     # For visualisation, create a new graph on each step
-                    if debug in [1, 2, 3]:
+                    if debug > 0:
                         # Number of edges in current lattice
                         c = len(edge_paths)
 
@@ -784,7 +786,7 @@ def second_pass(
                             debug=debug,
                             src_tgt_ids=(src_id, tgt_id),
                             fig_data=fig_data,
-                            filename=f"{circuit_name}{c:03d}" if vis_options[1] else None,
+                            filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
                         )
 
                     # Write to edge_paths if an edge is found
