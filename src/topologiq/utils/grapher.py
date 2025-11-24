@@ -487,7 +487,7 @@ def _init_vis(
             tgt_kind = zx_type.lower()*3 if zx_type in ["X", "Y", "Z"] else "ooo"
         
         # Valid paths mini-graph
-        valid_paths_mini_graph = edge_paths_to_nx_graph(valid_paths)
+        valid_paths_mini_graph = edge_paths_to_nx_graph(valid_paths) if valid_paths else nx.Graph()
         valid_paths_block_positions = nx.get_node_attributes(valid_paths_mini_graph, "coords")
 
 
@@ -1027,10 +1027,10 @@ def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
                 'full_path': path,
                 'coords': path_coords,
                 # Check for validity using the actual path object
-                'is_valid': path in valid_paths.values() 
+                'is_valid': path in valid_paths.values() if valid_paths else False
             })
 
-            is_valid = path in valid_paths.values()
+            is_valid = path in valid_paths.values() if valid_paths else False
             animation_sequence.append({
                 'coords': path_coords, 
                 'color': 'green' if is_valid else 'red', 
