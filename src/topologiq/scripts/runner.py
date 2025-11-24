@@ -199,6 +199,7 @@ def runner(
                                 None,
                                 None,
                                 None,
+                                hide_ports=hide_ports,
                                 debug=0,
                                 fig_data=fig_data,
                                 filename=f"{circuit_name}{c:03d}" if vis_options[1] else None,
