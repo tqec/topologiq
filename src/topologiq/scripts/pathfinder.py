@@ -241,13 +241,14 @@ def core_pathfinder_bfs(
             continue
         if curr_manhattan > max_manhattan:
             break
-        if curr_coords in tgt_coords and (
-            tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds
-        ):
-            valid_paths[current_block] = path[current_block]
-            tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-            if tgts_filled >= tgts_to_fill:
-                break
+        if curr_coords in tgt_coords:
+            if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
+                valid_paths[current_block] = path[current_block]
+                tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+                if tgts_filled >= tgts_to_fill:
+                    break
+            else:
+                continue
 
         # Remove unnecessary moves (corresponding to non-exits)
         # SUPER NB! This block needs further implementation.
