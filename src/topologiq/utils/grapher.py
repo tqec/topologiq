@@ -849,8 +849,10 @@ def _render_nx_graph(
                     size = [1.0, 1.0, 1.0] if cube_kind != "ooo" else [0.9, 0.9, 0.9]
                     if not is_final_vis and len(tent_coords) == 1 and cube_coords in tent_coords:
                         edge_col = "gold"
+                        border_width = 1
                     else:
                         edge_col = "black" if cube_kind != "ooo" else "white"
+                        border_width = 0.5
                     _ = render_block(
                         ax,
                         cube_id,
@@ -859,6 +861,7 @@ def _render_nx_graph(
                         cube_kind,
                         node_hex_map,
                         edge_col=edge_col,
+                        border_width=border_width,
                         taken=taken,
                     )
 

@@ -908,7 +908,12 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
                     continue 
                     
                 artists = render_block(
-                    fig.ax, f"P-{i}", block_coords, size, block_kind, node_hex_map,
+                    fig.ax,
+                    "TBD",
+                    block_coords,
+                    size,
+                    block_kind,
+                    node_hex_map,
                     edge_col=current_edge_col, 
                     border_width=border_width, 
                     alpha=alpha,
@@ -924,7 +929,10 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
                     v_coords = block_coords + ((np.array(u_coords) - np.array(block_coords)) * 2)
 
                 artists = render_pipe(
-                    fig.ax, u_coords, v_coords, block_kind, 
+                    fig.ax,
+                    u_coords,
+                    v_coords,
+                    block_kind, 
                     edge_col=current_edge_col, 
                     border_width=border_width,
                 )
