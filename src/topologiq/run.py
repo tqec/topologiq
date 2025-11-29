@@ -112,7 +112,12 @@ def run():
         if arg.startswith("--pyzx:"):
             circuit_name = arg.replace("--pyzx:", "")
             pyzx_function = getattr(pyzx_graphs, circuit_name)
-            pyzx_graph, fig_data = pyzx_function(draw_graph=True)
+            if "random" not in circuit_name:
+                pyzx_graph, fig_data = pyzx_function(draw_graph=True)
+            else:
+                qubit_range = (2, 7)
+                depth_range = (3, 10)
+                pyzx_graph, fig_data = pyzx_function(qubit_range, depth_range, draw_graph=True)
             simple_graph = pyzx_g_to_simple_g(pyzx_graph)
 
         # Look for visualisation options
