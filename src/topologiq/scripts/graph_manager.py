@@ -237,18 +237,21 @@ def graph_manager_bfs(
                                     "num_2n_pass_edges_processed": 0,
                                 }
 
-                                prep_stats_n_log(
-                                    "graph_manager",
-                                    log_stats_id,
-                                    run_success,
-                                    counts,
-                                    times,
-                                    circuit_name=circuit_name,
-                                    edge_paths=edge_paths,
-                                    lat_nodes=lat_nodes,
-                                    lat_edges=lat_edges,
-                                    run_params={"min_succ_rate": min_succ_rate, **kwargs},
-                                )
+                                try:
+                                    prep_stats_n_log(
+                                        "graph_manager",
+                                        log_stats_id,
+                                        run_success,
+                                        counts,
+                                        times,
+                                        circuit_name=circuit_name,
+                                        edge_paths=edge_paths,
+                                        lat_nodes=lat_nodes,
+                                        lat_edges=lat_edges,
+                                        run_params={"min_succ_rate": min_succ_rate, **kwargs},
+                                    )
+                                except Exception as e:
+                                    print(f"Unable to log stats for failed pathfinder iteration: {e}")
 
                             raise ValueError(
                                 f"Path creation. Error with edge: {src_id} -> {tgt_id}."
@@ -305,18 +308,21 @@ def graph_manager_bfs(
                 "num_2n_pass_edges_processed": num_2n_pass_edges,
             }
 
-            prep_stats_n_log(
-                "graph_manager",
-                log_stats_id,
-                run_success,
-                counts,
-                times,
-                circuit_name=circuit_name,
-                edge_paths=edge_paths,
-                lat_nodes=lat_nodes,
-                lat_edges=lat_edges,
-                run_params={"min_succ_rate": min_succ_rate, **kwargs},
-            )
+            try:
+                prep_stats_n_log(
+                    "graph_manager",
+                    log_stats_id,
+                    run_success,
+                    counts,
+                    times,
+                    circuit_name=circuit_name,
+                    edge_paths=edge_paths,
+                    lat_nodes=lat_nodes,
+                    lat_edges=lat_edges,
+                    run_params={"min_succ_rate": min_succ_rate, **kwargs},
+                )
+            except Exception as e:
+                print(f"Unable to log stats for failed run in second pass: {e}")
 
         # Raise
         raise ValueError(e)
@@ -337,18 +343,21 @@ def graph_manager_bfs(
             "num_2n_pass_edges_processed": num_2n_pass_edges,
         }
 
-        prep_stats_n_log(
-            "graph_manager",
-            log_stats_id,
-            run_success,
-            counts,
-            times,
-            circuit_name=circuit_name,
-            edge_paths=edge_paths,
-            lat_nodes=lat_nodes,
-            lat_edges=lat_edges,
-            run_params={"min_succ_rate": min_succ_rate, **kwargs},
-        )
+        try:
+            prep_stats_n_log(
+                "graph_manager",
+                log_stats_id,
+                run_success,
+                counts,
+                times,
+                circuit_name=circuit_name,
+                edge_paths=edge_paths,
+                lat_nodes=lat_nodes,
+                lat_edges=lat_edges,
+                run_params={"min_succ_rate": min_succ_rate, **kwargs},
+            )
+        except Exception as e:
+            print(f"Unable to log stats for successful run: {e}")
 
     return nx_g, edge_paths, c, lat_nodes, lat_edges
 
@@ -905,18 +914,21 @@ def run_pathfinder(
             )
 
         # Try finding paths to each tentative coordinates
-        valid_paths, pathfinder_vis_data = pathfinder(
-            src_block_info,
-            tent_coords,
-            tgt_zx_type,
-            taken=taken_cc,
-            tgt_block_info=(tent_coords[0], tgt_type),
-            hdm=hdm,
-            min_succ_rate=min_succ_rate,
-            critical_beams=critical_beams,
-            src_tgt_ids=src_tgt_ids,
-            log_stats_id=log_stats_id,
-        )
+        if tent_coords:
+            valid_paths, pathfinder_vis_data = pathfinder(
+                src_block_info,
+                tent_coords,
+                tgt_zx_type,
+                taken=taken_cc,
+                tgt_block_info=(tent_coords[0], tgt_type),
+                hdm=hdm,
+                min_succ_rate=min_succ_rate,
+                critical_beams=critical_beams,
+                src_tgt_ids=src_tgt_ids,
+                log_stats_id=log_stats_id,
+            )
+        else:
+            raise ValueError(f"tent_coords: {tent_coords}")
 
         # Append usable paths to clean paths
         if valid_paths:
