@@ -160,22 +160,29 @@ def prep_stats_n_log(
             durations["total"],
         ]
 
+        try:
+            edge_paths_summary = [
+                {
+                    edge_path["src_tgt_ids"][0]: edge_path["path_nodes"][0][1] if edge_path["path_nodes"][0][1] else None,
+                    edge_path["src_tgt_ids"][1]: edge_path["path_nodes"][-1][1] if edge_path["path_nodes"][-1][1] else None,
+                }
+                for edge_path in edge_paths.values()] if edge_paths else ["error"]
+
+        except Exception as e:
+            print(f"Minor error with logging of aux stats: {e}")
+            edge_paths_summary = [
+                {
+                    edge_path["src_tgt_ids"][0]: "Undefined",
+                    edge_path["src_tgt_ids"][1]: "Undefined",
+                }
+                for edge_path in edge_paths.values()] if edge_paths else ["error"]
+
         aux_stats = [
             log_stats_id,
             op_success,
             circuit_name,
             run_params,
-            (
-                [
-                    {
-                        edge_path["src_tgt_ids"][0]: edge_path["path_nodes"][0][1],
-                        edge_path["src_tgt_ids"][1]: edge_path["path_nodes"][-1][1]
-                    } 
-                    for edge_path in edge_paths.values()
-                ]
-                if edge_paths
-                else ["error"]
-            ),
+            edge_paths_summary,
         ]
 
         log_stats(
@@ -184,7 +191,7 @@ def prep_stats_n_log(
             opt_header=HEADER_PARAMS_STATS,
         )
 
-        if op_success is not True or run_params["length_of_beams"] != 9 or run_params["weights"] != (-1, -1):
+        if op_success is not True or run_params["weights"] != (-1, -1):
 
             repo_root: Path = Path(__file__).resolve().parent.parent
             stats_dir_path = repo_root / "assets/stats"
