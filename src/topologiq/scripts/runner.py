@@ -17,7 +17,6 @@ from datetime import datetime
 from typing import List, Tuple, Union
 
 from topologiq.scripts.graph_manager import graph_manager_bfs
-from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import write_outputs
 from topologiq.utils.utils_zx_graphs import strip_boundaries
 from topologiq.utils.grapher_common import lattice_to_g
@@ -118,7 +117,7 @@ def runner(
         # Nullify any pre-existing fig_data as overlay would no longer correspond
         fig_data = None
         print("Note! Graph auto-optimised to reduce final volume.")
-        simple_graph_vis(simple_graph, layout_method="planar")
+        #simple_graph_vis(simple_graph, layout_method="planar")
 
     # Optional graph transformations
     if strip_ports:
