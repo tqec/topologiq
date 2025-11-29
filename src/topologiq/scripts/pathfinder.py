@@ -235,7 +235,7 @@ def core_pathfinder_bfs(
         # Check exit conditions in case something's gone wrong
         curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
         if curr_manhattan < prune_distance - 6:
-            visited = prune_visited(visited)
+            visited = prune_visited(visited, current_block)
             prune_distance = curr_manhattan
         if curr_manhattan > src_tgt_manhattan + 6:
             continue

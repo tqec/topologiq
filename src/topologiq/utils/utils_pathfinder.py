@@ -338,7 +338,7 @@ def flip_hdm(k: str) -> str:
     # Return revised kind
     return new_k
 
-def prune_visited(visited: dict[Tuple[StandardBlock, StandardCoord], int]) -> dict[Tuple[StandardBlock, StandardCoord], int]:
+def prune_visited(visited: dict[Tuple[StandardBlock, StandardCoord], int], curr_block_info: StandardBlock) -> dict[Tuple[StandardBlock, StandardCoord], int]:
     """Takes the visited dictionary from the pathfinder and prunes the second (directional) element of the keys
     
     Args:
@@ -353,5 +353,6 @@ def prune_visited(visited: dict[Tuple[StandardBlock, StandardCoord], int]) -> di
     for k, v in visited.items():
         block_info = k[0]
         new_visited[(block_info, (0,0,0))] = v
+        new_visited[(curr_block_info, (0,0,0))] = 0
     
     return new_visited
