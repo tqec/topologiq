@@ -183,26 +183,25 @@ def runner(
                 )
 
                 # vis_options result
-                if vis_options[0] or vis_options[1]:
+                if vis_options[0] or vis_options[1] or debug > 0:
                     final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
                     # 3D interactive visualisation
-                    if vis_options[0]:
-                        if vis_options[0].lower() in ["final", "details"]:
-                            vis_3d(
-                                nx_g,
-                                final_nx_g,
-                                edge_paths,
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                                hide_ports=hide_ports,
-                                debug=1,
-                                fig_data=fig_data,
-                                filename_info=(circuit_name, c) if vis_options[1] else None,
-                            )
+                    vis_3d(
+                        nx_g,
+                        final_nx_g,
+                        edge_paths,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        hide_ports=hide_ports,
+                        debug=debug,
+                        vis_options=vis_options,
+                        fig_data=fig_data,
+                        filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
+                    )
 
                     # Animation
                     if vis_options[1]:

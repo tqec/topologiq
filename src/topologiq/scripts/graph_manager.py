@@ -539,6 +539,7 @@ def place_nxt_block(
             winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
             
             # For visualisation, create a new graph on each step
+            debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
             if debug > 0:
                 # Number of edges in current lattice
                 c = len(edge_paths)
@@ -561,6 +562,7 @@ def place_nxt_block(
                     hide_ports=hide_ports,
                     all_search_paths=all_search_paths,
                     debug=debug,
+                    vis_options=vis_options,
                     src_tgt_ids=(src_id, tgt_id),
                     fig_data=fig_data,
                     filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
@@ -771,6 +773,7 @@ def second_pass(
                     )
 
                     # For visualisation, create a new graph on each step
+                    debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
                     if debug > 0:
                         # Number of edges in current lattice
                         c = len(edge_paths)
@@ -793,6 +796,7 @@ def second_pass(
                             hide_ports=hide_ports,
                             all_search_paths=all_search_paths,
                             debug=debug,
+                            vis_options=vis_options,
                             src_tgt_ids=(src_id, tgt_id),
                             fig_data=fig_data,
                             filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,

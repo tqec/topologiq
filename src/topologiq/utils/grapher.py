@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Button
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from PIL import Image
 
 from topologiq.utils.classes import PathBetweenNodes, StandardBlock, StandardCoord
@@ -57,7 +57,8 @@ def vis_3d(
     tent_tgt_kinds: List[str] | None,
     hide_ports: bool = False,
     all_search_paths: dict[StandardBlock, List[StandardBlock]] | None = [],
-    debug: int = 2,
+    debug: int = 1,
+    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
     src_tgt_ids: Tuple[int, int] | None = None,
     fig_data: matplotlib.figure.Figure | None = None,
     filename_info: Tuple[str, int] | None = None,
@@ -81,6 +82,13 @@ def vis_3d(
         hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
         all_search_paths (optional): A dictionary containing all paths searched by the inner pathfinder algorithm.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
+        vis_options (optional): Visualisation settings provided as a Tuple.
+            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
+                (None): No visualisation.
+                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
+            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
+                (None): No animation.
+                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
         fig_data (optional): the Matplotlib figure of the input graph (used as optional overlay).
 
@@ -91,7 +99,7 @@ def vis_3d(
 
     # Preliminaries
     # ---
-    
+
     # Create foundational Matplotlib objects
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(projection="3d")
@@ -379,7 +387,10 @@ def vis_3d(
                 f.close()
 
     # Show
-    plt.show()
+    if debug > 1 or vis_options[0] == "detail" or (vis_options[0] == "final" and is_final_vis):
+        plt.show()
+    else:
+        plt.close()
 
 
 #######################
@@ -426,7 +437,7 @@ def _init_vis(
         category: Coding partner (see README for details).
         model: Gemini, 2.5 Flash.
     """
-    
+
     # Determine type of visualisation
     is_final_vis = False if tent_coords and tent_tgt_kinds and debug > 0 else True
     is_single_target = False if is_final_vis else len(tent_coords) == 1 and len(tent_tgt_kinds) == 1
