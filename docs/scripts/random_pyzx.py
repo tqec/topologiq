@@ -84,7 +84,7 @@ if __name__ == "__main__":
     log_stats = False
     debug = 0
 
-    m_times = 1  # Number of times to repeat the run of single random graph
+    m_times = 10  # Number of times to repeat the run of single random graph
     qubit_range = (2, 7)  # Min, max number of qubits.
     depth_range = (5, 15) # Min, max depth.
     run_random(m_times, qubit_range, depth_range, vis_options=vis_options, stop_on_first_success=stop_on_first_success, log_stats=log_stats, debug=debug)
