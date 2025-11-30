@@ -120,7 +120,11 @@ python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
 uv run src/topologiq/run.py --pyzx:cnots --repeat:50
 python3 src/topologiq/run.py --pyzx:cnots --repeat:50  # Requires active .venv
 
-# Run topologiq in full debug mode (output logs must exist).
+# Turn debug mode on (valid modes: 1, 2, 3) (adds incrementally detailed logs and visualisations).
+uv run src/topologiq/run.py --pyzx:cnots --vis:detail --debug:1
+python3 src/topologiq/run.py --pyzx:cnots --vis:detail --debug:1  # Requires active .venv
+
+# Pick up edge cases and prompt user to run specific edge case (output logs must exist).
 uv run src/topologiq/debug.py
 python3 src/topologiq/debug.py  # Requires active .venv
 ```
@@ -140,17 +144,9 @@ python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
 uv run src/topologiq/run.py --pyzx:cnots --vis:detail
 python3 src/topologiq/run.py --pyzx:cnots --vis:detail  # Requires active .venv
 
-# "BOUNDARIES" considered by algorithm but NOT shown in visualisations.
-uv run src/topologiq/run.py --pyzx:cnot --vis:final --hide_boundaries
-python3 src/topologiq/run.py --pyzx:cnot --vis:final --hide_boundaries  # Requires active .venv
-
 # "BOUNDARIES" stripped prior performing any operations and therefore not considered.
 uv run src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries
 python3 src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries  # Requires active .venv
-
-# Run visualisations on debug mode (additional details shown) (only helpful if combined with detail visualisations or animations).
-uv run src/topologiq/run.py --pyzx:cnots --vis:detail --debug
-python3 src/topologiq/run.py --pyzx:cnots --vis:detail --debug  # Requires active .venv
 
 # A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
 uv run src/topologiq/run.py --pyzx:cnots --animate:GIF
@@ -197,7 +193,7 @@ Everything is pending, but below a list of highest priorities:
 - More example scripts (no more notebooks, there's too many already), especially for integration of external systems.
 - Improve run-times further, especially for the inner pathfinder algorithm when two pre-existing nodes are very far from one another.
 
-Having said that, at the moment, a pre-requisite to accepting contributions is to develop all the automated workflows needed to manage contributions robustly. To avoid accidents on "main", other contributions are unlikely to be accepted before these workflows are available. It would be awesome if someone wants to contribute the workflows. Else, they'll be ready when they're ready. 
+Having said that, at the moment, a pre-requisite to accepting contributions is to develop all the automated workflows needed to manage contributions robustly. To avoid accidents on "main", other contributions are unlikely to be accepted before these workflows are available. It would be awesome if someone wants to contribute the workflows. Else, they'll be ready when they're ready.
 
 ## License
 This repository is open source software. All code in the repository is under an Apache 2.0 license.

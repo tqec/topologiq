@@ -17,13 +17,14 @@ from datetime import datetime
 from typing import List, Tuple, Union
 
 from topologiq.scripts.graph_manager import graph_manager_bfs
-from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import write_outputs
 from topologiq.utils.utils_zx_graphs import strip_boundaries
-from topologiq.utils.grapher import vis_3d_g, lattice_to_g
+from topologiq.utils.grapher_common import lattice_to_g
+from topologiq.utils.grapher import vis_3d
 from topologiq.utils.animation import create_animation
 from topologiq.utils.utils_zx_graphs import break_single_spider_graph
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
+from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
 
 
 ####################
@@ -39,7 +40,7 @@ def runner(
     stop_on_first_success: bool = True,
     vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
     log_stats: bool = False,
-    debug: bool = False,
+    debug: int = 0,
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
     **kwargs,
@@ -71,7 +72,7 @@ def runner(
                 (None): No animation.
                 (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
         log_stats (optional): If True, triggers automated stats logging to CSV files in `.assets/stats/`.
-        debug (optional): If True, turns debugging mode on (enable verbose logging and added details in visualisations).
+        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
 
@@ -95,6 +96,13 @@ def runner(
     Path(output_dir_path).mkdir(parents=True, exist_ok=True)
     unique_run_id = None
 
+    # Assemble kwargs if not detected
+    if len(kwargs) == 0:
+        kwargs: dict[str, Tuple[int, int] | int] = {
+            "weights": VALUE_FUNCTION_HYPERPARAMS,
+            "length_of_beams": LENGTH_OF_BEAMS,
+        }
+
     # Optimise incoming graph if applicable
     # The following operations leave the simple_graph unchanged if no optimisation is available
     # Eventually, there should be a manager that calls only applicable optimisations
@@ -109,7 +117,7 @@ def runner(
         # Nullify any pre-existing fig_data as overlay would no longer correspond
         fig_data = None
         print("Note! Graph auto-optimised to reduce final volume.")
-        simple_graph_vis(simple_graph, layout_method="planar")
+        #simple_graph_vis(simple_graph, layout_method="planar")
 
     # Optional graph transformations
     if strip_ports:
@@ -123,7 +131,7 @@ def runner(
         i += 1
 
         # Verbose updates if log_stats or debug mode is on
-        if log_stats or debug:
+        if log_stats or debug in [1, 2, 3]:
             print(f"\nAttempt {i} of {max_attempts}:")
         
         # Create unique run ID if stats logging is on
@@ -175,31 +183,28 @@ def runner(
                 )
 
                 # vis_options result
-                if vis_options[0] or vis_options[1]:
+                if vis_options[0] or vis_options[1] or debug > 0:
                     final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
 
                     # 3D interactive visualisation
-                    if vis_options[0]:
-                        if vis_options[0].lower() in ["final", "details"]:
-                            vis_3d_g(
-                                final_nx_g,
-                                edge_paths,
-                                hide_ports=hide_ports,
-                                fig_data=fig_data,
-                            )
+                    vis_3d(
+                        nx_g,
+                        final_nx_g,
+                        edge_paths,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        hide_ports=hide_ports,
+                        debug=debug,
+                        vis_options=vis_options,
+                        fig_data=fig_data,
+                        filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
+                    )
 
                     # Animation
-                    if vis_options[1]:
-                        if vis_options[1].lower() in ["gif", "mp4"]:
-                            vis_3d_g(
-                                final_nx_g,
-                                edge_paths,
-                                hide_ports=hide_ports,
-                                save_to_file=True,
-                                filename=f"{circuit_name}{c:03d}",
-                                fig_data=fig_data,
-                            )
-
+                    if vis_options[1] or debug == 4:
                             create_animation(
                                 filename_prefix=circuit_name,
                                 restart_delay=5000,
@@ -217,7 +222,7 @@ def runner(
             duration_all = (datetime.now() - t1).total_seconds()
 
             # Update user
-            if log_stats or debug:
+            if log_stats or debug in [1, 2, 3]:
                 print(
                     Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
                     f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",

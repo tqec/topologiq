@@ -89,7 +89,7 @@ def run():
     strip_ports: bool = False
     hide_ports: bool = False
     log_stats: bool = False
-    debug: bool = False
+    debug: int = 0
     fig_data: Figure | None = None
 
     # Handle any arguments passed via the command
@@ -112,7 +112,12 @@ def run():
         if arg.startswith("--pyzx:"):
             circuit_name = arg.replace("--pyzx:", "")
             pyzx_function = getattr(pyzx_graphs, circuit_name)
-            pyzx_graph, fig_data = pyzx_function(draw_graph=True)
+            if "random" not in circuit_name:
+                pyzx_graph, fig_data = pyzx_function(draw_graph=True)
+            else:
+                qubit_range = (2, 7)
+                depth_range = (3, 10)
+                pyzx_graph, fig_data = pyzx_function(qubit_range, depth_range, draw_graph=True)
             simple_graph = pyzx_g_to_simple_g(pyzx_graph)
 
         # Look for visualisation options
@@ -134,7 +139,7 @@ def run():
 
             # Look for number of repetitions parameter
         if arg.startswith("--debug"):
-            debug = True
+            debug = int(arg.replace("--debug:", ""))
 
     # Call Topologiq on `simple_graph` of circuit
     if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:

@@ -1,6 +1,5 @@
 import matplotlib
 import pyzx as zx
-import random
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from typing import Optional, Tuple, Union
@@ -54,17 +53,49 @@ def simple_mess(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Opt
     return g, fig
 
 
-def random_graph(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
+def random_graph(
+    qubit_n: int,
+    depth: int,
+    draw_graph: bool = False
+) -> Tuple[Union[BaseGraph, GraphS] | None, matplotlib.figure.Figure] | None:
 
-    qubits = random.randint(2, 5)
-    depth = random.randint(7, 15)
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubits, depth=depth, clifford=True)
-    g = c.to_graph()
-    # zx.clifford_simp(g)
-    # g.normalize()
+    # Generate inside loop to check graph integrity
+    # PyZX sometimes generates graphs of disconnected subgraphs,
+    # which aren't compatible with Topologiq. This block emulates
+    # Topologiq's core BFS logic to ensure the returned PyZX graph is
+    # a single big interconnected graph.
+    i = 0
+    max_attempts = 100
+    while i < max_attempts:
+        # Increase counter from start to not forget
+        i += 1
 
-    fig = None
-    if draw_graph:
-        fig = zx.draw(g, labels=True)
+        # Generate a graph
+        c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubit_n, depth=depth, clifford=False)
+        g = c.to_graph()
 
-    return g, fig
+        # Run a canonical BFS loop to confirm all spiders are hit by BFS
+        queue = []
+        visited = {}
+
+        ids_original_spiders = list(g.vertices())
+        queue.append(ids_original_spiders[0])
+        visited[ids_original_spiders[0]] = True
+        while queue:
+            nxt = queue.pop(0)
+            all_neighbours = list(g.neighbors(nxt))
+            for neigh in all_neighbours:
+                if neigh not in visited:
+                    queue.append(neigh)
+                    visited[neigh] = True
+
+        # Check BFS visited IDs against original PyZX graph
+        if ids_original_spiders == sorted(list(visited.keys())):
+            # Return if all IDs are present
+            if draw_graph:
+                fig = zx.draw(g)
+            
+            # Return graph and figure
+            return g, fig
+
+    return None, None

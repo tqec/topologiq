@@ -28,7 +28,6 @@ from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
 from topologiq.utils.utils_pathfinder import check_is_exit, prune_visited, rot_o_kind, nxt_kinds
 from topologiq.utils.utils_misc import get_max_manhattan, prep_stats_n_log
 
-
 ############################
 # MAIN PATHFINDER WORKFLOW #
 ############################
@@ -43,7 +42,10 @@ def pathfinder(
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     src_tgt_ids: Optional[Tuple[int,int]] = None,
     log_stats_id: Union[str, None] = None,
-) -> Union[None, dict[StandardBlock, List[StandardBlock]]]:
+) -> Tuple[
+    Union[None, dict[StandardBlock, List[StandardBlock]]],
+    Tuple[List[StandardCoord], List[str], Union[None, dict[StandardBlock, List[StandardBlock]]], Union[None, dict[StandardBlock, List[StandardBlock]]]],
+    ]:
     """Call core pathfinder after generating list of possible kinds for the given operation.
 
     Args:
@@ -54,10 +56,12 @@ def pathfinder(
         taken (optional): A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process (updated regularly).
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
+        critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
+        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
 
     Returns:
-        - valid_paths: all paths found in round, covering some or all tent_coords.
+        valid_paths: all paths found in round, covering some or all tent_coords.
 
     """
 
@@ -83,7 +87,7 @@ def pathfinder(
     )
 
     # Call pathfinder
-    valid_paths, visit_stats = core_pathfinder_bfs(
+    valid_paths, all_search_paths, visit_stats = core_pathfinder_bfs(
         src_block_info,
         tent_coords,
         tent_tgt_kinds,
@@ -93,6 +97,8 @@ def pathfinder(
         critical_beams=critical_beams,
         src_tgt_ids=src_tgt_ids,
     )
+
+    pathfinder_vis_data = [tent_coords, tent_tgt_kinds, all_search_paths, valid_paths]
 
     # Log stats if needed
     if log_stats_id is not None:
@@ -132,7 +138,8 @@ def pathfinder(
             visit_stats=visit_stats,
         )
 
-    return valid_paths
+    # Return valid paths and data for visualising round
+    return valid_paths, pathfinder_vis_data
 
 
 ###############################
@@ -147,7 +154,10 @@ def core_pathfinder_bfs(
     hdm: bool = False,
     critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
     src_tgt_ids: Optional[Tuple[int,int]] = None,
-) -> Tuple[Union[None, dict[StandardBlock, List[StandardBlock]]], Tuple[int, int]]:
+) -> Tuple[
+    Union[None, dict[StandardBlock, List[StandardBlock]]],
+    Union[None, dict[StandardBlock, List[StandardBlock]]],
+    Tuple[int, int]]:
     """Create topologically-correct paths between a source and one or more target coordinates/kinds.
 
     This function is the core algorithm in the inner pathfinder BFS. It systematically explores a 4D space
@@ -157,13 +167,13 @@ def core_pathfinder_bfs(
     Args:
         src_block_info: The coords and kind of the source block.
         tent_coords: A list of tentative target coordinates to find paths to.
-        tent_tgt_kinds: list of kinds matching the zx-type of target block
+        tent_tgt_kinds: A list of kinds matching the zx-type of target block.
         min_succ_rate: Minimum % of tentative coordinates that must be filled for each edge.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process (updated regularly).
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
 
     Returns:
-        valid_paths: All paths found in round, covering some or all tent_coords.
+        valid_paths: All paths found in round covering some or all tent_coords.
 
     """
 
@@ -173,7 +183,10 @@ def core_pathfinder_bfs(
     tgt_coords = tent_coords
 
     if src_coords in taken:
+        print("src_coords in taken")
         taken.remove(src_coords)
+    if tgt_coords[0] in taken:
+        print("tgt_coords in taken")
     if len(tgt_coords) == 1 and len(tent_tgt_kinds) == 1 and tgt_coords[0] in taken:
         taken.remove(tgt_coords[0])
 
@@ -184,6 +197,7 @@ def core_pathfinder_bfs(
     path_len = {src_block_info: 0}
     path = {src_block_info: [src_block_info]}
     valid_paths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
+    all_search_paths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
     moves_unadjusted = [
         (1, 0, 0),
         (-1, 0, 0),
@@ -221,20 +235,21 @@ def core_pathfinder_bfs(
         # Check exit conditions in case something's gone wrong
         curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
         if curr_manhattan < prune_distance - 6:
-            visited = prune_visited(visited)
+            visited = prune_visited(visited, current_block)
             prune_distance = curr_manhattan
         if curr_manhattan > src_tgt_manhattan + 6:
             continue
         if curr_manhattan > max_manhattan:
             break
-        if curr_coords in tgt_coords and (
-            tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds
-        ):
-            valid_paths[current_block] = path[current_block]
-            tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-            if tgts_filled >= tgts_to_fill:
-                break
-        
+        if curr_coords in tgt_coords:
+            if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
+                valid_paths[current_block] = path[current_block]
+                tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+                if tgts_filled >= tgts_to_fill:
+                    break
+            else:
+                continue
+
         # Remove unnecessary moves (corresponding to non-exits)
         # SUPER NB! This block needs further implementation.
         # It's an emerging solution for long paths with multiple hooks. 
@@ -327,7 +342,6 @@ def core_pathfinder_bfs(
             # Create a list of kinds that are valid for the next block
             possible_nxt_types = nxt_kinds(curr_coords, curr_kind if not alt_curr_kind else alt_curr_kind, nxt_coords)
             for nxt_type in possible_nxt_types:
-                
                 # Place Hadamard instead of regular pipe if all corresponding flags are present
                 if hdm and "o" in nxt_type:
                     nxt_type += "h"
@@ -359,14 +373,29 @@ def core_pathfinder_bfs(
                             tent_tgt_kinds == ["ooo"] or nxt_type in tent_tgt_kinds
                         ):
                             valid_paths[nxt_b_info] = path[nxt_b_info]
+                            all_search_paths[nxt_b_info] = path[nxt_b_info]
                             tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
                             if tgts_filled >= tgts_to_fill:
                                 break
+                        else:
+                            all_search_paths[nxt_b_info] = path[nxt_b_info]
+                        
+                        # Increase counter of times pathfinder tries visits something new
+                        visit_attempts += 1
+                        
+                    if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
+                        break
+                
+                if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
+                    break
+            
+            if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
+                break
 
-            # Increase counter of times pathfinder tries visits something new
-            visit_attempts += 1
+        if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
+            break
 
-    return valid_paths, (visit_attempts, len(visited))
+    return valid_paths, all_search_paths, (visit_attempts, len(visited))
 
 
 ##################
