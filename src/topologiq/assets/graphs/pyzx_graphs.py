@@ -1,6 +1,5 @@
 import matplotlib
 import pyzx as zx
-import random
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from typing import Optional, Tuple, Union
@@ -55,18 +54,12 @@ def simple_mess(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Opt
 
 
 def random_graph(
-    qubit_range: Tuple[int, int],
-    depth_range: Tuple[int, int],
+    qubit_n: int,
+    depth: int,
     draw_graph: bool = False
 ) -> Tuple[Union[BaseGraph, GraphS] | None, matplotlib.figure.Figure] | None:
 
-    # Determine size of graph
-    min_qubits, max_qubits = qubit_range
-    min_depth, max_depth = depth_range
-    qubits = random.randrange(min_qubits, max_qubits)
-    depth = random.randrange(min_depth, max_depth)
-
-    # Check graph integrity
+    # Generate inside loop to check graph integrity
     # PyZX sometimes generates graphs of disconnected subgraphs,
     # which aren't compatible with Topologiq. This block emulates
     # Topologiq's core BFS logic to ensure the returned PyZX graph is
@@ -78,7 +71,7 @@ def random_graph(
         i += 1
 
         # Generate a graph
-        c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubits, depth=depth, clifford=True)
+        c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubit_n, depth=depth, clifford=False)
         g = c.to_graph()
 
         # Run a canonical BFS loop to confirm all spiders are hit by BFS
@@ -100,7 +93,7 @@ def random_graph(
         if ids_original_spiders == sorted(list(visited.keys())):
             # Return if all IDs are present
             if draw_graph:
-                fig = zx.draw(g, labels=True)
+                fig = zx.draw(g)
             
             # Return graph and figure
             return g, fig
