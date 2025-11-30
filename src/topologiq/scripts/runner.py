@@ -204,7 +204,7 @@ def runner(
                     )
 
                     # Animation
-                    if vis_options[1]:
+                    if vis_options[1] or debug == 4:
                             create_animation(
                                 filename_prefix=circuit_name,
                                 restart_delay=5000,

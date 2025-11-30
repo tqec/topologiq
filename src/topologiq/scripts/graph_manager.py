@@ -167,6 +167,10 @@ def graph_manager_bfs(
         # Update node counter
         num_nodes_input += 1
 
+        # Update user
+        if log_stats_id or debug > 0:
+            print(f"First cube ID: {first_id} ({first_kind}).")
+
     # Loop over all other spiders
     c = 0  # Visualiser counter (needed to save snapshots to file)
     while queue:
@@ -254,7 +258,7 @@ def graph_manager_bfs(
                                     print(f"Unable to log stats for failed pathfinder iteration: {e}")
 
                             raise ValueError(
-                                f"Path creation. Error with edge: {src_id} -> {tgt_id}."
+                                f"ERROR with edge: {src_id} -> {tgt_id}."
                             )
 
                     # Increase distance between nodes if placement not possible
@@ -424,6 +428,9 @@ def place_nxt_block(
 
     """
 
+    # Start timer
+    t1 = datetime.now()
+
     # Always prune beams to ensure recent placements are accounted for
     nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
@@ -537,36 +544,39 @@ def place_nxt_block(
         winner_path: Optional[PathBetweenNodes] = None
         if viable_paths:
             winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
-            
-            # For visualisation, create a new graph on each step
-            debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
-            if debug > 0:
-                # Number of edges in current lattice
-                c = len(edge_paths)
 
-                # Create partial progress graph from current edges
-                partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths))
-                partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
+        # Finish timer before popping up visualisation
+        duration_iter = (datetime.now() - t1).total_seconds()
 
-                # Detailed interactive visualisation of progress
-                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
-                vis_3d(
-                    nx_g,
-                    partial_nx_g,
-                    edge_paths,
-                    valid_paths if valid_paths else None,
-                    winner_path if winner_path else None,
-                    src_block_info,
-                    tent_coords,
-                    tent_tgt_kinds,
-                    hide_ports=hide_ports,
-                    all_search_paths=all_search_paths,
-                    debug=debug,
-                    vis_options=vis_options,
-                    src_tgt_ids=(src_id, tgt_id),
-                    fig_data=fig_data,
-                    filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
-                )
+        # For visualisation, create a new graph on each step
+        debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
+        if debug > 0:
+            # Number of edges in current lattice
+            c = len(edge_paths)
+
+            # Create partial progress graph from current edges
+            partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths))
+            partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
+
+            # Detailed interactive visualisation of progress
+            tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
+            vis_3d(
+                nx_g,
+                partial_nx_g,
+                edge_paths,
+                valid_paths if valid_paths else None,
+                winner_path if winner_path else None,
+                src_block_info,
+                tent_coords,
+                tent_tgt_kinds,
+                hide_ports=hide_ports,
+                all_search_paths=all_search_paths,
+                debug=debug,
+                vis_options=vis_options,
+                src_tgt_ids=(src_id, tgt_id),
+                fig_data=fig_data,
+                filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
+            )
 
         # Write winner path and related info
         if winner_path:
@@ -618,8 +628,9 @@ def place_nxt_block(
             taken.extend(all_coords_in_path)
 
             # Update user if log_stats or debug are enabled
-            if log_stats_id or debug in [1, 2, 3]:
-                print(f"Path creation: {src_id} -> {tgt_id}. SUCCESS.")
+            if log_stats_id or debug > 0:                
+                volume = len([block for block in winner_path.all_nodes_in_path if "o" not in block[1]])
+                print(f"New path created: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms) (+{volume - 1} vol).")
 
             # Return updated list of taken coords and all_beams, with success flag
             nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
@@ -629,8 +640,8 @@ def place_nxt_block(
         if not winner_path:
 
             # Explicit warning if log_stats or debug are enabled 
-            if log_stats_id or debug in [1, 2, 3]:
-                print(f"Path creation: {src_id} -> {tgt_id}. FAIL.")
+            if log_stats_id or debug > 0:
+                print(f"ERROR. New path creation: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms).")
 
             # Fill edge_paths with error
             edge = tuple(sorted((src_id, tgt_id)))
@@ -717,8 +728,9 @@ def second_pass(
         # Process edge only if both src_id and tgt_id have already been placed in the 3D space
         # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
         if u_coords is not None and v_coords is not None:
-            # Update visualiser counter
+            # Update counter & timer
             c += 1
+            t1 = datetime.now()
 
             # Format adjustments to match existing operations
             u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
@@ -771,6 +783,7 @@ def second_pass(
                         debug=debug,
                         nx_g=nx_g,
                     )
+                    duration_iter = (datetime.now() - t1).total_seconds()
 
                     # For visualisation, create a new graph on each step
                     debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
@@ -836,11 +849,12 @@ def second_pass(
 
                         # Update user if log_stats or debug mode are enabled
                         if log_stats_id or debug in [1, 2, 3]:
-                            print(f"Path discovery: {src_id} -> {tgt_id}. SUCCESS.")
+                            volume = len([block for block in clean_paths[0] if "o" not in block[1]])
+                            print(f"Found path between pre-existent cubes: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms) (+{volume-2} vol).")
 
                     # Write an error to edge_paths if edge not found
                     else:
-                        raise ValueError(f"Path discovery. Error with edge: {src_id} -> {tgt_id}.")
+                        raise ValueError(f"ERROR. Path between pre-existent cubes {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms).")
 
     # Return edge_paths for final consumption
     return edge_paths, c, num_2n_pass_edges
