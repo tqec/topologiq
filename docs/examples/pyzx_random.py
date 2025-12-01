@@ -1,12 +1,17 @@
-"""
-Run random PyZX graphs of arbitrary dimensions, an arbitrary number of times.
+""" Example using a random PyZX graphs of arbitrary dimensions.
 
-Script loops over `n` random PyZX graphs, running each `m` times and logging
-statistics for all runs.
+This script contains an example of how to use Topologiq to perform algorithmic lattice
+surgery on a random PyZX graphs. The script is meant as an example of what Topologiq can do
+but can also be used as the base for running automated randomised tests.
 
 Usage:
+    Run script as given.
     
 Notes:
+    While we have identified improvements that might allow Topologiq to handle large graphs, 
+        this is not yet possible. You will start to see some attempts fail at around 50 spiders,
+        which can be recovered by asking Topologiq to increase the number of attempts per graph.
+        Graphs over 100 spiders might fail entirely irrespective of number of attempts.
 
 """
 
@@ -19,7 +24,7 @@ from typing import Tuple
 
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
-from topologiq.assets.graphs.pyzx_graphs import random_graph
+from topologiq.assets.pyzx_graphs import random_graph
 from topologiq.scripts.runner import runner
 
 ####################
@@ -42,6 +47,7 @@ def run_random(
         log_stats (optional): If True, triggers automated stats logging to CSV files in `.assets/stats/`.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+
     """
 
     # Assemble kwargs
@@ -76,6 +82,7 @@ def run_random(
         print("Try again. Valid graph not available.\nPyZX sometimes generates graphs with disconnected subgraphs, which are incompatible with Topologiq and need to be discarded.")
 
 
+# ...
 if __name__ == "__main__":
     
     # Topologiq generation parameters

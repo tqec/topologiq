@@ -1,22 +1,24 @@
 # What is this folder?
-This folder is only used locally. It contains data files which are helpful to:
+This folder contains files and reports which are helpful to:
 - understand and improve runtimes
 - understand and improve space-time volume performance
 - understand edge cases that might helpf in debugging.
 
-## Why are there no data files in the folder?
-The actual .CSV files with data for analytics remain local.
+## Why are there no data files in the data folder?
+The data folder sometimes contains and sometimes does not contain files. It depends on whether there is work ongoing to generate new benchmarks. 
 
-To create data files, give the main `runner.py` function the optional parameter `log_stats: bool = True`. This will trigger the creation a unique identifier for the run, and automated logging to the following files:
+Ideally, one day this will be optimised so that benchmarks are always actualised for every update of the codebase.
+
+If you see no files but still want to play around with some data about Topologiq's performance, give the main `runner.py` function the optional parameter `log_stats: bool = True`. This will trigger the creation of the following data files:
 - graph_manager.csv: statistics about the outer BFS cycle,
 - pathfinder.csv: statistics about each individual edge path sent to the inner pathfinder algorithm,
 - params.csv: outputs and run parameters for specific runs.
 - debug.csv: output and run parameters for specific runs that can assist debugging (failed runs or runs using atypical beam lengths or atypical hyperparameters).
 
-Please note. Statistics are NOT logged by default. A regular failed run will NOT be logged unless `log_stats` is set to `True`.
+Please note. Statistics are NOT logged by default. A regular run will NOT be logged unless `log_stats` is set to `True`.
 
 ## Schemas
-Schemas are as follows:
+Schemas for the data files inside the data folder are as follows:
 
 ### Graph manager (one log per cycle/circuit run)
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,

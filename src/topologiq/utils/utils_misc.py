@@ -59,36 +59,85 @@ HEADER_PARAMS_STATS = [
 ##############
 # SHARED OPS #
 ##############
-def get_manhattan(src_c: StandardCoord, tgt_c: StandardCoord) -> int:
-    """Gets the Manhattan distance between any two (x, y, z) coordinates.
+def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
+    """Calculate the Manhattan distance between any two (x, y, z) coordinates.
     Args:
-        - src_c: (x, y, z) coordinates for the source block.
-        - tgt_c: (x, y, z) coordinates for the target block.
+        src_coords: The (x, y, z) coordinates for the source block.
+        tgt_coords: The (x, y, z) coordinates for the target block.
     Returns:
-        - [int]: the Manhattan distance between the two incoming coordinate tuples
+        int: The Manhattan distance between the given coordinates.
     """
 
-    return np.sum(np.abs(np.array(src_c) - np.array(tgt_c)))
+    return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
 
 
-def get_max_manhattan(src_c: StandardCoord, all_cs: List[StandardCoord]) -> int:
-    """Determines the maximum Manhattan distance and a list of (x, y, z) coordinates of any arbitrary length.
+def get_max_manhattan(src_coord: StandardCoord, all_coords: List[StandardCoord]) -> int:
+    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
     Args:
-        - src_c: (x, y, z) coordinates for the source block.
-        - all_cs: a list of (x, y, z) coordinates of any arbitrary length, which may include src_c.
+        src_coord: The (x, y, z) coordinates for the source block.
+        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
     Returns:
-        - [int]: the max. Manhattan distance between the given source coordinate and all coordinate tuples in the list of coordinates.
+        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
     """
 
-    if all_cs:
-        return max([get_manhattan(src_c, c) for c in all_cs])
+    if all_coords:
+        return max([get_manhattan(src_coord, c) for c in all_coords])
 
     return 0
 
 
-##################
-# STATS LOGGERS  #
-##################
+############
+# LOGGERS  #
+############
+def write_outputs(
+    simple_graph: SimpleDictGraph,
+    circuit_name: str,
+    edge_paths: dict,
+    lat_nodes: dict[int, StandardBlock],
+    lat_edges: dict[Tuple[int, int], List[str]],
+    output_dir_path: Path,
+):
+    """Write the final output to a TXT file.
+    
+    Args:
+        simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
+        circuit_name: The name of the circuit.
+        edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq. 
+        output_dir_path: The directory where outputs are saved.
+    """
+
+    lines: List[str] = []
+
+    lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
+    lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
+    for node in simple_graph["nodes"]:
+        lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
+    lines.append("\n")
+    for edge in simple_graph["edges"]:
+        lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
+
+    lines.append(
+        '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
+    )
+
+    for key, edge_path in edge_paths.items():
+        lines.append(f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n")
+
+    lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
+    for key, node in lat_nodes.items():
+        lines.append(f"Node ID: {key}. Info: {node}\n")
+    for key, edge_info in lat_edges.items():
+        lines.append(
+            f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
+        )
+
+    with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
+        f.writelines(lines)
+        f.close()
+
+
 def prep_stats_n_log(
     stats_type: str,
     log_stats_id: str,
@@ -105,24 +154,47 @@ def prep_stats_n_log(
     visit_stats: Tuple[int, int] = (0, 0),
     run_params: dict[str, Any] = {},
 ):
-    """Takes a list of arguments and assembles them in the appropriate order needed to log stats to file. Uses the type of stats to determine appropriate order
+    """Prepare incoming parameters for logging stats to file. 
+    
+    This function takes a number of parameters and assembles them in the order needed to log stats to file. 
+    The function uses the incoming `stats_type` to determine appropriate order, and adds headers as appropriate
+    using the header constants available at the top of this file.
+
+    NB! Please note the arguments give to this function can be very different depending on whether the
+    operation relates to logging statistics of one edge iteration by the pathfinder or the summary
+    of the full process. Keep this in mind when reading parameter descriptions, as some refer to 
+    global objects used to keep track of the overall processes
+    while other refer to specific objects used in one pathfinder iteration.
 
     Args:
-        -
+        stats_type: The desired type of logging operation.
+        log_stats_id: 
+        op_success: Whether Topologiq succesfully built the circuit.
+        counts: A dictionary containing counts for the number of spiders/cubes and edges/pipes in input and output circuits.
+        times: A dictionary containing various running times for several aspects of the process.
+        circuit_name: The name of the circuit.
+        edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq. 
+        src_block_info: The information of a source cube including its position in the 3D space and its kind.
+        tgt_block_info: The information of a target cube including its position in the 3D space and its kind.
+        tgt_zx_type: The ZX type of a target spider/cube
+        visit_stats: Statistics about the number of visitation attempts and visits in a given pathfinder iteration.
+        run_params: A number of critical parameters needed to replicate how Topologiq approached a given circuit.
 
     Keyword arguments (kwargs):
-        - This varies per operation. See "CONSTANTS" section above in this file for all possibilities.
+        See "CONSTANTS" for all possibilities.
 
     Returns:
-        - main_stats: array containing all principal stats to be logged to the corresponding stats file.
-        - aux_stats: array containing any secondary stats to be logged to any auxiliary stats file, or an empty array if no secondary stats exist.
+        main_stats: An array containing all principal stats to log to primary stats files.
+        aux_stats: An array containing secondary stats to log to auxiliary stats file, or an empty array if no secondary stats exist.
     """
 
-    # INITIALISE ARRAYS
+    # Init arrays
     main_stats = []
     aux_stats = []
 
-    # FILL ARRAYS AS PER LOG TYPE
+    # Fill arrays as determined by the `stats_type`
     if "graph_manager" in stats_type:
 
         durations = {
@@ -235,6 +307,7 @@ def prep_stats_n_log(
             durations["total"],
         ]
 
+    # Call logger
     log_stats(
         main_stats,
         f"{stats_type}{'_tests' if log_stats_id.endswith('*') else ''}",
@@ -247,17 +320,16 @@ def prep_stats_n_log(
 
 
 def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []):
-    """Writes statistics to one of the statistics files in `./assets/stats/`
+    """Write statistics to an arbitrary statistic files in `./assets/stats/`
+
     Args:
-        - stats_line: the line of statistics to be logged to file.
-        - stats_type: the type of statistics being logged to file, which also matches the name of recipient file.
-        - init_file: prompts the function to fully erase the destination file and start by writing headers to it.
-    Returns:
-        - n/a: stats are written to .csv files in `./assets/stats/`
+        stats_line: A full stats object formatted as a single line for a CSV data file.
+        stats_type: The type of statistics being logged, which matches the name of recipient file.
+        opt_header (optional): A line to use as header.
     """
 
-    repo_root: Path = Path(__file__).resolve().parent.parent
-    stats_dir_path = repo_root / "assets/stats"
+    repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
+    stats_dir_path = repo_root / "benchmark/data"
 
     if not os.path.exists(f"{stats_dir_path}/{stats_type}.csv"):
         with open(f"{stats_dir_path}/{stats_type}.csv", "w", newline="") as f:
@@ -270,69 +342,24 @@ def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []
         f.close()
 
 
-def write_outputs(
-    c_g_dict: SimpleDictGraph,
-    circuit_name: str,
-    edge_paths: dict,
-    lat_nodes: dict[int, StandardBlock],
-    lat_edges: dict[Tuple[int, int], List[str]],
-    output_dir_path: Path,
-):
-    """Writes the final results of the run to TXT file.
-    Args:
-        - c_g_dict: a ZX circuit as a simple dictionary of nodes and edges
-        - circuit_name: name of ZX circuit
-        - edge_paths: the raw set of 3D edges found by the algorithm (with redundant blocks for start and end positions of some edges)
-        - lat_nodes: the nodes/blocks of the resulting space-time diagram (without redundant blocks)
-        - lat_edges: the edges/pipes of the resulting space-time diagram (without redundant pipes)
-        - output_dir_path: the directory where outputs are saved.
-
-    Returns
-        - n/a: stats are written to .csv files in `output_dir_path`
-    """
-
-    lines: List[str] = []
-
-    lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
-    lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
-    for node in c_g_dict["nodes"]:
-        lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
-    lines.append("\n")
-    for edge in c_g_dict["edges"]:
-        lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
-
-    lines.append(
-        '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
-    )
-
-    for key, edge_path in edge_paths.items():
-        lines.append(f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n")
-
-    lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
-    for key, node in lat_nodes.items():
-        lines.append(f"Node ID: {key}. Info: {node}\n")
-    for key, edge_info in lat_edges.items():
-        lines.append(
-            f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
-        )
-
-    with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
-        f.writelines(lines)
-        f.close()
-
-
 #################
 # STATS READERS #
 #################
 def get_debug_cases(path_to_stats: Path) -> List[Tuple[str, int, str]]:
     """Get key replicability information for any failed case from output stats.
 
+    This function gets information needed to replicate any failed cases logged to the corresponding
+    stats file.
+
+    Args:
+        path_to_stats: The path to an existing debug stats file, with failed cases in it.
+
     Returns
-        - debug_cases: list of (name, first_id, first_kind) for all failed cases in output stats log. 
+        debug_cases: List with information needed to replicate any failed cases. 
 
     """
 
-    # EXTRACT CASES FROM DEBUG CASES LOG FILE
+    # Extract cases from file
     debug_cases_full = []
     try: 
         with open(path_to_stats, "r") as f:
@@ -345,7 +372,7 @@ def get_debug_cases(path_to_stats: Path) -> List[Tuple[str, int, str]]:
     except (IOError, OSError, ValueError):
         raise ValueError(f"Uknown error while reading `{path_to_stats}`")
 
-    # EXTRACT PARAMS NEEDED TO REPRODUCE CASE
+    # Extract the specific parameters needed to replicate case
     debug_cases = []
     for case in debug_cases_full:
         circuit_name = case[2]

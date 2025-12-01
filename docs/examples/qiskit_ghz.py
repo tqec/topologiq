@@ -1,4 +1,21 @@
-""" Perform lattice surgery on a 16-qubit GHZ circuit produced using Qiskit."""
+""" Example using a 16-qubit GHZ circuit produced using Qiskit.
+
+This script contains an example of how to use Topologiq to perform algorithmic lattice
+surgery on a 16-qubit GHZ circuit designed using Qiskit.
+
+Usage:
+    Run script as given.
+    
+Notes:
+    There is a critical step not shown in visualisations. The reduced PyZX graph contains 
+        one colour spider an many boundaries, which violates the max_edges == 4 constraint
+        needed to perform lattice surgery based on the surface code. Topologiq has in-built
+        subroutines to handle these situations. In particular, for single_spider graphs, 
+        Topologiq calculates the optimal number of spiders needed to have a graph where all
+        spiders have the maximum number of edges allowed but not more than possible.
+"""
+
+
 import random
 import pyzx as zx
 
@@ -13,6 +30,12 @@ from topologiq.scripts.runner import runner
 
 
 def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
+    """Create a n-qubits GHZ and convert it to QASM.
+
+    Args:
+        n_qubits: The number of qubits for the GHZ.
+        circuit_name: The name of the circuit.
+    """
     # Foundational circuit
     qc: QuantumCircuit = QuantumCircuit(n_qubits, name=circuit_name)
     
@@ -28,7 +51,14 @@ def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
 
     return qasm_str
 
+
 def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
+    """Import a circuit from QASM and convert it to a PyZX graph.
+
+    Args:
+        qasm_str: A quantum circuit encoded as a QASM string. 
+
+    """
     # QASM --> PyZX circuit --> PyZX graph
     zx_circuit = zx.Circuit.from_qasm(qasm_str)
     zx_graph = zx_circuit.to_graph()
@@ -40,6 +70,12 @@ def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
 
 
 def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
+    """Reduce a PyZX graph after applying states to all inputs.
+
+    Args:
+        zx_graph: The input ZX graph, given as a PyZX graph.
+
+    """
 
     # Work with copy
     zx_graph_copy = zx_graph
@@ -48,7 +84,7 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
     num_apply_state = zx_graph_copy.num_inputs()
     zx_graph_copy.apply_state('0' * num_apply_state)
 
-    # No post-select needed (here to signal where operation would fall if needed)
+    # No post-selection needed (but here to signal where to do it if ever necessary)
     zx_graph_copy.apply_effect('////////////////')
 
     # Reduce & draw
@@ -65,8 +101,13 @@ def run_topologiq(
     Union[None, dict[int, StandardBlock]],
     Union[None, dict[Tuple[int, int], List[str]]]
 ]:
+    """Call Topologiq on an arbitrary PyZX graph.
+    
+    Args:
+        zx_graph: The input ZX graph, given as a PyZX graph.
+        circuit_name: The name of the circuit.
 
-    # Call Topologiq
+    """
     print("\n======> Now calling Topologiq:")
     random.seed(11)
     simple_graph = pyzx_g_to_simple_g(zx_graph)  # PyZX graph --> Topologiq's native format
@@ -80,6 +121,7 @@ def run_topologiq(
     return lattice_nodes, lattice_edges
 
 
+# ...
 if __name__ == "__main__":
     circuit_name = "ghz16"
     n_qubits = 16
