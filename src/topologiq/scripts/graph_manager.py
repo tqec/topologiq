@@ -848,7 +848,7 @@ def second_pass(
                         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
                         # Update user if log_stats or debug mode are enabled
-                        if log_stats_id or debug in [1, 2, 3]:
+                        if log_stats_id or debug > 0:
                             volume = len([block for block in clean_paths[0] if "o" not in block[1]])
                             print(f"Found path between pre-existent cubes: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms) (+{volume-2} vol).")
 

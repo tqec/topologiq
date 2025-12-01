@@ -90,7 +90,7 @@ def runner(
 
     # Preliminaries
     t1 = datetime.now()
-    repo_root: Path = Path(__file__).resolve().parent.parent
+    repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
     output_dir_path = repo_root / "output/txt"
     temp_dir_path = repo_root / "output/temp"
     Path(output_dir_path).mkdir(parents=True, exist_ok=True)

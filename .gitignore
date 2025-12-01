@@ -2,12 +2,12 @@
 .vscode/
 .archive/
 .admin/
-src/topologiq/stats_checks.py
+**/stats_checks.py
+**/data/*.csv
 
 # Outputs
 /output/
 **/output
-src/topologiq/assets/stats/*.csv
 
 # Python 
 .venv/

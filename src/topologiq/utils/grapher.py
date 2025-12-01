@@ -335,7 +335,7 @@ def vis_3d(
     fig.canvas.mpl_connect('key_press_event', lambda e: keypress_handler(e, fig, btn_prox, tent_coords))
 
     # Save to file if applicable
-    repo_root: Path = Path(__file__).resolve().parent.parent
+    repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
     temp_folder_path = repo_root / "output/temp"
     if filename_info:
         circuit_name, c = filename_info
