@@ -64,111 +64,68 @@ pip install -e
 ```
 
 ## Examples
-For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times.
+You can quickly test **Topologiq** from the terminal using pre-defined circuit examples.
 
-A succesfull result will produce a TXT file with information about the initial ZX graph, intermediate state, and final result (saves to `./src/topologiq/outputs/txt/`) (all information printed to this TXT file is also available for programmatic use). There are also optional parameters to trigger a variety of visualisations and summary animations.
+Check `./outputs/txt/` for results. All information in TXT outputs is also available for programmatic use.
 
 ``` bash
-# A CNOT, using PyZX.
-uv run src/topologiq/run.py --pyzx:cnot --vis:final
-python3 src/topologiq/run.py --pyzx:cnot --vis:final  # Requires active .venv
+# PyZX examples (Available examples: CNOT, CNOTs, simple_mess)
+uv run src/topologiq/run.py --pyzx:<circuit_name>
+python3 src/topologiq/run.py --pyzx:<circuit_name>  # Requires active .venv
 
-# Random series of CNOTs, using PyZX.
-uv run src/topologiq/run.py --pyzx:cnots --vis:final
-python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
-
-# A medium-size circuit with three interconnected lines, using PyZX.
-uv run src/topologiq/run.py --pyzx:simple_mess --vis:final
-python3 src/topologiq/run.py --pyzx:simple_mess --vis:final  # Requires active .venv
-
-# Line of hadamards, using a non-descript ZX-graph.
-uv run src/topologiq/run.py --graph:hadamard_line --vis:final
-python3 src/topologiq/run.py --graph:hadamard_line --vis:final  # Requires active .venv
-
-# Circuit with Hadamards on bends, using a non-descript ZX-graph.
-uv run src/topologiq/run.py --graph:hadamard_bend --vis:final
-python3 src/topologiq/run.py --graph:hadamard_bend --vis:final  # Requires active .venv
-
-# A 7-qubit Steane code, using a non-descript ZX-graph. 
-uv run src/topologiq/run.py --graph:steane --vis:final
-python3 src/topologiq/run.py --graph:steane --vis:final  # Requires active .venv
-
-# A mess of hadamards, using a non-descript ZX-graph.
-uv run src/topologiq/run.py --graph:hadamard_mess --vis:final
-python3 src/topologiq/run.py --graph:hadamard_mess --vis:final  # Requires active .venv
+# Dict-based graph examples (Available examples: hadamard_line, hadamard_bend, steane, steane_obfs, or hadamard_mess)
+uv run src/topologiq/run.py --graph:<circuit_name>
+python3 src/topologiq/run.py --graph:<circuit_name>  # Requires active .venv
 ```
 
-There are also additional options that can be appended to any command for debugging and statistical purposes.
+There are also optional parameters to enable 3D visuals, animations, and debug options.
 
 ``` bash
-# Run a circuit normally and log stats for all attempts to complete the specific circuit.
-uv run src/topologiq/run.py --pyzx:simple_mess --log_stats
-python3 src/topologiq/run.py --pyzx:simple_mess --log_stats  # Requires active .venv
+# Enable "final" result or "detail" edge-by-edge progress visualisations
+uv run src/topologiq/run.py --pyzx:<circuit_name> --vis:<final|detail>
+python3 src/topologiq/run.py --pyzx:<circuit_name> --vis:<final|detail>  # Requires active .venv
 
-# Run a specific circuit a single time irrespective of outcome.
-uv run src/topologiq/run.py --graph:hadamard_mess --repeat:1
-python3 src/topologiq/run.py --graph:steane --repeat:1  # Requires active .venv
+# Produce a "GIF" or "MP4" animation of the process (MP4 requires FFmpeg).
+uv run src/topologiq/run.py --pyzx:<circuit_name> --animate:<GIF|MP4>
+python3 src/topologiq/run.py --pyzx:<circuit_name> --animate:<GIF|MP4>  # Requires active .venv
 
-# Run a circuit a given number of times and log log stats for all 50 cycles.
-uv run src/topologiq/run.py --pyzx:cnots --repeat:50
-python3 src/topologiq/run.py --pyzx:cnots --repeat:50  # Requires active .venv
+# Run a circuit a specific number of times irrespective of outcome for each inidividual run
+uv run src/topologiq/run.py --pyzx:<circuit_name> --repeat:50
+python3 src/topologiq/run.py --pyzx:<circuit_name> --repeat:50  # Requires active .venv
 
-# Turn debug mode on (valid modes: 1, 2, 3) (adds incrementally detailed logs and visualisations).
-uv run src/topologiq/run.py --pyzx:cnots --vis:detail --debug:1
-python3 src/topologiq/run.py --pyzx:cnots --vis:detail --debug:1  # Requires active .venv
+# Log run-time and performance statistics
+uv run src/topologiq/run.py --pyzx:<circuit_name> --log_stats
+python3 src/topologiq/run.py --pyzx:<circuit_name> --log_stats  # Requires active .venv
 
-# Pick up edge cases and prompt user to run specific edge case (output logs must exist).
+# Enable debug mode (incrementally detailed logs and visuals) (available modes: 1, 2, 3, 4) .
+uv run src/topologiq/run.py --pyzx:<circuit_name> --vis:detail --debug:1
+python3 src/topologiq/run.py --pyzx:<circuit_name> --vis:detail --debug:1  # Requires active .venv
+```
+
+There is also an accessible debug facility to quickly run any edge case encountered while running Topologiq with `log_stats` enabled.
+``` bash
+# Pick up and replicate any available edge case (i.e. circuits Topologiq failed to build).
 uv run src/topologiq/debug.py
 python3 src/topologiq/debug.py  # Requires active .venv
-```
 
-And it is possible to set several visualisation options also via command.
-
-``` bash
-# No visualisations
-uv run src/topologiq/run.py --pyzx:cnot
-python3 src/topologiq/run.py --pyzx:cnot  # Requires active .venv
-
-# Final outcome visualised.
-uv run src/topologiq/run.py --pyzx:cnots --vis:final
-python3 src/topologiq/run.py --pyzx:cnots --vis:final  # Requires active .venv
-
-# Each edge-placement is visualised / a series of progress visualisations.
-uv run src/topologiq/run.py --pyzx:cnots --vis:detail
-python3 src/topologiq/run.py --pyzx:cnots --vis:detail  # Requires active .venv
-
-# "BOUNDARIES" stripped prior performing any operations and therefore not considered.
-uv run src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries
-python3 src/topologiq/run.py --pyzx:cnot --vis:final --strip_boundaries  # Requires active .venv
-
-# A GIF or MP4 summary animation of the process is saved to `/outputs/media`.
-uv run src/topologiq/run.py --pyzx:cnots --animate:GIF
-uv run src/topologiq/run.py --pyzx:cnots --animate:MP4
-python3 src/topologiq/run.py --pyzx:cnots --animate:GIF  # Requires active .venv
-python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires active .venv. Requires FFmpeg.
+# NB! Case must have been logged to stats, which only happens when Topologiq runs with `log_stats` enabled.
+# NB! Currently available only for example graphs (the foundational graph must exist in file to replicate it).
 ```
 
 ## Yeah, but how does it work, really?
-A detailed insight into the algorithm and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of the inner workings of the algorithm. 
+Detailed insight into **Topologiq** and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of what goes on under the hood. 
 
-**In first place,** the algorithm will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
+**Input.** **Topologiq** will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
 - ***Native format:*** A simple dictionary of nodes and edges (see `./src/topologiq/assets/graphs/simple_graphs.py` for examples).
-- ***PyZX interoperability:*** PyZX graphs supported (check `run.py` for a blueprint of the conversion process and `./src/topologiq/assets/graphs/pyzx_graphs.py` for examples).
-  - Note. If using a random PyZX circuit for testing, ensure all qubit lines are interconnected. If a qubit line is not interconnected, the graph has subgraphs. The algorithm treats subgraphs as separate logical computations, and will focus on one subgraph only.
+- ***PyZX interoperability:*** PyZX graphs supported (check `docs/examples/pyzx_cnots.ipynb` for an example).
+  - NB. If using a random PyZX circuit, ensure all qubit lines are interconnected. Else, the graph has independent subgraphs, which Topologiq does not support.
 
-**After,** the algorithm will traverse the ZX graph transforming each node into an equivalent "primitive" and position it in a way that honours the original graph. This second part of the process is itself divided into several stages:
-- ***Positioning:*** organises the process of placing each node into a number of tentative positions.
-  - Step currently follows a greedy Breadth First Search (BFS) approach.
-  - Additional strategies will be explored in due course. 
-- ***Pathfinding:*** explores a 4D space (x, y, z, block type) to determine which tentative positions allow topologically-correct paths.
-  - Step currently uses a slightly-modified Dijkstra.
-  - Additional strategies may be explored in due course mainly because Dijkstra is an inherently-slow algorithm.
-  - That said, the priority is to optimise the existing approach to ensure maximal robustness.
-- ***Value function:*** Chooses best path from the pathfinding algorithm based on given hyperparameters attached to the positioning algorithm.
-  - Hyperparameters currently set to values that increase the odds of finding a successful solution in test runs. 
-  - This does **NOT** mean the algorithm will produce optimal results with current hyperparameters.
-  - An automated approach to discovering optimal hyperparameters will eventually be added, but this is not currently available.
-  - To vary hyperparameters manually, edit `run_hyper_params.py`.
+**Process.** **Topologiq** will traverse the ZX graph transforming each spider into an equivalent lattice surgery "primitive" positioned in a 3D space.
+- ***Positioning:*** define a number of tentative 3D positions for each spider.
+- ***Pathfinding:*** determine which tentative positions allow topologically-correct paths.
+- ***Value function:*** choose best of any number of topologically-correct paths from previous step
+
+The final choice considers the length of each topologically-correct path found in during pathfinding, as well as their relative impact to the feasibility of future placements. Having said that, all steps in the process share objects and undertake checks that avoid overloading the final step with many unreasonably suboptimal paths.
 
 ## Contributing
 Pull requests and issues are more than welcomed!
