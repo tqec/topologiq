@@ -93,7 +93,7 @@ def vis_3d(
         fig_data (optional): the Matplotlib figure of the input graph (used as optional overlay).
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -434,7 +434,7 @@ def _init_vis(
             taken: A list of coordinates occupied by existing blocks, targets, and source block.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -571,7 +571,7 @@ def _render_winner_path(
         taken: A list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -647,7 +647,7 @@ def _render_tent_tgts(
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -682,7 +682,7 @@ def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g:
         nx_g: The main NX graph the algorithm uses to guide its discovery process.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -836,7 +836,7 @@ def _render_nx_graph(
         valid_paths_block_positions (optional): The positions ocuppied by any valid paths rendered elsewhere in visualisation.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -960,7 +960,7 @@ def _adjust_plot_dimensions(
         pathfinder_success (optional): A boolean to flag if the last pathfinder iteration succeeded.
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1024,7 +1024,7 @@ def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
         tuple: (animation_sequence, num_paths, num_frames, animation_interval_ms, TARGET_DURATION_MS)
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     animation_sequence = []
@@ -1080,7 +1080,7 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
         persistent_green_artists: A list of Matplotlib line artists for the valid paths.
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     

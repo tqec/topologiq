@@ -216,7 +216,7 @@ def figure_to_png(
         png_io: an in-memory binary stream (BytesIO object) containing the PNG data.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -657,7 +657,7 @@ def render_pipe(
         List[Poly3DCollection]: A list containing the Matplotlib artists for the pipe sections.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     
@@ -803,7 +803,7 @@ def render_pipe_section(
         border_width: width for borders of edge.
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -863,7 +863,7 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
         border_width (optional): The default border width for the rendered blocks.
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -966,7 +966,7 @@ def get_vertices(
         array: array (numpy) of shape (8, 3) where each row represents the (x, y, z) coordinates of a vertex of the cuboid.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1000,7 +1000,7 @@ def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
         list: list of lists where each inner list represents a face and contains the coords of the vertices for that face.
     
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1025,7 +1025,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
         tent_coords: List of coordinates defining the tentative targets.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1139,7 +1139,7 @@ def _get_min_prox_distance(path_coords, tent_coords):
         min_dist: The minimum Manhattan Distance found.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.    
     """
 
@@ -1171,7 +1171,7 @@ def onpick_handler(e: matplotlib.backend_bases.PickEvent, ax: matplotlib.axes.Ax
             containing all the children artists.
         
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1221,7 +1221,7 @@ def toggle_animation_handler(
         target_duration_ms: The total expected duration of the animation.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1308,7 +1308,7 @@ def toggle_winner_path_handler(e: matplotlib.backend_bases.MouseEvent, fig: matp
         btn_valid: The "Valid Paths" Button widget to update its state and label if needed.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     
@@ -1348,7 +1348,7 @@ def toggle_beams_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib
         btn_beams: The Button widget itself to update its label.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     # Toggle the visibility state
@@ -1378,7 +1378,7 @@ def toggle_targets_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotl
         btn_tgt: The Button widget itself to update its label.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     # Toggle the visibility state
@@ -1414,7 +1414,7 @@ def toggle_valid_paths_handler(
         btn_win: The "Winner Path" Button widget to update its state and label if needed.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     # Toggle the visibility state
@@ -1456,7 +1456,7 @@ def toggle_overlay_handler(
         btn_pos: Positioning constants required by the toggle function.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
     # Only proceed if the artist object exists
@@ -1508,7 +1508,7 @@ def hide_overlay_handler(
         btn_pos: Positioning constants required by the toggle function.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.   
     """
 
@@ -1543,7 +1543,7 @@ def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
         tent_coords: List of coordinates defining the tentative targets.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 
@@ -1600,7 +1600,7 @@ def keypress_handler(e, fig, btn_prox, tent_coords):
         tent_coords: List of coordinates defining the tentative targets.
 
     AI disclaimer:
-        category: Coding partner (see README for details).
+        category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
     """
 

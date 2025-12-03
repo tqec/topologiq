@@ -63,7 +63,6 @@ uv pip install -e
 pip install -e
 ```
 
-
 ## Examples
 For examples, run any of the commands below from the root of the repository. The algorithm will run and stop when it finds a succesfull solution or run up to ten times.
 
@@ -149,7 +148,6 @@ python3 src/topologiq/run.py --pyzx:cnots --animate:GIF  # Requires active .venv
 python3 src/topologiq/run.py --pyzx:cnots --animate:MP4  # Requires active .venv. Requires FFmpeg.
 ```
 
-
 ## Yeah, but how does it work, really?
 A detailed insight into the algorithm and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of the inner workings of the algorithm. 
 
@@ -173,12 +171,25 @@ A detailed insight into the algorithm and, hopefully, a paper, is in progress. M
   - To vary hyperparameters manually, edit `run_hyper_params.py`.
 
 ## Contributing
-Everything is pending, but below a Santa list of things we would absolutely love to get some help with:
-- Comprehensive testing, including both unit tests and end-to-end tests that double as benchmarks.
-- Better documentation, in particular, more example scripts (notebooks possible, but scripts preferred) integrating other external frameworks (for instance, we know pytket should work just fine with Topologiq, just haven't found the time to write a good docs example of this).
-- Improve running times further, especially by reducing the need for something we call "second pass" edges.
+Pull requests and issues are more than welcomed!
 
-Having said that, at the moment, a pre-requisite to accepting contributions is to develop all the automated workflows needed to manage contributions robustly. To avoid accidents on "main", other contributions are unlikely to be accepted before these workflows are available. It would be awesome if someone wants to contribute the workflows. Else, they'll be ready when they're ready.
+See [CONTRIBUTING](./CONTRIBUTING.md) for specific instructions to start contributing.
 
 ## License
-This repository is open source software. All code in the repository is under an Apache 2.0 license.
+Topologiq is licensed under an [Apache 2.0 license](./LICENSE).
+
+The [`ETHICAL_NOTICE.md`](ETHICAL_NOTICE.md) contains additional **ethical use** pointers.
+
+## Community
+Every Wednesday at 8:30am PST, we hold [meetings](https://meet.jit.si/TQEC-design-automation) to discuss project progress and conduct educational talks related to TQEC.
+
+Here are some helpful links to learn more about the TQEC community and Topologiq:
+- Overview of state of the art 2D QEC: [Slides](https://docs.google.com/presentation/d/1xYBfkVMpA1YEVhpgTZpKvY8zeOO1VyHmRWvx_kDJEU8/edit?usp=sharing)/[Video](https://www.youtube.com/watch?v=aUtH7wdwBAM&t=2s)
+- Introduction to surface code quantum computation: [Slides](https://docs.google.com/presentation/d/1GxGD9kzDYJA6X47BXGII2qjDVVoub5BsSVrGHRZINO4/edit?usp=sharing)
+- Programming a quantum computer using SketchUp: [Slides](https://docs.google.com/presentation/d/1MjFuODipnmF-jDstEnQrqbsOtbSKZyPsuTOMo8wpSJc/edit?usp=sharing)/[Video](https://drive.google.com/file/d/1o1LMiidtYDcVoEFZXsJPb7XdTkZ83VFX/view?usp=drive_link)
+- Overview of Topologiq: [Video](https://drive.google.com/file/d/1C9Kke4qSYd0lX5qO_yvUX88DsPt8kyaP/view?usp=drive_link)
+- Qiskit->QASM->Topologiq interoperability: [Video](https://drive.google.com/file/d/1tFYNmvvyNDT04BK6U3ESRZVXB1PrObGd/view).
+
+All the resources and group meeting recordings are available at [this link](https://docs.google.com/spreadsheets/d/11DSA2wzKLOrfTGNHunFvzsMYeO7jZ8Ny8kpzoC_wKQg/edit?usp=sharing&resourcekey=0-PdGFkp5s-4XWihMSxk0UIg).
+
+Please join the [Google group](https://groups.google.com/g/tqec-design-automation) to receive more updates and information!
