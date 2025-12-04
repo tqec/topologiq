@@ -25,42 +25,38 @@ As visualised in the animated GIF below, **Topologiq** uses the connectivity inf
 ## Install
 Currently, the best way to test **Topologiq** is to clone the repository, recreate the environment, and install dependencies.
 
-**Step 1.** Clone. 
+### Using UV
 ```bash
+# 1. Clone repository. 
 git clone https://github.com/jbolns/topologiq.git
-```
 
-**Step 2.** Recreate environment.
-
-Choose between an UV or a pip installation (one or the other, not both).
-
-*Using UV.*
-```bash
-# 1. Create & Sync
+# 2. Sync environment.
 uv sync
+
+# Additional steps needed only for contributors
+# 3. Opt for an editable installation
+uv pip install -e .
 ```
 
-*Using pip.*
+### Using PIP
 ```bash
-# 1. Create environment
+# 1. Clone repository. 
+git clone https://github.com/jbolns/topologiq.git
+
+# 2. Recreate environment.
+# 2.1. Environment creation
 python -m venv .venv
 
-# 2. Activate environment
+# 2.2. Environment activation
 .venv\Scripts\activate.bat  # Windows
 source .venv/bin/activate  # Linux
 
-# 3. Install dependencies
+# 2.3. Install dependencies
 pip install -r requirements.txt
-```
 
-**For contributors.** Contributors should opt for an editable installation.
-
-```bash
-# After running steps 1 of UV method or steps 1 & 2 of pip method
-uv pip install -e
-
-# OR (and never both)
-pip install -e
+# Additional steps needed only for contributors
+# 3. Opt for an editable installation
+pip install -e .
 ```
 
 ## Examples
@@ -69,7 +65,7 @@ You can quickly test **Topologiq** from the terminal using pre-defined circuit e
 Check `./outputs/txt/` for results. All information in TXT outputs is also available for programmatic use.
 
 ``` bash
-# PyZX examples (Available examples: CNOT, CNOTs, simple_mess)
+# PyZX examples (Available examples: cnot, cnots, simple_mess)
 uv run src/topologiq/run.py --pyzx:<circuit_name>
 python3 src/topologiq/run.py --pyzx:<circuit_name>  # Requires active .venv
 
