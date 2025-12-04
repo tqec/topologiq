@@ -1779,6 +1779,10 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+all = [
+    { name = "deptry" },
+    { name = "ruff" },
+]
 dev = [
     { name = "deptry" },
     { name = "ruff" },
@@ -1804,9 +1808,13 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+all = [
+    { name = "deptry", specifier = ">=0.24.0" },
+    { name = "ruff", specifier = "==0.14.7" },
+]
 dev = [
     { name = "deptry", specifier = ">=0.24.0" },
-    { name = "ruff", specifier = ">=0.14.7" },
+    { name = "ruff", specifier = "==0.14.7" },
 ]
 
 [[package]]

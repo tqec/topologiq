@@ -5,16 +5,77 @@ Usage:
 
 """
 
-from typing import list, tuple
-
 import numpy as np
 
 from topologiq.utils.classes import NodeBeams, StandardBeam, StandardBlock, StandardCoord
 
 
-#############################
-# PATHFINDER AUX OPERATIONS #
-#############################
+##################
+# BFS MANAGEMENT #
+##################
+def prune_visited(
+    visited: dict[tuple[StandardBlock, StandardCoord], int],
+    curr_block_info: StandardBlock
+) -> dict[tuple[StandardBlock, StandardCoord], int]:
+    """Prune the visited dictionary from the pathfinder.
+
+    Args:
+        visited: The dictionary the pathfinder algorithm uses to keep track of visited sites.
+        curr_block_info: The coordinates and kind of the current block.
+
+    Returns:
+        new_visited: A pruned version of the incoming dictionary, which allows revisiting some sites.
+
+    """
+
+    new_visited = {}
+    for k, v in visited.items():
+        block_info = k[0]
+        new_visited[(block_info, (0,0,0))] = v
+        new_visited[(curr_block_info, (0,0,0))] = 0
+
+    return new_visited
+
+
+##########################
+# STANDARD 3D OPERATIONS #
+##########################
+def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
+    """Calculate the Manhattan distance between any two (x, y, z) coordinates.
+
+    Args:
+        src_coords: The (x, y, z) coordinates for the source block.
+        tgt_coords: The (x, y, z) coordinates for the target block.
+
+    Returns:
+        int: The Manhattan distance between the given coordinates.
+
+    """
+
+    return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
+
+
+def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
+    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
+
+    Args:
+        src_coord: The (x, y, z) coordinates for the source block.
+        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
+
+    Returns:
+        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
+
+    """
+
+    if all_coords:
+        return max([get_manhattan(src_coord, c) for c in all_coords])
+
+    return 0
+
+
+#######################
+# SYMBOLIC OPERATIONS #
+#######################
 def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord) -> bool:
     """Check if a face is an exit.
 
@@ -349,26 +410,3 @@ def flip_hdm(k: str) -> str:
 
     # Return revised kind
     return new_k
-
-def prune_visited(
-    visited: dict[tuple[StandardBlock, StandardCoord], int],
-    curr_block_info: StandardBlock
-) -> dict[tuple[StandardBlock, StandardCoord], int]:
-    """Prune the visited dictionary from the pathfinder.
-
-    Args:
-        visited: The dictionary the pathfinder algorithm uses to keep track of visited sites.
-        curr_block_info: The coordinates and kind of the current block.
-
-    Returns:
-        new_visited: A pruned version of the incoming dictionary, which allows revisiting some sites.
-
-    """
-
-    new_visited = {}
-    for k, v in visited.items():
-        block_info = k[0]
-        new_visited[(block_info, (0,0,0))] = v
-        new_visited[(curr_block_info, (0,0,0))] = 0
-
-    return new_visited

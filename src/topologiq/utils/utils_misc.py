@@ -1,13 +1,18 @@
-from datetime import datetime
-import os
-import csv
-import numpy as np
+"""Util facilities for logging and reading stats.
 
+Usage:
+    Call any function/class from a separate script.
+
+"""
+
+import csv
+import os
+from ast import literal_eval
+from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Tuple, Union
+from typing import Any
 
 from topologiq.utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
-
 
 #############
 # CONSTANTS #
@@ -56,36 +61,6 @@ HEADER_PARAMS_STATS = [
 ]
 
 
-##############
-# SHARED OPS #
-##############
-def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
-    """Calculate the Manhattan distance between any two (x, y, z) coordinates.
-    Args:
-        src_coords: The (x, y, z) coordinates for the source block.
-        tgt_coords: The (x, y, z) coordinates for the target block.
-    Returns:
-        int: The Manhattan distance between the given coordinates.
-    """
-
-    return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
-
-
-def get_max_manhattan(src_coord: StandardCoord, all_coords: List[StandardCoord]) -> int:
-    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
-    Args:
-        src_coord: The (x, y, z) coordinates for the source block.
-        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
-    Returns:
-        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
-    """
-
-    if all_coords:
-        return max([get_manhattan(src_coord, c) for c in all_coords])
-
-    return 0
-
-
 ############
 # LOGGERS  #
 ############
@@ -94,44 +69,36 @@ def write_outputs(
     circuit_name: str,
     edge_paths: dict,
     lat_nodes: dict[int, StandardBlock],
-    lat_edges: dict[Tuple[int, int], List[str]],
+    lat_edges: dict[tuple[int, int], list[str]],
     output_dir_path: Path,
 ):
     """Write the final output to a TXT file.
-    
+
     Args:
         simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
         circuit_name: The name of the circuit.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
-        lat_edges: The pipes of the final space-time diagram produced by Topologiq. 
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
         output_dir_path: The directory where outputs are saved.
+
     """
 
-    lines: List[str] = []
+    lines: list[str] = []
 
     lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
+
     lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
-    for node in simple_graph["nodes"]:
-        lines.append(f"Node ID: {node[0]}. Type: {node[1]}\n")
+    lines.extend([f"Node ID: {node[0]}. Type: {node[1]}\n" for node in simple_graph["nodes"]])
     lines.append("\n")
-    for edge in simple_graph["edges"]:
-        lines.append(f"Edge ID: {edge[0]}. Type: {edge[1]}\n")
+    lines.extend([f"Edge ID: {edge[0]}. Type: {edge[1]}\n" for edge in simple_graph["edges"]])
 
-    lines.append(
-        '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
-    )
-
-    for key, edge_path in edge_paths.items():
-        lines.append(f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n")
+    lines.append('\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n')
+    lines.extend([f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n" for key, edge_path in edge_paths.items()])
 
     lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
-    for key, node in lat_nodes.items():
-        lines.append(f"Node ID: {key}. Info: {node}\n")
-    for key, edge_info in lat_edges.items():
-        lines.append(
-            f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
-        )
+    lines.extend([f"Node ID: {key}. Info: {node}\n" for key, node in lat_nodes.items()])
+    lines.extend([f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n" for key, edge_info in lat_edges.items()])
 
     with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
         f.writelines(lines)
@@ -143,39 +110,39 @@ def prep_stats_n_log(
     log_stats_id: str,
     op_success: bool,
     counts: dict[str, int],
-    times: dict[str, Union[datetime, None]],
+    times: dict[str, datetime | None],
     circuit_name: str = "unknown",
-    edge_paths: Union[None, dict] = None,
-    lat_nodes: Union[None, dict[int, StandardBlock]] = None,
-    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None,
-    src_block_info: Union[None, StandardBlock] = None,
-    tgt_block_info: Tuple[Union[None, StandardCoord], Union[None, str]] = (None, None),
-    tgt_zx_type: Union[None, str] = None,
-    visit_stats: Tuple[int, int] = (0, 0),
+    edge_paths: dict | None = None,
+    lat_nodes: dict[int, StandardBlock] | None = None,
+    lat_edges: dict[tuple[int, int], list[str]] | None = None,
+    src_block_info: StandardBlock | None = None,
+    tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
+    tgt_zx_type: str | None = None,
+    visit_stats: tuple[int, int] = (0, 0),
     run_params: dict[str, Any] = {},
 ):
-    """Prepare incoming parameters for logging stats to file. 
-    
-    This function takes a number of parameters and assembles them in the order needed to log stats to file. 
+    """Prepare incoming parameters for logging stats to file.
+
+    This function takes a number of parameters and assembles them in the order needed to log stats to file.
     The function uses the incoming `stats_type` to determine appropriate order, and adds headers as appropriate
     using the header constants available at the top of this file.
 
     NB! Please note the arguments give to this function can be very different depending on whether the
     operation relates to logging statistics of one edge iteration by the pathfinder or the summary
-    of the full process. Keep this in mind when reading parameter descriptions, as some refer to 
+    of the full process. Keep this in mind when reading parameter descriptions, as some refer to
     global objects used to keep track of the overall processes
     while other refer to specific objects used in one pathfinder iteration.
 
     Args:
         stats_type: The desired type of logging operation.
-        log_stats_id: 
+        log_stats_id: A unique datetime-based identifier for the purposes of logging stats for an specific run.
         op_success: Whether Topologiq succesfully built the circuit.
         counts: A dictionary containing counts for the number of spiders/cubes and edges/pipes in input and output circuits.
         times: A dictionary containing various running times for several aspects of the process.
         circuit_name: The name of the circuit.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
-        lat_edges: The pipes of the final space-time diagram produced by Topologiq. 
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
         src_block_info: The information of a source cube including its position in the 3D space and its kind.
         tgt_block_info: The information of a target cube including its position in the 3D space and its kind.
         tgt_zx_type: The ZX type of a target spider/cube
@@ -188,6 +155,7 @@ def prep_stats_n_log(
     Returns:
         main_stats: An array containing all principal stats to log to primary stats files.
         aux_stats: An array containing secondary stats to log to auxiliary stats file, or an empty array if no secondary stats exist.
+
     """
 
     # Init arrays
@@ -271,7 +239,7 @@ def prep_stats_n_log(
 
             if path_to_debug_file.is_file():
                 debug_cases = list(set(get_debug_cases(path_to_debug_file)))
-                new_case_info = tuple([circuit_name] + [list(aux_stats[4][0].keys())[0], list(aux_stats[4][0].values())[0]] + list(run_params.values()))
+                new_case_info = tuple([circuit_name, list(aux_stats[4][0].keys())[0], list(aux_stats[4][0].values())[0], *list(run_params.values())])
             if not path_to_debug_file.is_file() or (new_case_info not in debug_cases):
                 log_stats(
                     aux_stats,
@@ -319,13 +287,14 @@ def prep_stats_n_log(
     )
 
 
-def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []):
-    """Write statistics to an arbitrary statistic files in `./assets/stats/`
+def log_stats(stats_line: list[Any], stats_type: str, opt_header: list[str] = []):
+    """Write statistics to an arbitrary statistic files in `./assets/stats/`.
 
     Args:
         stats_line: A full stats object formatted as a single line for a CSV data file.
         stats_type: The type of statistics being logged, which matches the name of recipient file.
         opt_header (optional): A line to use as header.
+
     """
 
     repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
@@ -345,7 +314,7 @@ def log_stats(stats_line: List[Any], stats_type: str, opt_header: List[str] = []
 #################
 # STATS READERS #
 #################
-def get_debug_cases(path_to_stats: Path) -> List[Tuple[str, int, str]]:
+def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     """Get key replicability information for any failed case from output stats.
 
     This function gets information needed to replicate any failed cases logged to the corresponding
@@ -354,30 +323,29 @@ def get_debug_cases(path_to_stats: Path) -> List[Tuple[str, int, str]]:
     Args:
         path_to_stats: The path to an existing debug stats file, with failed cases in it.
 
-    Returns
-        debug_cases: List with information needed to replicate any failed cases. 
+    Returns:
+        debug_cases: list with information needed to replicate any failed cases.
 
     """
 
     # Extract cases from file
     debug_cases_full = []
-    try: 
-        with open(path_to_stats, "r") as f:
+    try:
+        with open(path_to_stats) as f:
             entries = list(csv.reader(f, delimiter=';'))[1:]
-            for entry in entries:
-                debug_cases_full.append(entry)
+            debug_cases_full.extend(entry for entry in entries)
         f.close()
     except FileNotFoundError:
         raise FileNotFoundError(f"File `{path_to_stats}` must exist.\n")
-    except (IOError, OSError, ValueError):
+    except (OSError, ValueError):
         raise ValueError(f"Uknown error while reading `{path_to_stats}`")
 
     # Extract the specific parameters needed to replicate case
     debug_cases = []
     for case in debug_cases_full:
         circuit_name = case[2]
-        min_success_rate, weights, len_of_beams = eval(case[3]).values()
-        first_id, first_kind = list(eval(case[4])[0].items())[0]
+        min_success_rate, weights, len_of_beams = literal_eval(case[3]).values()
+        first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
         debug_cases.append((circuit_name, first_id, first_kind, min_success_rate, weights, len_of_beams))
 
     return debug_cases

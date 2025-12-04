@@ -97,7 +97,7 @@ def graph_manager_bfs(
             length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
 
     Returns:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         c: a counter for the number of completed (top-level) iterations by the main loop in this function (used to organise visualisations).
 
@@ -395,8 +395,7 @@ def place_nxt_block(
     Args:
         src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
         tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
-            updated regularly over the course of the process.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         all_beams: A list of coordinates occupied by the beams of already-placed cubes that still require connections.
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
@@ -471,8 +470,6 @@ def place_nxt_block(
             min_succ_rate=min_succ_rate,
             src_tgt_ids=(src_id, tgt_id),
             log_stats_id=log_stats_id,
-            debug=debug,
-            nx_g=nx_g,
         )
 
         # Assemble a preliminary dictionary of viable paths
@@ -680,7 +677,7 @@ def second_pass(
     run out of spiders/cubes to place before all edges are rendered in 3D.
 
     Args:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
         c: A counter for the number of completed edge iterations (used to organise visualisations).
@@ -778,8 +775,6 @@ def second_pass(
                         log_stats_id=log_stats_id,
                         critical_beams=critical_beams,
                         src_tgt_ids=(src_id, tgt_id),
-                        debug=debug,
-                        nx_g=nx_g,
                     )
                     duration_iter = (datetime.now() - t1).total_seconds()
 
@@ -980,7 +975,7 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
         simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
 
     Returns:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
 
     """
 

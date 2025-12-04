@@ -1,22 +1,29 @@
-import networkx as nx
+"""Quick and simple grapher for dictionary-based graphs.
+
+Usage:
+    Call `simple_graph_vis` from a separate script.
+
+"""
+
 import matplotlib.pyplot as plt
+import networkx as nx
+from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle
-from matplotlib.figure import Figure
+
 from topologiq.utils.classes import SimpleDictGraph
 
 
-def simple_graph_vis(
-    simple_graph: SimpleDictGraph, layout_method: str = "spectral"
-) -> Figure:
-    """
-    Visualizes a graph using only Matplotlib objects.
+def simple_graph_vis(simple_graph: SimpleDictGraph, layout_method: str = "spectral") -> Figure:
+    """Visualise a graph using only Matplotlib objects.
 
     Args:
         simple_graph: A dictionary with 'nodes' and 'edges' keys, representing the graph.
+        layout_method: The NX layout method to use to define node positions.
+
     """
 
-    # COLOURS
+    # Colours
     hex_map = {
         "X": "#d7a4a1",
         "Y": "#a8e6cf",
@@ -26,39 +33,38 @@ def simple_graph_vis(
         "HADAMARD": "#1f2df1",
     }
 
-    # CREATE TEMP NX GRAPH FOR LAYOUT & DETERMINE LAYOUT
-    # Graph
-    G_temp = nx.Graph()
+    # Temporary NX graph for layout purposes
+    temp_g = nx.Graph()
     for node_id, node_type in simple_graph["nodes"]:
-        G_temp.add_node(node_id)
+        temp_g.add_node(node_id)
     for (u, v), edge_type in simple_graph["edges"]:
-        G_temp.add_edge(u, v)
+        temp_g.add_edge(u, v)
 
     # Layout
     positions = {}
     if layout_method == "spring":
-        positions = nx.spring_layout(G_temp, iterations=100)
+        positions = nx.spring_layout(temp_g, iterations=100)
     elif layout_method == "circular":
-        positions = nx.circular_layout(G_temp)
+        positions = nx.circular_layout(temp_g)
     elif layout_method == "shell":
-        positions = nx.shell_layout(G_temp)
+        positions = nx.shell_layout(temp_g)
     elif layout_method == "kamada_kawai":
-        positions = nx.kamada_kawai_layout(G_temp)
+        positions = nx.kamada_kawai_layout(temp_g)
     elif layout_method == "spectral":
-        positions_spectral = nx.spectral_layout(G_temp)
-        positions = nx.kamada_kawai_layout(G_temp, pos=positions_spectral)
+        positions_spectral = nx.spectral_layout(temp_g)
+        positions = nx.kamada_kawai_layout(temp_g, pos=positions_spectral)
     elif layout_method == "planar":
-        if not nx.is_planar(G_temp):
+        if not nx.is_planar(temp_g):
             print("Warning: Graph is not planar. Falling back to 'spring' layout.")
-            positions = nx.spring_layout(G_temp, iterations=100)
+            positions = nx.spring_layout(temp_g, iterations=100)
         else:
-            positions_spring = nx.spring_layout(G_temp, iterations=100)
+            positions_spring = nx.spring_layout(temp_g, iterations=100)
             positions = positions_spring
     else:
         print(f"Warning: Unknown layout '{layout_method}'. Using 'spring' as default.")
-        positions = nx.spring_layout(G_temp, iterations=100)
+        positions = nx.spring_layout(temp_g, iterations=100)
 
-    # ASSEMBLE FIGURE
+    # Initialise figure
     fig, ax = plt.subplots()
 
     # Edges with low z-order
@@ -107,5 +113,4 @@ def simple_graph_vis(
     plt.axis("off")
     plt.show()
 
-    # RETURN FIG FOR CONSUMPTION IN OTHER VISUALISATIONS
     return fig

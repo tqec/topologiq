@@ -64,10 +64,7 @@ dev = [
 ]
 
 all = [
-  { include-group = "test" },
-  { include-group = "docs" },
-  { include-group = "dev" },
-  { include-group = "bench" },
+  { include-group = "dev" }
 ]
 
 
@@ -108,6 +105,7 @@ ignore = [
     "D203",     # incorrect-blank-line-before-class incompatible w. D211
     "D213",     # multi-line-summary-second-line incompatible w. D212
     "D407",     # Do not enforce numpy-style underlining in docstrings
+    "PERF203",  # Allow try-except within loop due to its role in error recovery for grapher
     "PLR5501",  # Allow nested if-if/else-if for clarity in complex loops
     "PLR0912",  # Allow nested if-if/else-if for clarity in complex loops
     "PLR0913",  # Allow as many arguments in functions as desired
