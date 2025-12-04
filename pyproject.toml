@@ -2,6 +2,7 @@
 requires = ["uv_build >= 0.8.17, <0.9.0"]
 build-backend = "uv_build"
 
+
 [project]
 name = "topologiq"
 version = "0.1.0"
@@ -29,6 +30,7 @@ classifiers = [
   "Topic :: Software Development :: User Interfaces",
 ]
 
+
 dependencies = [
     "imageio==2.37.0",
     "imageio-ffmpeg==0.6.0",
@@ -47,17 +49,73 @@ dependencies = [
     "scipy>=1.15,<1.17",
 ]
 
+
 [project.urls]
 Website = "https://github.com/jbolns/topologiq"
 Documentation = "https://github.com/jbolns/topologiq"
 Repository = "https://github.com/jbolns/topologiq"
 Issues = "https://github.com/jbolns/topologiq/issues"
 
+
 [dependency-groups]
 dev = [
     "deptry>=0.24.0",
+    "ruff==0.14.7",  # Fixed to ensure all contributors adhere to same exact rules. 
 ]
+
+all = [
+  { include-group = "test" },
+  { include-group = "docs" },
+  { include-group = "dev" },
+  { include-group = "bench" },
+]
+
 
 [tool.deptry.per_rule_ignores]
 DEP002 = ["imageio-ffmpeg", "ipykernel", "ipympl", "ipython", "ipywidgets", "pandas", "numpy", "pywin32", "scipy"]
 DEP003 = ["topologiq"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "I",  # isort
+    "E",  # pycodestyle
+    "W",  # pycodestyle
+    "D",  # pydocstyle
+    "F",  # pyflakes
+    "PL",  # pylint
+    "NPY",  # numpy specific rules
+    "N",  # pep8-naming
+    "PERF",  # perflint
+    "RUF",  # ruff specific rules
+    "UP",  # pyupgrade
+    "S",  # flake8-bandit
+]
+
+exclude = [
+    "__pycache__",
+    ".venv",
+    ".git",
+]
+
+ignore = [
+    "E501",     # Line lenght: default to [tool.ruff] settings
+    "B905",     # zip(): allow without "strict=True"
+    "D202",     # Allow blank-lines after function docstrings
+    "D203",     # incorrect-blank-line-before-class incompatible w. D211
+    "D213",     # multi-line-summary-second-line incompatible w. D212
+    "D407",     # Do not enforce numpy-style underlining in docstrings
+    "PLR5501",  # Allow nested if-if/else-if for clarity in complex loops
+    "PLR0912",  # Allow nested if-if/else-if for clarity in complex loops
+    "PLR0913",  # Allow as many arguments in functions as desired
+    "PLR0915",  # Allow as many statements as needed
+    "PLR2004",  # Allow magic-value comparisons
+    "RUF015",   # Allow slicing first elements
+    "S311",     # Allow pseudo-random generators
+]
+
+[tool.ruff.format]
+docstring-code-format = true  # Format dosctrings

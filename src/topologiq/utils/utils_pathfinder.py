@@ -1,37 +1,45 @@
+"""Util facilities to assist in 3D pathfinding operations.
+
+Usage:
+    Call any function/class from a separate script.
+
+"""
+
+from typing import list, tuple
+
 import numpy as np
 
-from typing import Tuple, List, Optional
+from topologiq.utils.classes import NodeBeams, StandardBeam, StandardBlock, StandardCoord
 
-from topologiq.utils.classes import StandardBlock, StandardCoord, NodeBeams, StandardBeam
 
 #############################
 # PATHFINDER AUX OPERATIONS #
 #############################
-def check_is_exit(src_c: StandardCoord, src_k: Optional[str], tgt_c: StandardCoord) -> bool:
-    """Checks if a face is an exit by matching exit markers in the block/pipe's symbolic name
-    and an displacement array symbolising the direction of the target block/pipe.
+def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord) -> bool:
+    """Check if a face is an exit.
+
+    This function works by matching exit markers in a block's kind against a displacement
+    array symbolising the direction of the target block/pipe.
 
     Args:
-        - src_c: (x, y, z) coordinates for the current block/pipe.
-        - src_k: current block's/pipe's kind.
-        - tgt_c: coordinates for the target block/pipe.
+        src_c: (x, y, z) coordinates for the current block/pipe.
+        src_k: current block's/pipe's kind.
+        tgt_c: coordinates for the target block/pipe.
 
     Returns:
-        - bool:
-            - True: face is an exist
-            - False: face is not an exit.
+        (bool): True if face is an exit else False.
 
     """
 
     src_k = src_k.lower()[:3] if isinstance(src_k, str) else ""
-    kind_3D = [src_k[0], src_k[1], src_k[2]]
+    kind_3d = [src_k[0], src_k[1], src_k[2]]
 
-    if "o" in kind_3D:
+    if "o" in kind_3d:
         marker = "o"
     else:
-        marker = [i for i in set(kind_3D) if kind_3D.count(i) >= 2][0]
+        marker = [i for i in set(kind_3d) if kind_3d.count(i) >= 2][0]
 
-    exit_idxs = [i for i, char in enumerate(kind_3D) if char == marker]
+    exit_idxs = [i for i, char in enumerate(kind_3d) if char == marker]
     diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]
 
     diff_idx = -1
@@ -49,23 +57,23 @@ def check_is_exit(src_c: StandardCoord, src_k: Optional[str], tgt_c: StandardCoo
 def check_unobstr(
     src_c: StandardCoord,
     tgt_c: StandardCoord,
-    taken: List[StandardCoord],
-    all_beams: List[NodeBeams],
+    taken: list[StandardCoord],
+    all_beams: list[NodeBeams],
     beams_len: int,
-) -> Tuple[bool, StandardBeam]:
-    """Checks if a face (typically an exit: call after verifying face is exit) is unobstructed.
+) -> tuple[bool, StandardBeam]:
+    """Check if a face is unobstructed.
+
+    This function should typically be called after verifying a face is exit.
 
     Args:
-        - src_c: (x, y, z) coordinates for the current block/pipe.
-        - tgt_c: coordinates for the target block/pipe.
-        - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-        - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
-        - beams_len: int representing how long does each beam spans from its originating block.
+        src_c: (x, y, z) coordinates for the current block/pipe.
+        tgt_c: coordinates for the target block/pipe.
+        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
+        beams_len: int representing how long does each beam spans from its originating block.
 
     Returns:
-        - bool:
-            - True: face is unobstructed
-            - False: face is obstructed.
+        (bool): True if face is unobstructed else False.
 
     """
 
@@ -91,24 +99,26 @@ def check_unobstr(
 def check_exits(
     src_c: StandardCoord,
     src_k: str | None,
-    taken: List[StandardCoord],
-    all_beams: List[NodeBeams],
+    taken: list[StandardCoord],
+    all_beams: list[NodeBeams],
     beams_len: int,
-) -> Tuple[int, NodeBeams]:
-    """Finds the number of unobstructed exits for any given block/pipe by calling other functions that use the
-    block's/pipe's symbolic name to determine if each face is or is not
-    and whether the said exit is unobstructed.
+) -> tuple[int, NodeBeams]:
+    """Find the number of unobstructed exits for an arbitrary block.
+
+    This function manages calls to other functions that determine if
+    each face of a block is or is not an exit and whether the said
+    exit is unobstructed.
 
     Args:
-        - src_c: (x, y, z) coordinates for the block/pipe of interest.
-        - src_k: kind/type of the block/pipe of interest.
-        - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-        - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
-        - beams_len: int representing how long does each beam spans from its originating block.
+        src_c: (x, y, z) coordinates for the block/pipe of interest.
+        src_k: kind/type of the block/pipe of interest.
+        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
+        beams_len: int representing how long does each beam spans from its originating block.
 
     Returns:
-        - unobstrexits_n: the number of unobstructed exist for the block/pipe of interest.
-        - n_beams: the beams emanating from the block/pipe of interest.
+        unobstrexits_n: the number of unobstructed exist for the block/pipe of interest.
+        n_beams: the beams emanating from the block/pipe of interest.
 
     """
 
@@ -143,17 +153,18 @@ def check_exits(
 
 
 def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
-    """Uses a Manhattan distance to quickly checks if a potential (source, target) combination
-    is possible given the standard size of a block and pipe and that all blocks are followed by a pipe.
+    """Determine if a given move is allowed/possible.
+
+    This function uses a Manhattan distance to quickly check if a
+    potential (source, target) combination is possible given the
+    standard cube/pipe sizes and necessary relative placements.
 
     Args:
-        - src_c: (x, y, z) coordinates for the originating block.
-        - tgt_c: (x, y, z) coordinates for the potential placement of the target block.
+        src_c: (x, y, z) coordinates for the originating block.
+        tgt_c: (x, y, z) coordinates for the potential placement of the target block.
 
     Returns:
-        - bool:
-            - True: move is theoretically possible,
-            - False: move is not theoretically possible.
+        (bool): True if move is theoretically possible else False.
 
     """
 
@@ -163,25 +174,23 @@ def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
     return manhattan % 3 == 0
 
 
-def face_match(
-    src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: str
-) -> bool:
-    """Checks if block or pipe has an available exit pointing towards a target coordinate
-    by matching exit marker in the block's or pipe's symbolic name to the direction of target coordinate.
+def face_match(src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: str) -> bool:
+    """Check if block has an available exit pointing towards a target coordinate.
 
-    ! Function does not test if target coordinate is available.
-    ! Function does not test if exit is unobstructed.
-    ! To check if two cubes match, run this function twice: current to target, target to current.
+    This function checks if a block has an available exit that could be used to reach an
+    arbitrary target coordinate. The function can also be used to check if two cubes match
+    by calling it twice using current->target and target->current coordinates. That said,
+    the function does not test if target coordinate is available or an exit is unobstructed.
 
     Args:
-        - src_c: (x, y, z) coords for source node.
-        - src_k: kind for the source node.
-        - tgt_c: (x, y, z) coords for target node.
+        src_c: (x, y, z) coords for source node.
+        src_k: kind for the source node.
+        tgt_c: (x, y, z) coords for target node.
+        tgt_k: kind for the target node.
 
     Returns:
-        - (boolean):
-            - True: available exit towards target coordinate,
-            - False: NO available exit towards target coordinate.
+        (boolean): True if an available exit points towards target coordinate else False.
+
     """
 
     # Sanitise kind in case of mixed case inputs
@@ -205,25 +214,22 @@ def face_match(
     return True
 
 
-def cube_match(
-    src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str
-) -> bool:
-    """Checks if two cubes match by comparing the symbols of their colours.
+def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str) -> bool:
+    """Check if two cubes match.
 
-    ! Note. Function does not handle HADAMARDS.
-    ! Note. To handle hadamards in "tgt_pos", strip the "h" from name, run as a regular pipe, add "h" back after match is found.
-    ! Note. To handle hadamards in "src_c", rotate it, then run as regular pipe.
+    This function checks if two cubes match by comparing the symbols of their colours.
+    To handle hadamards as `tgt_k`, strip the "h" from the block kind and run as a regular pipe,
+    adding the "h" after match is determined. To handle hadamards in `src_k`, rotate it,
+    then run as regular pipe.
 
     Args:
-        - src_c: (x, y, z) coordinates for the current node.
-        - src_k: current node's kind.
-        - tgt_pos: (x, y, z) coordinates for the next node.
-        - tgt_k: target node's kind.
+        src_c: (x, y, z) coordinates for the current node.
+        src_k: current node's kind.
+        tgt_pos: (x, y, z) coordinates for the next node.
+        tgt_k: target node's kind.
 
     Returns:
-        - bool:
-            - True: cubes match
-            - False: no match.
+        (bool): True if cubes match else False.
 
     """
 
@@ -238,16 +244,19 @@ def cube_match(
     return True
 
 
-def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[str]:
-    """Reduces the number of possible types for next block/pipe by quickly running the current kind by a pre-match operations.
+def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[str]:
+    """Reduce the number of possible kinds for next block.
+
+    This function reduces the total number of potential kinds to check as plausible next
+    kinds by quickly running the current kind through a few quick pre-match expectations.
 
     Args:
-        - src_c: (x, y, z) coordinates for the current node.
-        - src_k: current node's kind.
-        - tgt_pos: (x, y, z) coordinates for the next node.
+        src_c: (x, y, z) coordinates for the current node.
+        src_k: current node's kind.
+        tgt_pos: (x, y, z) coordinates for the next node.
 
     Returns:
-        - reduced_valid_kinds: a subset of kinds applicable to next move.
+        reduced_valid_kinds: a subset of kinds applicable to next move.
 
     """
 
@@ -260,8 +269,8 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[
     if "h" in src_k:
         src_k = src_k[:3]
     # If current kind has an "o", the next kind is a cube
-    if "o" in src_k:                
-        ok = [tgt_k for tgt_k in c_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]            
+    if "o" in src_k:
+        ok = [tgt_k for tgt_k in c_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]
     # If current kind does not have an "o", then current kind is cube and the next kind is a pipe
     else:
         ok = [tgt_k for tgt_k in p_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]
@@ -272,14 +281,17 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> List[
 
 
 def rot_o_kind(k: str) -> str:
-    """Rotates a pipe around its length by using the exit marker in its symbolic name to create a rotational matrix,
-    which is then used to rotate the original name with a symbolic multiplication.
+    """Rotate a pipe around its length.
+
+    This function enables pipe rotation by using the exit marker in their kind
+    to create a rotational matrix, which is then used to rotate the original kind
+    using symbolic multiplication.
 
     Args:
-        - k: the kind of the pipe that needs rotation.
+        k: the kind of the pipe that needs rotation.
 
     Returns:
-        - rot_k: a kind with the rotation incorporated into the new name.
+        rot_k: a kind with the rotation incorporated into the new name.
 
     """
 
@@ -315,17 +327,17 @@ def rot_o_kind(k: str) -> str:
 
 
 def flip_hdm(k: str) -> str:
-    """Quickly flips a Hadamard for the opposite Hadamard with length on the same axis.
+    """Flip a Hadamard for the opposite Hadamard with length on the same axis.
 
     Args:
-        - k: the kind of the Hadamard that needs inverting.
+        k: the kind of the Hadamard that needs inverting.
 
     Returns:
-        - k_2: the kind of the corresponding/inverted Hadamard.
-
+        k_2: the kind of the corresponding/inverted Hadamard.
 
     """
-    # List of hadamard equivalences
+
+    # list of hadamard equivalences
     equivs = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
 
     # Match to equivalent block given direction
@@ -338,21 +350,25 @@ def flip_hdm(k: str) -> str:
     # Return revised kind
     return new_k
 
-def prune_visited(visited: dict[Tuple[StandardBlock, StandardCoord], int], curr_block_info: StandardBlock) -> dict[Tuple[StandardBlock, StandardCoord], int]:
-    """Takes the visited dictionary from the pathfinder and prunes the second (directional) element of the keys
-    
+def prune_visited(
+    visited: dict[tuple[StandardBlock, StandardCoord], int],
+    curr_block_info: StandardBlock
+) -> dict[tuple[StandardBlock, StandardCoord], int]:
+    """Prune the visited dictionary from the pathfinder.
+
     Args:
-        - visited: a dictionary of visited sites, used by the pathfinder algorithm to keep track of sites visited in order to avoid revisiting them.
+        visited: The dictionary the pathfinder algorithm uses to keep track of visited sites.
+        curr_block_info: The coordinates and kind of the current block.
 
     Returns:
-        - new_visited: a new version of the incoming dictionary, with directional elements of keys zeroed out, which has the effect of enabling the algorithm to revisit any sites previously visited.
-    
+        new_visited: A pruned version of the incoming dictionary, which allows revisiting some sites.
+
     """
-    
+
     new_visited = {}
     for k, v in visited.items():
         block_info = k[0]
         new_visited[(block_info, (0,0,0))] = v
         new_visited[(curr_block_info, (0,0,0))] = 0
-    
+
     return new_visited

@@ -1,5 +1,4 @@
-"""
-Manages the inner pathfinder BFS algorithm. 
+"""Manage the inner pathfinder BFS algorithm.
 
 This file contains functions that altogether create topologically-correct 3D edge paths
 between a given source cube with pre-determined position and kind and one or more target cubes.
@@ -12,40 +11,43 @@ it assumes the target cube has already been placed in the 3D space and goes into
 where it returns the shortest path between source and target cubes.
 
 Usage:
-    Call `pathfinder()` programmatically from a separate script, with an appropriate combination of optional parameters. 
+    Call `pathfinder()` programmatically from a separate script, with an appropriate combination of optional parameters.
 
 Notes:
     For now, none of the functions in this file are to be called individually.
-    In the future, some of the functions could be called by variant algorithms that 
+    In the future, some of the functions could be called by variant algorithms that
         do not necessarily need or want to implement all separate features.
+
 """
 
-from datetime import datetime
 from collections import deque
-from typing import List, Tuple, Optional, Union
+from datetime import datetime
 
-from topologiq.utils.classes import NodeBeams, StandardCoord, StandardBlock
-from topologiq.utils.utils_pathfinder import check_is_exit, prune_visited, rot_o_kind, nxt_kinds
+from topologiq.utils.classes import NodeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_misc import get_max_manhattan, prep_stats_n_log
+from topologiq.utils.utils_pathfinder import check_is_exit, nxt_kinds, prune_visited, rot_o_kind
+
 
 ############################
 # MAIN PATHFINDER WORKFLOW #
 ############################
 def pathfinder(
     src_block_info: StandardBlock,
-    tent_coords: List[StandardCoord],
+    tent_coords: list[StandardCoord],
     tgt_zx_type: str,
-    tgt_block_info: Tuple[Optional[StandardCoord], Optional[str]] = (None, None),
-    taken: List[StandardCoord] = [],
+    tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
+    taken: list[StandardCoord] = [],
     hdm: bool = False,
     min_succ_rate: int = 60,
-    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
-    src_tgt_ids: Optional[Tuple[int,int]] = None,
-    log_stats_id: Union[str, None] = None,
-) -> Tuple[
-    Union[None, dict[StandardBlock, List[StandardBlock]]],
-    Tuple[List[StandardCoord], List[str], Union[None, dict[StandardBlock, List[StandardBlock]]], Union[None, dict[StandardBlock, List[StandardBlock]]]],
-    ]:
+    critical_beams: dict[int, tuple[int, NodeBeams]] = {},
+    src_tgt_ids: tuple[int,int] | None = None,
+    log_stats_id: str | None = None,
+) -> tuple[
+    dict[StandardBlock, list[StandardBlock]] | None,
+    tuple[list[StandardCoord], list[str],
+    dict[StandardBlock, list[StandardBlock]] | None,
+    dict[StandardBlock, list[StandardBlock]]] | None,
+]:
     """Call core pathfinder after generating list of possible kinds for the given operation.
 
     Args:
@@ -57,8 +59,8 @@ def pathfinder(
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
+        src_tgt_ids (optional): The exact IDs of the source and target cubes.
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
 
     Returns:
         valid_paths: all paths found in round, covering some or all tent_coords.
@@ -74,7 +76,7 @@ def pathfinder(
     # Unpack incoming data
     src_coords, _ = src_block_info
     _, tgt_kind = tgt_block_info
-    taken_cc: List[StandardCoord] = taken[:]
+    taken_cc: list[StandardCoord] = taken[:]
     if taken_cc:
         if src_coords in taken_cc:
             taken_cc.remove(src_coords)
@@ -147,17 +149,18 @@ def pathfinder(
 ###############################
 def core_pathfinder_bfs(
     src_block_info: StandardBlock,
-    tent_coords: List[StandardCoord],
-    tent_tgt_kinds: List[str],
+    tent_coords: list[StandardCoord],
+    tent_tgt_kinds: list[str],
     min_succ_rate: int,
-    taken: List[StandardCoord] = [],
+    taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
-    src_tgt_ids: Optional[Tuple[int,int]] = None,
-) -> Tuple[
-    Union[None, dict[StandardBlock, List[StandardBlock]]],
-    Union[None, dict[StandardBlock, List[StandardBlock]]],
-    Tuple[int, int]]:
+    critical_beams: dict[int, tuple[int, NodeBeams]] = {},
+    src_tgt_ids: tuple[int,int] | None = None,
+) -> tuple[
+    dict[StandardBlock, list[StandardBlock]] | None,
+    dict[StandardBlock, list[StandardBlock]] | None,
+    tuple[int, int]
+]:
     """Create topologically-correct paths between a source and one or more target coordinates/kinds.
 
     This function is the core algorithm in the inner pathfinder BFS. It systematically explores a 4D space
@@ -171,6 +174,8 @@ def core_pathfinder_bfs(
         min_succ_rate: Minimum % of tentative coordinates that must be filled for each edge.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
+        critical_beams (optional): An object containing beams considered critical for future operations.
+        src_tgt_ids (optional): The exact IDs of the source and target cubes.
 
     Returns:
         valid_paths: All paths found in round covering some or all tent_coords.
@@ -192,12 +197,12 @@ def core_pathfinder_bfs(
 
     # BFS management variables
     queue = deque([src_block_info])
-    visited: dict[Tuple[StandardBlock, StandardCoord], int] = {(src_block_info, (0, 0, 0)): 0}
+    visited: dict[tuple[StandardBlock, StandardCoord], int] = {(src_block_info, (0, 0, 0)): 0}
     visit_attempts = 0
     path_len = {src_block_info: 0}
     path = {src_block_info: [src_block_info]}
-    valid_paths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
-    all_search_paths: Union[None, dict[StandardBlock, List[StandardBlock]]] = {}
+    valid_paths: dict[StandardBlock, list[StandardBlock]] | None = {}
+    all_search_paths: dict[StandardBlock, list[StandardBlock]] | None = {}
     moves_unadjusted = [
         (1, 0, 0),
         (-1, 0, 0),
@@ -252,7 +257,7 @@ def core_pathfinder_bfs(
 
         # Remove unnecessary moves (corresponding to non-exits)
         # SUPER NB! This block needs further implementation.
-        # It's an emerging solution for long paths with multiple hooks. 
+        # It's an emerging solution for long paths with multiple hooks.
         moves_adjusted = []
         remaining_moves = []
         for move in moves_unadjusted:
@@ -265,7 +270,7 @@ def core_pathfinder_bfs(
 
         if len(tent_coords) == 1:
             moves = moves_adjusted
-        else: 
+        else:
             moves = moves_unadjusted
         moves = moves_unadjusted
 
@@ -328,7 +333,7 @@ def core_pathfinder_bfs(
                             continue
 
             # Rotate if current kind is a Hadamard
-            # NB! The raw kinds of Hadamards correspond to unrotated colours. 
+            # NB! The raw kinds of Hadamards correspond to unrotated colours.
             # As the next kind latches to rotated end of hadamard, kind must be rotated
             alt_curr_kind = None
             if "h" in curr_kind:
@@ -341,7 +346,11 @@ def core_pathfinder_bfs(
 
             # Create a list of kinds that are valid for the next block
             possible_nxt_types = nxt_kinds(curr_coords, curr_kind if not alt_curr_kind else alt_curr_kind, nxt_coords)
-            for nxt_type in possible_nxt_types:
+            for possible_nxt_type in possible_nxt_types:
+
+                # Create a copy of next type to avoid re-writting the actual loop variable
+                nxt_type = possible_nxt_type
+
                 # Place Hadamard instead of regular pipe if all corresponding flags are present
                 if hdm and "o" in nxt_type:
                     nxt_type += "h"
@@ -379,16 +388,16 @@ def core_pathfinder_bfs(
                                 break
                         else:
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
-                        
+
                         # Increase counter of times pathfinder tries visits something new
                         visit_attempts += 1
-                        
+
                     if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                         break
-                
+
                 if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                     break
-            
+
             if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                 break
 
@@ -401,9 +410,9 @@ def core_pathfinder_bfs(
 ##################
 # AUX OPERATIONS #
 ##################
-def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List[str]:
-    """Generate all possible valid kinds for a given ZX type
-    
+def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: str | None = None) -> list[str]:
+    """Generate all possible valid kinds for a given ZX type.
+
     This function takes the ZX type of a potential new block in a 3D path and returns
     a list of block (cube or pipe) kinds that could fulfill that ZX type. Rather than
     seeing the function as creating kinds to check, the function should be seen as
@@ -433,11 +442,11 @@ def gen_tent_tgt_kinds(tgt_zx_type: str, tgt_kind: Optional[str] = None) -> List
         kind_family = ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"]
     else:
         return [tgt_zx_type]
-    
+
     return kind_family
 
 
-def get_taken_coords(all_blocks: List[StandardBlock]) -> List[StandardCoord]:
+def get_taken_coords(all_blocks: list[StandardBlock]) -> list[StandardCoord]:
     """Convert a series of blocks into a list of coordinates occupied by the blocks.
 
     Args:
