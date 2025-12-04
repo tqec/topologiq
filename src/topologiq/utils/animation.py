@@ -1,7 +1,20 @@
+"""Util facilities for logging and reading stats.
+
+Usage:
+    Call `create_animation` from a separate script when there is a need
+    to create an animation of the algorithmic process.
+
+Notes:
+    The `create_animation` function will NOT work if there are no images
+    to stitch together, which the function looks for in `./output/temp`.
+
+"""
+
 import os
 import shutil
-import imageio.v2 as iio
 from pathlib import Path
+
+import imageio.v2 as iio
 
 
 def create_animation(
@@ -11,21 +24,22 @@ def create_animation(
     remove_temp_images: bool = True,
     video: bool = False,
 ):
-    """Creates a GIF or MP4 animation from snapshots of the algorithmic process (snapshots must exist in `./output/temp/`).
+    """Create a GIF or MP4 animation from snapshots of the process.
+
+    This function reads a series of snapshots of the algorithm's progress after each edge
+    and produces an animation based on these snapshots. The function requires
+    images to exist in `./output/temp/`.
 
     Args:
-        - filename_prefix: filename to use for animation.
-        - duration: duration of each frame.
-        - restart_delay: helper variable to ensure a pause at the end of any GIF animation.
-        - remove_temp_images:
-            - True: delete the temp snapshots used to create the animation.
-            - False: do NOT delete the temp snapshots used to create the animation.
-        - video:
-            - False: save animation as GIF
-            - True: save the animation as MP4 (requires FFmpeg)
-
-    Returns
-        - n/a. The animation is not returned but saved to `./output/media/` folder.
+        filename_prefix: filename to use for animation.
+        duration: duration of each frame.
+        restart_delay: helper variable to ensure a pause at the end of any GIF animation.
+        remove_temp_images:
+            True: delete the temp snapshots used to create the animation.
+            False: do NOT delete the temp snapshots used to create the animation.
+        video:
+            False: save animation as GIF
+            True: save the animation as MP4 (requires FFmpeg)
 
     """
 
@@ -50,7 +64,7 @@ def create_animation(
     # BUILD THE GIF
     if images:
         Path(output_folder_path).mkdir(parents=True, exist_ok=True)
-        
+
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
         if video:
             output_file_path = Path(output_folder_path, f"{filename_prefix}.mp4")
@@ -69,7 +83,3 @@ def create_animation(
     if remove_temp_images:
         if temp_folder_path.exists():
             shutil.rmtree(temp_folder_path)
-
-
-if __name__ == "__main__":
-    create_animation(filename_prefix="cnots", video=True)

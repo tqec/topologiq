@@ -1,44 +1,39 @@
-"""
-This file contains Topologiq's main visualisation facility. 
+"""Main 3D visualisation facility for final outputs and progress updates.
 
 This file contains functions that can help create full-detail visualisations of how
 the pathfinder algorithm goes about resolving specific edges.
 
-Usage: 
+Usage:
     Call `vis_3d()` programmatically with an appropriate parameter combination.
 
-NB! AI policy. If you use AI to modify this file, refer to `./README` for appropriate disclaimer guidelines.
 """
 
 from pathlib import Path
-import numpy as np
-import networkx as nx
+
 import matplotlib
 import matplotlib.pyplot as plt
-
+import networkx as nx
+import numpy as np
 from matplotlib.widgets import Button
-
-from typing import List, Tuple, Union
 from PIL import Image
 
 from topologiq.utils.classes import PathBetweenNodes, StandardBlock, StandardCoord
 from topologiq.utils.grapher_common import (
-    node_hex_map,
     edge_paths_to_nx_graph,
+    figure_to_png,
+    hide_overlay_handler,
+    keypress_handler,
+    node_hex_map,
+    onpick_handler,
     render_block,
     render_pipe,
-    figure_to_png,
-    onpick_handler,
     toggle_animation_handler,
-    toggle_winner_path_handler,
     toggle_beams_handler,
+    toggle_overlay_handler,
+    toggle_prox_paths_handler,
     toggle_targets_handler,
     toggle_valid_paths_handler,
-    toggle_overlay_handler,
-    hide_overlay_handler,
-    toggle_prox_paths_handler,
-    keypress_handler,
-
+    toggle_winner_path_handler,
 )
 from topologiq.utils.utils_zx_graphs import kind_to_zx_type
 
@@ -50,18 +45,18 @@ def vis_3d(
     nx_g: nx.Graph,
     partial_nx_g: nx.Graph,
     edge_paths: dict,
-    valid_paths: dict[StandardBlock, List[StandardBlock]] | None,
-    winner_path: PathBetweenNodes | List[StandardBlock] | None,
+    valid_paths: dict[StandardBlock, list[StandardBlock]] | None,
+    winner_path: PathBetweenNodes | list[StandardBlock] | None,
     src_block_info: StandardBlock | None,
-    tent_coords: List[StandardCoord] | None,
-    tent_tgt_kinds: List[str] | None,
+    tent_coords: list[StandardCoord] | None,
+    tent_tgt_kinds: list[str] | None,
     hide_ports: bool = False,
-    all_search_paths: dict[StandardBlock, List[StandardBlock]] | None = [],
+    all_search_paths: dict[StandardBlock, list[StandardBlock]] | None = [],
     debug: int = 1,
-    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    src_tgt_ids: Tuple[int, int] | None = None,
+    vis_options: tuple[str | None, str | None] = (None, None),
+    src_tgt_ids: tuple[int, int] | None = None,
     fig_data: matplotlib.figure.Figure | None = None,
-    filename_info: Tuple[str, int] | None = None,
+    filename_info: tuple[str, int] | None = None,
 ):
     """Create a granular visualisation of a single iteration of the inner pathfinder algorithm.
 
@@ -82,7 +77,7 @@ def vis_3d(
         hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
         all_search_paths (optional): A dictionary containing all paths searched by the inner pathfinder algorithm.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-        vis_options (optional): Visualisation settings provided as a Tuple.
+        vis_options (optional): Visualisation settings provided as a tuple.
             vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
                 (None): No visualisation.
                 (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
@@ -90,11 +85,13 @@ def vis_3d(
                 (None): No animation.
                 (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
-        fig_data (optional): the Matplotlib figure of the input graph (used as optional overlay).
+        fig_data (optional): The Matplotlib figure of the input graph (used as optional overlay).
+        filename_info (optional): The name of circuit and a iteration number needed to name any saved files.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Preliminaries
@@ -112,10 +109,10 @@ def vis_3d(
         valid_paths_block_positions, taken
     ) = _init_vis(fig, edge_paths, valid_paths, winner_path, src_block_info, tent_coords, tent_tgt_kinds, debug)
 
-    
+
     # Static elements
     # ---
-    
+
     # Shared settings
     size = [1.0, 1.0, 1.0]
     edge_col = "black"
@@ -140,7 +137,7 @@ def vis_3d(
             edge_col=edge_col,
             taken=taken,
         )
-     
+
     # Pre-existing blocks / previous edges
     _render_nx_graph(
         fig,
@@ -178,25 +175,25 @@ def vis_3d(
     # Beams
     if nx_g and not is_final_vis:
         _render_beams(fig, ax, nx_g)
-    
+
     # ZX input graph overlay
     if fig_data:
         _render_zx_graph_overlay(fig, partial_nx_g, edge_paths, is_final_vis, fig_data, src_tgt_ids)
-    
+
     # All paths searched by pathfinder algorithm
     def _update_fallback(frame):
-        """ Placeholder update function when no paths are found or debug is low."""
+        """Return empty list as fallback to update function when no paths are found or debug is low."""
         return []
 
     if all_search_paths and debug > 2:
         (
-            animation_sequence, 
-            num_paths, 
-            num_frames, 
-            animation_interval_ms, 
-            TARGET_DURATION_MS
+            animation_sequence,
+            num_paths,
+            num_frames,
+            animation_interval_ms,
+            tgt_duration_ms
         ) = _prepare_search_paths_data(fig, all_search_paths, valid_paths)
-        
+
         if num_paths > 0:
             update, persistent_green_artists = _setup_path_animation(
                 fig, ax, animation_sequence, num_paths
@@ -206,15 +203,15 @@ def vis_3d(
             persistent_green_artists = []
             num_frames = 1
             animation_interval_ms = 500
-            TARGET_DURATION_MS = 1000
-            num_paths = 0 
+            tgt_duration_ms = 1000
+            num_paths = 0
     else:  # Define necessary variables for the button handlers to work when debug < 3
         update = _update_fallback
         persistent_green_artists = []
         num_frames = 1
         animation_interval_ms = 500
-        TARGET_DURATION_MS = 1000
-        num_paths = 0 
+        tgt_duration_ms = 1000
+        num_paths = 0
 
     # Plot adjustments
     # ---
@@ -224,13 +221,13 @@ def vis_3d(
     # ---
 
     # Base dimensions & paddings
-    BTN_L, BTN_B, BTN_W, BTN_H = [0.01, 0.05, 0.18, 0.05]
-    BTN_PAD = 0.01
+    btn_l, btn_b, btn_w, btn_h = [0.01, 0.05, 0.18, 0.05]
+    btn_pad = 0.01
 
     # Show in high-debug modes
     if debug > 2:
         # Replay path search
-        ax_anim = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD)*5, BTN_W, BTN_H])
+        ax_anim = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*5, btn_w, btn_h])
         btn_anim = Button(ax_anim, 'Replay Path Search')
         btn_anim.set_active(True)
         btn_anim.on_clicked(
@@ -243,12 +240,12 @@ def vis_3d(
                 num_frames,
                 animation_interval_ms,
                 num_paths,
-                TARGET_DURATION_MS
+                tgt_duration_ms
             )
         )
 
         # Show/hide winner path (NEW)
-        ax_win = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD)*4, BTN_W, BTN_H])
+        ax_win = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*4, btn_w, btn_h])
         btn_win = Button(ax_win, 'Hide Winner Path')
         btn_win.on_clicked(
             lambda e: toggle_winner_path_handler(
@@ -258,9 +255,9 @@ def vis_3d(
                 btn_valid
             )
         )
-        
+
         # Show/hide beams
-        ax_beams = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD)*3, BTN_W, BTN_H])
+        ax_beams = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*3, btn_w, btn_h])
         btn_beams = Button(ax_beams, 'Show Beams')
         btn_beams.on_clicked(
             lambda e: toggle_beams_handler(
@@ -271,7 +268,7 @@ def vis_3d(
         )
 
         # Show/hide targets
-        ax_tgt = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD)*2, BTN_W, BTN_H])
+        ax_tgt = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*2, btn_w, btn_h])
         btn_tgt = Button(ax_tgt, 'Hide Targets' if fig.show_tent_tgt_blocks else 'Show Targets')
         btn_tgt.on_clicked(
             lambda e: toggle_targets_handler(
@@ -282,7 +279,7 @@ def vis_3d(
         )
 
         # Show/hide valid paths
-        ax_valid = fig.add_axes([BTN_L, BTN_B + (BTN_H + BTN_PAD), BTN_W, BTN_H]) # Position next to Targets
+        ax_valid = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad), btn_w, btn_h]) # Position next to Targets
         btn_valid = Button(ax_valid, 'Show Valid Paths')
         btn_valid.on_clicked(
             lambda e: toggle_valid_paths_handler(
@@ -294,7 +291,7 @@ def vis_3d(
         )
 
         # Show/hide proximate paths
-        ax_prox = fig.add_axes([BTN_L, BTN_B, BTN_W, BTN_H])
+        ax_prox = fig.add_axes([btn_l, btn_b, btn_w, btn_h])
         btn_prox = Button(ax_prox, "Prox Paths")
         btn_prox.set_active(True)
         btn_prox.on_clicked(
@@ -305,26 +302,26 @@ def vis_3d(
     if fig_data:
 
         # Overlay of input ZX-graph
-        BTN_W_MIN, BTN_B = (0.04, 0.0)
-        current_width = BTN_W_MIN if fig.show_overlay else BTN_W
-        ax_overlay_btn = fig.add_axes([1 - current_width, BTN_B, current_width, BTN_H])
+        btn_w_min, btn_b = (0.04, 0.0)
+        current_width = btn_w_min if fig.show_overlay else btn_w
+        ax_overlay_btn = fig.add_axes([1 - current_width, btn_b, current_width, btn_h])
 
         for spine in ax_overlay_btn.spines.values():
             spine.set_edgecolor('gray')
             spine.set_linestyle("dotted")
 
         initial_btn_text = 'X' if fig.show_overlay else 'Show Input ZX Graph'
-        btn_overlay = Button(ax_overlay_btn, initial_btn_text) 
+        btn_overlay = Button(ax_overlay_btn, initial_btn_text)
         fig.overlay_button_handle = btn_overlay
 
         # Attach the primary button handler
         btn_overlay.on_clicked(
-            lambda e: toggle_overlay_handler(e, fig, btn_overlay, [BTN_W, BTN_W_MIN, BTN_B, BTN_H])
+            lambda e: toggle_overlay_handler(e, fig, btn_overlay, [btn_w, btn_w_min, btn_b, btn_h])
         )
 
         # Overlay click-to-hide functionality
         if fig_data and hasattr(fig, 'ax_overlay'):
-            btn_pos = [BTN_W, BTN_W_MIN, BTN_B, BTN_H]
+            btn_pos = [btn_w, btn_w_min, btn_b, btn_h]
             fig.canvas.mpl_connect(
                 'button_press_event',
                 lambda e: hide_overlay_handler(e, fig, toggle_overlay_handler, btn_overlay, btn_pos)
@@ -346,7 +343,7 @@ def vis_3d(
         if debug == 4:
             temp_folder_path = repo_root / "output/txt"
             file_path = f"{temp_folder_path}/{circuit_name}-last-edge.txt"
-            
+
             with open(file_path, "w") as f:
                 f.write("# PATHFINDER ITERATION SUMMARY\n")
                 f.write(f"Circuit name: {circuit_name if circuit_name else 'None'}\n")
@@ -372,14 +369,14 @@ def vis_3d(
                 f.write("\n\n## valid_paths\n")
                 if valid_paths:
                     for path in valid_paths.values():
-                        f.write(f"{str(path)}\n")
+                        f.write(f"{path!s}\n")
                 else:
                     f.write("None\n")
 
                 f.write("\n## all_search_paths\n")
                 if all_search_paths:
                     for path in all_search_paths.values():
-                        f.write(f"{str(path)}\n")
+                        f.write(f"{path!s}\n")
                 else:
                     f.write("None\n")
                 f.write("\n")
@@ -399,17 +396,17 @@ def vis_3d(
 def _init_vis(
     fig: matplotlib.figure.Figure,
     edge_paths: dict,
-    valid_paths: dict[StandardBlock, List[StandardBlock]] | None,
-    winner_path: PathBetweenNodes | List[StandardBlock] | None,
+    valid_paths: dict[StandardBlock, list[StandardBlock]] | None,
+    winner_path: PathBetweenNodes | list[StandardBlock] | None,
     src_block_info: StandardBlock | None,
-    tent_coords: List[StandardCoord] | None,
-    tent_tgt_kinds: List[str] | None,
+    tent_coords: list[StandardCoord] | None,
+    tent_tgt_kinds: list[str] | None,
     debug: int = 2,
 ):
     """Initialise main visualisation and add state trackers to the main visualisation.
 
-    This function handles the initialisation of a number of state trackers needed to track and 
-    manage states for the main visualisation function. These are added directly to the figure (fig). 
+    This function handles the initialisation of a number of state trackers needed to track and
+    manage states for the main visualisation function. These are added directly to the figure (fig).
     The function also initialises and returns several critical objects used across the visualisation.
 
     Args:
@@ -436,12 +433,13 @@ def _init_vis(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Determine type of visualisation
     is_final_vis = False if tent_coords and tent_tgt_kinds and debug > 0 else True
     is_single_target = False if is_final_vis else len(tent_coords) == 1 and len(tent_tgt_kinds) == 1
-        
+
     # Source block
     show_src_block = False if is_final_vis else True
 
@@ -476,7 +474,7 @@ def _init_vis(
     fig.show_prox_paths = False
     fig.all_search_paths_raw = []
     fig.prox_path_artists = []
-    fig.prox_distance_threshold = 1 
+    fig.prox_distance_threshold = 1
     fig.prox_filtered_paths = []
     fig.prox_view_mode = 'ALL'
     fig.prox_current_index = 0
@@ -486,17 +484,17 @@ def _init_vis(
     tgt_kind = None
     valid_paths_mini_graph = None
     valid_paths_block_positions = None
-    
+
     if not is_final_vis:
         if src_block_info:
-             src_coords, src_kind = src_block_info 
+             src_coords, src_kind = src_block_info
         if len(tent_tgt_kinds) == 1:
             tgt_kind = tent_tgt_kinds[0]
         else:
             # NOTE: Assumes tent_tgt_kinds is not empty.
             zx_type = kind_to_zx_type(tent_tgt_kinds[0])
             tgt_kind = zx_type.lower()*3 if zx_type in ["X", "Y", "Z"] else "ooo"
-        
+
         # Valid paths mini-graph
         valid_paths_mini_graph = edge_paths_to_nx_graph(valid_paths) if valid_paths else nx.Graph()
         valid_paths_block_positions = nx.get_node_attributes(valid_paths_mini_graph, "coords")
@@ -509,20 +507,20 @@ def _init_vis(
             taken.extend(tent_coords)
         if src_coords:
             taken.append(src_coords)
-        
+
         # Check if winner_path exists before accessing its attributes.
         if winner_path:
             if isinstance(winner_path, PathBetweenNodes):
                 taken.extend(winner_path.coords_in_path)
             else:
                 taken.extend([p[0] for p in winner_path])
-    
+
     # Use a standard for loop for clarity over list comprehension for side effects
     if edge_paths:
         for edge_path in edge_paths.values():
             if edge_path.get("path_coordinates") and edge_path["path_coordinates"] != "error":
                 taken.extend(edge_path["path_coordinates"])
-                
+
     taken = list(set(taken))
 
     # Wrap into a single tuple
@@ -543,19 +541,19 @@ def _init_vis(
 def _render_winner_path(
         fig: matplotlib.figure.Figure,
         ax: matplotlib.axes.Axes,
-        winner_path: PathBetweenNodes | List[StandardBlock] | None,
-        tent_coords: List[StandardCoord] | None,
-        src_coords: Tuple[int, int, int],
+        winner_path: PathBetweenNodes | list[StandardBlock] | None,
+        tent_coords: list[StandardCoord] | None,
+        src_coords: tuple[int, int, int],
         node_hex_map: dict[str, list[str]],
-        src_tgt_ids: Tuple[int, int] | None = None,
+        src_tgt_ids: tuple[int, int] | None = None,
         hide_ports: bool = False,
         edge_col: str = "black",
-        taken: List[StandardCoord] | List[None] | None = None,
+        taken: list[StandardCoord] | list[None] | None = None,
         ):
-    """Renders the blocks and pipes of the winner path.
+    """Render the blocks and pipes of the winner path.
 
     This function handles the rendering of blocks and pipe segments in the path selected as
-    the best path for a given pathfinder iteration. The rendered artists are added to 
+    the best path for a given pathfinder iteration. The rendered artists are added to
     the figure's state tracker for later interactive toggling.
 
     Args:
@@ -573,6 +571,7 @@ def _render_winner_path(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Preliminaries
@@ -612,7 +611,7 @@ def _render_winner_path(
             if i > 0 and i < path_length - 1:  # A pipe segment must have nodes before and after it.
                 u_coords = winner_path[i-1][0]
                 v_coords = winner_path[i+1][0]
-                
+
                 if u_coords is not None and v_coords is not None:
                     current_artists = render_pipe(ax, u_coords, v_coords, block_kind,  border_width=border_width, edge_col=edge_col)
 
@@ -626,17 +625,17 @@ def _render_winner_path(
 def _render_tent_tgts(
     fig: matplotlib.figure.Figure,
     ax: matplotlib.axes.Axes,
-    tent_coords: List[StandardCoord] | None,
+    tent_coords: list[StandardCoord] | None,
     tgt_kind: str,
     node_hex_map: dict[str, list[str]],
-    src_tgt_ids: Tuple[int, int] | None = None,
+    src_tgt_ids: tuple[int, int] | None = None,
 ):
-    """ Renders placeholder cubes for any number of tentative targets.
+    """Render placeholder cubes for any number of tentative targets.
 
-    This function handles the rendering of placeholder cubes in the positions sent to 
+    This function handles the rendering of placeholder cubes in the positions sent to
     the pathfinder algorithm as tentative targets. It can handle one or more tentative targets.
     If the tentative target kind is set, the cube will be drawn using that kind, else, placeholder
-    cubes will be of a colour which corresponds with they ZX type. 
+    cubes will be of a colour which corresponds with they ZX type.
 
     Args:
         fig: The Matplotlib Figure object used for storing rendered artists.
@@ -649,6 +648,7 @@ def _render_tent_tgts(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Add loop
@@ -663,7 +663,7 @@ def _render_tent_tgts(
                 edge_col="violet",
                 border_width=2,
             )
-            
+
         # Add to artists & manage visibility
             fig.target_artists.extend(artists)
             for artist in artists:
@@ -671,9 +671,9 @@ def _render_tent_tgts(
 
 
 def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g: nx.Graph):
-    """ Renders any beams saved to the nodes of the NX graph received as parameter.
+    """Render any beams saved to the nodes of the NX graph received as parameter.
 
-    This function handles the rendering of any beams present in the information of the nodes 
+    This function handles the rendering of any beams present in the information of the nodes
     sent to the function as a parameter.
 
     Args:
@@ -684,6 +684,7 @@ def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g:
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Preliminaries
@@ -713,7 +714,7 @@ def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g:
             alpha=1,
             depthshade=True,
         )
-        
+
         # Store the single artist for toggling
         fig.beam_artists.append(beam_artist)
         beam_artist.set_visible(fig.show_beams)
@@ -725,7 +726,7 @@ def _render_zx_graph_overlay(
     edge_paths: dict,
     is_final_vis: bool,
     fig_data: matplotlib.figure.Figure,
-    src_tgt_ids: Tuple[int, int] | None = None,
+    src_tgt_ids: tuple[int, int] | None = None,
 ):
     """Generate PNG of the original input ZX graph to use as overlay over 3D visualisations.
 
@@ -739,11 +740,12 @@ def _render_zx_graph_overlay(
         is_final_vis: a boolean to flag if the visualisation is the very last output.
         fig_data (optional): the Matplotlib figure of the input graph (used as optional overlay).
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
+
     """
 
     # Prepare PNG buffer of the input ZX graph
-    processed_edges = list(edge_paths.keys()) + [src_tgt_ids] if not is_final_vis else list(edge_paths.keys())
-    
+    processed_edges = [*list(edge_paths.keys()), src_tgt_ids] if not is_final_vis else list(edge_paths.keys())
+
     png_buffer = figure_to_png(
         fig_data,
         processed_ids=partial_nx_g.nodes(),
@@ -794,7 +796,7 @@ def _render_zx_graph_overlay(
     overlay_artist = ax_overlay.imshow(overlay_array)
 
     # Store the artist and the axis
-    fig.ax_overlay = ax_overlay 
+    fig.ax_overlay = ax_overlay
     fig.overlay_image_artist = overlay_artist
 
     # Set initial alpha based on the correct state flag (fig.show_overlay)
@@ -806,21 +808,21 @@ def _render_nx_graph(
     fig: matplotlib.figure.Figure,
     ax: matplotlib.axes.Axes,
     nx_g: nx.Graph,
-    src_coords: Tuple[int, int, int],
-    tent_coords: List[StandardCoord] | None,
+    src_coords: tuple[int, int, int],
+    tent_coords: list[StandardCoord] | None,
     is_final_vis: bool,
     hide_ports: bool = False,
-    taken: List[StandardCoord] | List[None] | None = None,
+    taken: list[StandardCoord] | list[None] | None = None,
     valid_paths_block_positions: dict[int, StandardCoord] | None = None,
     tgt_kind: str | None = None,
 ):
-    """Renders the nodes/edges of an NX graph as blocks/pipes of a space-time diagram.
+    """Render the nodes/edges of an NX graph as blocks/pipes of a space-time diagram.
 
     This function visualizes a a NetworkX graph as a 3D space-time diagram using Matplotlib.
     It draws nodes as blocks and edges as pipes, distinguishing between two modes:
-        1.  Static Mode (tgt_kind is None): Renders pre-existing components of the space-time diagram 
+        1.  Static Mode (tgt_kind is None): Renders pre-existing components of the space-time diagram
             that were completed in previous pathfinder iterations.
-        2.  Dynamic Mode (tgt_kind is present): Renders the set of valid paths discovered during 
+        2.  Dynamic Mode (tgt_kind is present): Renders the set of valid paths discovered during
             the current pathfinder iteration, adding them to `fig.valid_path_artists` for interactive toggling.
 
     Args:
@@ -838,6 +840,7 @@ def _render_nx_graph(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # General
@@ -937,8 +940,8 @@ def _adjust_plot_dimensions(
     fig: matplotlib.figure.Figure,
     ax: matplotlib.axes.Axes,
     nx_g: nx.Graph,
-    valid_paths: dict[StandardBlock, List[StandardBlock]] | None,
-    tent_coords: List[StandardCoord] | None,
+    valid_paths: dict[StandardBlock, list[StandardBlock]] | None,
+    tent_coords: list[StandardCoord] | None,
     src_block_info: StandardBlock | None,
     is_final_vis: bool,
     pathfinder_success: bool = True,
@@ -946,8 +949,8 @@ def _adjust_plot_dimensions(
     """Adjust the dimensions of the matplotlib plot.
 
     This function adjusts the dimensions (and therefore "zoom") of the main matplotlib
-    pane. It defines the optimal dimensions based on a list of coordinates sent to it, 
-    which should itself contain all objects being displayed. 
+    pane. It defines the optimal dimensions based on a list of coordinates sent to it,
+    which should itself contain all objects being displayed.
 
     Args:
         fig: The Matplotlib Figure object.
@@ -958,16 +961,17 @@ def _adjust_plot_dimensions(
         src_block_info: The information of the source cube including its position in the 3D space and its kind.
         is_final_vis: A boolean to flag if the visualisation is the very last output.
         pathfinder_success (optional): A boolean to flag if the last pathfinder iteration succeeded.
-    
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Calculate positions of all contents
     if is_final_vis:
         all_static_coords = np.array(list(nx.get_node_attributes(nx_g, "coords").values()))
-    else: 
+    else:
         all_static_coords = np.array(
             list(nx.get_node_attributes(nx_g, "coords").values())
             + tent_coords
@@ -1009,8 +1013,8 @@ def _adjust_plot_dimensions(
 
 def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
     """Prepare animation sequence for search paths.
-    
-    This function processes the raw search path data (all paths found by the inner pathfinder) 
+
+    This function processes the raw search path data (all paths found by the inner pathfinder)
     into two outputs:
         1. Figure state (`fig.all_search_paths_raw`): A persistent master list of all path coordinates and validity.
         2. Animation sequence: A sequential list of paths structured for frame-by-frame animation.
@@ -1021,18 +1025,19 @@ def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
         valid_paths: A dictionary of topologically-correct paths found during a single pathfinder iteration.
 
     Returns:
-        tuple: (animation_sequence, num_paths, num_frames, animation_interval_ms, TARGET_DURATION_MS)
-    
+        tuple: (animation_sequence, num_paths, num_frames, animation_interval_ms, tgt_duration_ms)
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
     animation_sequence = []
-    
+
     if all_search_paths:
         # NOTE: Ensure fig.all_search_paths_raw is initialized (e.g., in _init_vis)
         for path in all_search_paths.values():
-            
+
             # Convert path blocks to a numpy array of coordinates
             path_coords = np.array([block[0] for block in path])
 
@@ -1046,27 +1051,27 @@ def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
 
             is_valid = path in valid_paths.values() if valid_paths else False
             animation_sequence.append({
-                'coords': path_coords, 
-                'color': 'green' if is_valid else 'red', 
+                'coords': path_coords,
+                'color': 'green' if is_valid else 'red',
                 'persist': is_valid
             })
 
     num_paths = len(fig.all_search_paths_raw)
-    num_frames = num_paths + 1 
-    
+    num_frames = num_paths + 1
+
     # Calculate timing metrics
-    TARGET_DURATION_MS = 20000 if num_paths > 500 else 10000 if num_paths > 100 else 1000
-    animation_interval_ms = int(TARGET_DURATION_MS / num_paths) if num_paths > 0 else 500
-    
-    return animation_sequence, num_paths, num_frames, animation_interval_ms, TARGET_DURATION_MS
+    tgt_duration_ms = 20000 if num_paths > 500 else 10000 if num_paths > 100 else 1000
+    animation_interval_ms = int(tgt_duration_ms / num_paths) if num_paths > 0 else 500
+
+    return animation_sequence, num_paths, num_frames, animation_interval_ms, tgt_duration_ms
 
 
 def _setup_path_animation(fig, ax, animation_sequence, num_paths):
-    """ Initialize the artists and functionality needed to animate a path search as a sequence. 
+    """Initialise the artists and functionality needed to animate a path search as a sequence.
 
-    This function creates the necessary Matplotlib artists: 
+    This function creates the necessary Matplotlib artists:
         1. `dynamic_red_path_line`: A single line artist used to draw the current path being processed (red/frame).
-        2. `persistent_green_artists`: Pre-created, hidden artists for valid paths (green) that fade in at the end. 
+        2. `persistent_green_artists`: Pre-created, hidden artists for valid paths (green) that fade in at the end.
         It also returns the `update` closure, which contains the core animation logic.
 
     Args:
@@ -1078,24 +1083,25 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
     Returns:
         update_function: A closure that updates the plot for each animation frame.
         persistent_green_artists: A list of Matplotlib line artists for the valid paths.
-    
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
-    
+
     # Pre-create persistent paths (green, valid paths that will fade in)
     persistent_green_artists = []
     for item in animation_sequence:
         if item['persist']:
             path_artist, = ax.plot(
-                item['coords'][:, 0], item['coords'][:, 1], item['coords'][:, 2], 
+                item['coords'][:, 0], item['coords'][:, 1], item['coords'][:, 2],
                 color='green', linestyle=":", zorder=8, alpha=0,
             )
             persistent_green_artists.append({'artist': path_artist, 'index': len(persistent_green_artists)})
         else:
-            persistent_green_artists.append(None) 
-            
+            persistent_green_artists.append(None)
+
     # Initialize the Single Dynamic Path Line (for red/current path visualization)
     dynamic_red_path_line, = ax.plot(
         [], [], [], color='red', linestyle=":", zorder=8
@@ -1103,19 +1109,19 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
 
     # The Update function MUST be defined here to access the artists (closure)
     def update(frame):
-        """Manages the dual animation mode, adding a static final frame showing all paths."""
-        
+        """Manage the dual animation mode, adding a static final frame showing all paths."""
+
         artists_to_return = []
-   
+
         if frame < num_paths:  # Dynamic frames (animation)
             # Clear pre-existent line (if it was static from the last frame)
             dynamic_red_path_line.set_data([], [])
             dynamic_red_path_line.set_3d_properties([])
             artists_to_return.append(dynamic_red_path_line)
-            
+
             # Update current item
             current_item = animation_sequence[frame]
-            
+
             # Draw ALL paths (green or red) using the dynamic artist for visualization
             dynamic_red_path_line.set_data(current_item['coords'][:, 0], current_item['coords'][:, 1])
             dynamic_red_path_line.set_3d_properties(current_item['coords'][:, 2])
@@ -1124,13 +1130,13 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
             # Clear pre-existent dynamic line
             dynamic_red_path_line.set_data([], [])
             dynamic_red_path_line.set_3d_properties([])
-            
+
             # Iterate through ALL paths and statically draw them
             for i in range(num_paths):
 
                 item = animation_sequence[i]
                 path_coords = item['coords']
-                
+
                 # Colour and z-order based on persistence
                 color = 'green' if item['persist'] else 'red'
                 zorder = 8 if item['persist'] else 7
@@ -1143,12 +1149,12 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
                     path_coords[:, 2],
                     color=color,
                     linestyle=":",
-                    zorder=zorder, 
+                    zorder=zorder,
                     alpha=alpha,
                     visible=True
                 )
                 artists_to_return.append(static_path)
-                
+
                 # Store static path in the unified list for later toggling
                 fig.static_search_artists.append(static_path)
 

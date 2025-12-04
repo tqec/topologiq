@@ -1,4 +1,12 @@
-from typing import cast, Union
+"""Util facilities to assist PyZX interoperability.
+
+Usage:
+    Call any function/class from a separate script.
+
+"""
+
+from typing import cast
+
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType
@@ -9,15 +17,14 @@ from topologiq.utils.classes import SimpleDictGraph
 ########################
 # PYZX EXTRACTION JOBS #
 ########################
-def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
-    """Extracts circuit information from a PyZX graph and dumps it into a dictionary.
-    Output is slightly more complete than a `to_json` export using PyZX native capacities.
+def get_dict_from_pyzx(g: BaseGraph | GraphS):
+    """Extract circuit information from a PyZX graph and dumps it into a dictionary.
 
     Args:
-        - g: a PyZX graph.
+        g: a PyZX graph.
 
     Returns:
-        - g_dict: a dictionary with graph info.
+        g_dict: a dictionary with graph info.
 
     """
 
@@ -62,14 +69,14 @@ def get_dict_from_pyzx(g: Union[BaseGraph, GraphS]):
     return g_dict
 
 
-def pyzx_g_to_simple_g(g: Union[BaseGraph, GraphS]) -> SimpleDictGraph:
-    """Extracts circuit information from a PyZX graph and dumps it into a simple graph.
+def pyzx_g_to_simple_g(g: BaseGraph | GraphS) -> SimpleDictGraph:
+    """Extract circuit information from a PyZX graph and dumps it into a simple graph.
 
     Args:
-        - g: a PyZX graph.
+        g: a PyZX graph.
 
     Returns:
-        - g_simple: a dictionary with graph info.
+        g_simple: a dictionary with graph info.
 
     """
 

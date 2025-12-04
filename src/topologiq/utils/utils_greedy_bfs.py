@@ -1,22 +1,28 @@
+"""Util facilities to assist primary graph managemer BFS.
+
+Usage:
+    Call any function/class from a separate script.
+
+"""
+
 import random
+
 import networkx as nx
 
-from typing import Tuple, List
-
-from topologiq.utils.classes import StandardCoord, NodeBeams, StandardBlock
+from topologiq.utils.classes import NodeBeams, StandardBlock, StandardCoord
 
 
 #######################
 # NX GRAPH OPERATIONS #
 #######################
 def find_first_id(nx_g: nx.Graph) -> int:
-    """Pick a node for use as starting point for outer graph manager BFS.
+    """Pick a node for use as starting point by outer graph manager BFS.
 
     Args:
-        - nx_g: an nx_graph.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
 
     Returns:
-        - first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
+        first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
 
     """
 
@@ -26,7 +32,7 @@ def find_first_id(nx_g: nx.Graph) -> int:
 
     # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
     max_degree = -1
-    central_nodes: List[int] = []
+    central_nodes: list[int] = []
 
     node_degrees = nx_g.degree
     if isinstance(node_degrees, int):
@@ -47,14 +53,14 @@ def find_first_id(nx_g: nx.Graph) -> int:
 
 
 def get_node_degree(g: nx.Graph, node: int) -> int:
-    """Gets the degree (# of edges) of a given node.
+    """Get the degree (# of edges) of a given node.
 
     Args:
-        - g: an nx Graph.
-        - node: the node of interest.
+        g: an nx Graph.
+        node: the node of interest.
 
     Returns:
-        - int: the degree for the node of interest, or 0 if graph has no edges.
+        int: the degree for the node of interest, or 0 if graph has no edges.
 
     """
 
@@ -75,17 +81,17 @@ def get_node_degree(g: nx.Graph, node: int) -> int:
 def gen_tent_tgt_coords(
     src_c: StandardCoord,
     max_manhattan: int = 3,
-    taken: List[StandardCoord] = [],
-) -> List[StandardCoord]:
-    """Generates a number of potential placement positions for target node.
+    taken: list[StandardCoord] = [],
+) -> list[StandardCoord]:
+    """Generate a number of potential placement positions for target node.
 
     Args:
-        - src_c: (x, y, z) coordinates for the originating block.
-        - max_manhattan: Max. (Manhattan) distance between origin and target blocks.
-        - taken: a list of coordinates already taken by previous operations.
+        src_c: (x, y, z) coordinates for the originating block.
+        max_manhattan: Max. (Manhattan) distance between origin and target blocks.
+        taken: a list of coordinates already taken by previous operations.
 
     Returns:
-        - tent_coords: a list of tentative target coordinates that make good candidates for placing the target block.
+        tent_coords: a list of tentative target coordinates that make good candidates for placing the target block.
 
     """
 
@@ -173,14 +179,18 @@ def gen_tent_tgt_coords(
 
 
 def prune_beams(
-    nx_g: nx.Graph, all_beams: List[NodeBeams], taken: List[StandardCoord]
-) -> Tuple[nx.Graph, List[NodeBeams]]:
-    """Removes beams that have already been broken, as these are no longer indicative of anything.
+    nx_g: nx.Graph, all_beams: list[NodeBeams], taken: list[StandardCoord]
+) -> tuple[nx.Graph, list[NodeBeams]]:
+    """Remove beams that have already been broken.
+
     Args:
-        - all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
-        - taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph.
+        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+
     Returns:
-        - new_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with taken coords.
+        new_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with taken coords.
+
     """
 
     try:
@@ -210,22 +220,20 @@ def prune_beams(
 
                     nx_g.nodes[n_id]["beams"] = new_beams
     except (IndexError, ValueError, LookupError, KeyError):
-        nx_g = nx_g
+        pass
 
     return nx_g, new_beams
 
 
-def reindex_path_dict(
-    edge_paths: dict,
-) -> Tuple[dict[int, StandardBlock], dict[Tuple[int, int], List[str]]]:
-    """Distils an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
+def reindex_path_dict(edge_paths: dict) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
+    """Distil an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
 
     Args:
-        - edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
 
     Returns:
-        - lat_nodes: the nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
-        - lat_edges: the edges/pipes of the resulting space-time diagram / lattice surgery (without redundant pipes)
+        lat_nodes: the nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
+        lat_edges: the edges/pipes of the resulting space-time diagram / lattice surgery (without redundant pipes)
 
     """
 
@@ -274,7 +282,7 @@ def reindex_path_dict(
                 final_edges[(n1, n2)] = [e_type, orig_key]
 
     lat_nodes: dict[int, StandardBlock] = {}
-    lat_edges: dict[Tuple[int, int], List[str]] = {}
+    lat_edges: dict[tuple[int, int], list[str]] = {}
     for path in idx_paths.values():
         keys = list(path.keys())
         i = 0
@@ -288,9 +296,3 @@ def reindex_path_dict(
             i += 1
 
     return lat_nodes, lat_edges
-
-
-######################
-# DEBUG OPERATIONS #
-######################
-# CONSIDER MOVE LOGGING AND ANIMATION HERE.

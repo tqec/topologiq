@@ -1,50 +1,50 @@
-"""
-Manages the main/outer graph manager BFS process. 
+"""Manage the main/outer graph manager BFS process.
 
 This file contains functions that altogether determine the first spider to process,
-the order in which subsequent spiders get processed, and all operations needed to 
+the order in which subsequent spiders get processed, and all operations needed to
 determine potential/tentative placements, call the inner pathfinder algorithm to get
 paths to the tentative placements, and select a winner path from amongst all paths.
 
 Usage:
-    Call `graph_manager_bfs()` programmatically from a separate script. 
+    Call `graph_manager_bfs()` programmatically from a separate script.
 
 Notes:
     For now, none of the functions in this file are to be called individually.
-    In the future, some of the functions could be called by variant algorithms that 
+    In the future, some of the functions could be called by variant algorithms that
         do not necessarily need or want to implement all separate features.
+
 """
 
 import random
-import networkx as nx
-import matplotlib.figure
-
-from datetime import datetime
 from collections import deque
-from typing import Tuple, List, Optional, Any, Union, cast
+from datetime import datetime
+from typing import Any, cast
 
-from topologiq.scripts.pathfinder import pathfinder, get_taken_coords
+import matplotlib.figure
+import networkx as nx
+
+from topologiq.scripts.pathfinder import get_taken_coords, pathfinder
 from topologiq.utils.animation import create_animation
+from topologiq.utils.classes import (
+    Colors,
+    NodeBeams,
+    PathBetweenNodes,
+    SimpleDictGraph,
+    StandardBlock,
+    StandardCoord,
+)
+from topologiq.utils.grapher import vis_3d
+from topologiq.utils.grapher_common import lattice_to_g
 from topologiq.utils.utils_greedy_bfs import (
     find_first_id,
-    get_node_degree,
     gen_tent_tgt_coords,
+    get_node_degree,
     prune_beams,
     reindex_path_dict,
 )
+from topologiq.utils.utils_misc import prep_stats_n_log
 from topologiq.utils.utils_pathfinder import check_exits
 from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
-from topologiq.utils.grapher_common import lattice_to_g
-from topologiq.utils.grapher import vis_3d
-from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.classes import (
-    PathBetweenNodes,
-    StandardBlock,
-    NodeBeams,
-    SimpleDictGraph,
-    StandardCoord,
-    Colors,
-)
 
 
 ###############################
@@ -55,25 +55,25 @@ def graph_manager_bfs(
     circuit_name: str = "circuit",
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats_id: Union[str, None] = None,
+    vis_options: tuple[str | None, str | None] = (None, None),
+    log_stats_id: str | None = None,
     debug: int = 0,
-    fig_data: Optional[matplotlib.figure.Figure] = None,
-    first_cube: Tuple[Union[int, None], Union[str, None]] = (None, None),
+    fig_data: matplotlib.figure.Figure | None = None,
+    first_cube: tuple[int | None, str | None] = (None, None),
     **kwargs,
-) -> Tuple[
+) -> tuple[
     nx.Graph,
     dict,
     int,
-    Union[None, dict[int, StandardBlock]],
-    Union[None, dict[Tuple[int, int], List[str]]],
+    dict[int, StandardBlock] | None,
+    dict[tuple[int, int], list[str]] | None,
 ]:
     """Process all nodes/edges in the input ZX graph and select best paths.
 
-    This function manages a greedy Breadth-First-Search (BFS) process that takes care of calling 
-    a number of operations that altogether enable the conversion of all spiders and edges in the 
+    This function manages a greedy Breadth-First-Search (BFS) process that takes care of calling
+    a number of operations that altogether enable the conversion of all spiders and edges in the
     input ZX graph into corresponding 3D cubes and pipes. It chooses a first spider and places
-    its corresponding 3D cube at origin, then manages calls to other functions that place all 
+    its corresponding 3D cube at origin, then manages calls to other functions that place all
     subsequent spiders in the order given by the nature of the BFS process.
 
     Args:
@@ -81,7 +81,7 @@ def graph_manager_bfs(
         circuit_name: The name of the ZX circuit.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
-        vis_options (optional): Visualisation settings provided as a Tuple.
+        vis_options (optional): Visualisation settings provided as a tuple.
             vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
                 (None): No visualisation.
                 (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
@@ -92,13 +92,12 @@ def graph_manager_bfs(
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
-
-    Keyword arguments (**kwargs):
-        weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-        length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+        **kwargs:
+            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
+            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
 
     Returns:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         c: a counter for the number of completed (top-level) iterations by the main loop in this function (used to organise visualisations).
 
@@ -119,13 +118,13 @@ def graph_manager_bfs(
     num_nodes_input: int = 0
     num_1st_pass_edges: int = 0
 
-    lat_nodes: Union[None, dict[int, StandardBlock]] = None
-    lat_edges: Union[None, dict[Tuple[int, int], List[str]]] = None
-    
+    lat_nodes: dict[int, StandardBlock] | None = None
+    lat_edges: dict[tuple[int, int], list[str]] | None = None
+
     # Key parameters - BFS management
-    first_id: Optional[int] = find_first_id(nx_g) if first_cube[0] is None else first_cube[0]
-    taken: List[StandardCoord] = []
-    all_beams: List[NodeBeams] = []
+    first_id: int | None = find_first_id(nx_g) if first_cube[0] is None else first_cube[0]
+    taken: list[StandardCoord] = []
+    all_beams: list[NodeBeams] = []
     edge_paths: dict = {}
     queue: deque[int] = deque([first_id])
     visited: set = {first_id}
@@ -143,7 +142,7 @@ def graph_manager_bfs(
     else:
 
         # Get kind from type family
-        tentative_kinds: Optional[List[str]] = nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
+        tentative_kinds: list[str] | None = nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
         first_kind = random.choice(tentative_kinds) if tentative_kinds else None
 
         # Update list of taken coords and all_beams with node's position & beams
@@ -179,7 +178,7 @@ def graph_manager_bfs(
         src_id: int = queue.popleft()
 
         # Iterate over neighbours of current parent node
-        for tgt_id in cast(List[int], nx_g.neighbors(src_id)):
+        for tgt_id in cast(list[int], nx_g.neighbors(src_id)):
 
             # Queue and add to visited set if BFS just arrived at node
             if tgt_id not in visited:
@@ -373,31 +372,30 @@ def place_nxt_block(
     src_id: int,
     tgt_id: int,
     nx_g: nx.Graph,
-    taken: List[StandardCoord],
-    all_beams: List[NodeBeams],
+    taken: list[StandardCoord],
+    all_beams: list[NodeBeams],
     edge_paths: dict,
     circuit_name: str = "circuit",
     init_step: int = 3,
     min_succ_rate: int = 60,
     hide_ports: bool = False,
-    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    fig_data: Optional[matplotlib.figure.Figure] = None,
-    log_stats_id: Union[str, None] = None,
+    vis_options: tuple[str | None, str | None] = (None, None),
+    fig_data: matplotlib.figure.Figure | None = None,
+    log_stats_id: str | None = None,
     debug: int = 0,
     **kwargs,
-) -> Tuple[List[StandardCoord], List[NodeBeams], dict, bool]:
+) -> tuple[list[StandardCoord], list[NodeBeams], dict, bool]:
     """Position target cube in the 3D space as part of the primary BFS flow.
-    
+
     This function calls the inner pathfinder algorithm on any arbitrary combination of an already-placed
-    `src_id` and a yet-to-be-placed `tgt_id`. The inner pathfinder algorithm returns a list of viable 
-    paths to a number of valid placements for `tgt_id`, and chooses a best path from this list 
+    `src_id` and a yet-to-be-placed `tgt_id`. The inner pathfinder algorithm returns a list of viable
+    paths to a number of valid placements for `tgt_id`, and chooses a best path from this list
     using hyperparameters passed as `kwargs` and a value function.
 
     Args:
         src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
         tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
-            updated regularly over the course of the process.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         all_beams: A list of coordinates occupied by the beams of already-placed cubes that still require connections.
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
@@ -405,7 +403,7 @@ def place_nxt_block(
         init_step: The ideal/intended (Manhattan) distance between source and target blocks.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
-        vis_options (optional): Visualisation settings provided as a Tuple.
+        vis_options (optional): Visualisation settings provided as a tuple.
             vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
                 (None): No visualisation.
                 (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
@@ -415,10 +413,9 @@ def place_nxt_block(
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-
-    Keyword arguments (**kwargs):
-        weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-        length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+        **kwargs:
+            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
+            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
 
     Returns:
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
@@ -435,15 +432,15 @@ def place_nxt_block(
     nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
     # Get source cube data
-    src_coords: Optional[StandardCoord] = nx_g.nodes[src_id].get("coords")
-    src_kind: Optional[str] = nx_g.nodes[src_id].get("kind")
+    src_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
+    src_kind: str | None = nx_g.nodes[src_id].get("kind")
 
     if src_coords is None or src_kind is None:
         return taken, all_beams, edge_paths, False
     src_block_info: StandardBlock = (src_coords, src_kind)
 
     # Check position of target cube (should be None)
-    nxt_neigh_coords: Optional[StandardCoord] = nx_g.nodes[tgt_id].get("coords")
+    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
 
     # Process targets that have yet to be placed in the 3D space
     if nxt_neigh_coords is None:
@@ -473,8 +470,6 @@ def place_nxt_block(
             min_succ_rate=min_succ_rate,
             src_tgt_ids=(src_id, tgt_id),
             log_stats_id=log_stats_id,
-            debug=debug,
-            nx_g=nx_g,
         )
 
         # Assemble a preliminary dictionary of viable paths
@@ -541,7 +536,7 @@ def place_nxt_block(
                     viable_paths.append(PathBetweenNodes(**path_data))
 
         # Choose a winner path from all viable paths
-        winner_path: Optional[PathBetweenNodes] = None
+        winner_path: PathBetweenNodes | None = None
         if viable_paths:
             winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
 
@@ -628,7 +623,7 @@ def place_nxt_block(
             taken.extend(all_coords_in_path)
 
             # Update user if log_stats or debug are enabled
-            if log_stats_id or debug > 0:                
+            if log_stats_id or debug > 0:
                 volume = len([block for block in winner_path.all_nodes_in_path if "o" not in block[1]])
                 print(f"New path created: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms) (+{volume - 1} vol).")
 
@@ -639,7 +634,7 @@ def place_nxt_block(
         # Handle cases where no winner is found
         if not winner_path:
 
-            # Explicit warning if log_stats or debug are enabled 
+            # Explicit warning if log_stats or debug are enabled
             if log_stats_id or debug > 0:
                 print(f"ERROR. New path creation: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms).")
 
@@ -662,27 +657,27 @@ def place_nxt_block(
 
 def second_pass(
     nx_g: nx.Graph,
-    taken: List[StandardCoord],
+    taken: list[StandardCoord],
     edge_paths: dict,
     c: int,
-    all_beams: List[NodeBeams],
+    all_beams: list[NodeBeams],
     circuit_name: str = "circuit",
     min_succ_rate: int = 50,
     hide_ports: bool = False,
-    vis_options: Tuple[Union[None, str], Union[None, str]] = (None, None),
-    log_stats_id: Union[str, None] = None,
+    vis_options: tuple[str | None, str | None] = (None, None),
+    log_stats_id: str | None = None,
     debug: int = 0,
-    fig_data: Optional[matplotlib.figure.Figure] = None,
-) -> Tuple[dict, int, int]:
+    fig_data: matplotlib.figure.Figure | None = None,
+) -> tuple[dict, int, int]:
     """Perform a second pass of the graph to process any edges missed by the primary BFS.
-    
-    This function is a backup facility that goes over the ZX graph after the primary BFS finishes, 
+
+    This function is a backup facility that goes over the ZX graph after the primary BFS finishes,
     identifying any edge that is in the ZX graph but has not been yet transformed into a corresponding
-    3D edge. This typically happens when there are multiple interconnected nodes, which causes the BFS to 
+    3D edge. This typically happens when there are multiple interconnected nodes, which causes the BFS to
     run out of spiders/cubes to place before all edges are rendered in 3D.
 
     Args:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
         c: A counter for the number of completed edge iterations (used to organise visualisations).
@@ -690,7 +685,7 @@ def second_pass(
         circuit_name: The name of the ZX circuit.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
-        vis_options (optional): Visualisation settings provided as a Tuple.
+        vis_options (optional): Visualisation settings provided as a tuple.
             vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
                 (None): No visualisation.
                 (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
@@ -722,8 +717,8 @@ def second_pass(
         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
         # Get source and target data for current (src_id, tgt_id) pair
-        u_coords: Optional[StandardCoord] = nx_g.nodes[src_id].get("coords")
-        v_coords: Optional[StandardCoord] = nx_g.nodes[tgt_id].get("coords")
+        u_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
+        v_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
 
         # Process edge only if both src_id and tgt_id have already been placed in the 3D space
         # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
@@ -746,7 +741,7 @@ def second_pass(
                 # Prune beams to consider recent node placements
                 nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
-                critical_beams: dict[int, Tuple[int, NodeBeams]] = {}
+                critical_beams: dict[int, tuple[int, NodeBeams]] = {}
                 num_edges_still_to_complete = 0
                 for node_id in nx_g.nodes():
                     n_beams = nx_g.nodes[node_id]["beams"]
@@ -767,7 +762,7 @@ def second_pass(
                 hdm: bool = True if zx_edge_type == "HADAMARD" else False
 
                 # Call pathfinder using optional parameters that flag second pass nature of operation
-                v_kind: Optional[str] = nx_g.nodes[tgt_id].get("kind")
+                v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
                 if v_coords and v_kind:
                     clean_paths, pathfinder_vis_data = run_pathfinder(
                         (u_coords, u_kind),
@@ -780,8 +775,6 @@ def second_pass(
                         log_stats_id=log_stats_id,
                         critical_beams=critical_beams,
                         src_tgt_ids=(src_id, tgt_id),
-                        debug=debug,
-                        nx_g=nx_g,
                     )
                     duration_iter = (datetime.now() - t1).total_seconds()
 
@@ -843,7 +836,7 @@ def second_pass(
                         # Add path to position to list of taken coordinates
                         all_coords_in_path = get_taken_coords(clean_paths[0])
                         taken.extend(all_coords_in_path)
-                        
+
                         # Prune beams before moving to next edge
                         nx_g, all_beams = prune_beams(nx_g, all_beams, taken)
 
@@ -864,27 +857,26 @@ def run_pathfinder(
     src_block_info: StandardBlock,
     tgt_zx_type: str,
     init_step: int,
-    taken: List[StandardCoord],
-    tgt_block_info: Optional[StandardBlock] = None,
+    taken: list[StandardCoord],
+    tgt_block_info: StandardCoord | None = None,
     hdm: bool = False,
     min_succ_rate: int = 60,
-    critical_beams: dict[int, Tuple[int, NodeBeams]] = {},
-    src_tgt_ids: Optional[Tuple[int,int]] = None,
-    log_stats_id: Union[str, None] = None,
-    debug: int = 0,
-    nx_g: nx.Graph = [],
-) -> Tuple[
-    List[Any],
-    Tuple[List[StandardCoord], List[str], Union[None, dict[StandardBlock, List[StandardBlock]]]],
-    ]:
+    critical_beams: dict[int, tuple[int, NodeBeams]] = {},
+    src_tgt_ids: tuple[int,int] | None = None,
+    log_stats_id: str | None = None,
+) -> tuple[
+    list[Any],
+    tuple[list[StandardCoord], list[str],
+    dict[StandardBlock, list[StandardBlock]] | None],
+]:
     """Call the pathfinder algorithm for an arbitrary combination of source and target spiders/cubes.
-    
-    This function calls the inner pathfinder algorith with the information using a variable combination of parameters. 
-    If the function does not get information about the desired target, it assumes it is creating a path between an 
-    already-placed cube and a new cube. In such case, the function generates a list of tentative target coordinates, 
+
+    This function calls the inner pathfinder algorith with the information using a variable combination of parameters.
+    If the function does not get information about the desired target, it assumes it is creating a path between an
+    already-placed cube and a new cube. In such case, the function generates a list of tentative target coordinates,
     which the inner pathfinder algorithm fulfills up to `min_succ_rate` percent. Once the inner pathfinder algorithm
-    returns all paths fulfilled, this function eliminates paths not meeting key heuristics and chooses the best 
-    amongst all surviving paths. 
+    returns all paths fulfilled, this function eliminates paths not meeting key heuristics and chooses the best
+    amongst all surviving paths.
 
     Args:
         src_block_info: The information of the source cube including its position in the 3D space and its kind.
@@ -895,8 +887,8 @@ def run_pathfinder(
         hdm (optional): If True, it tells the inner pathfinding algorithm that the original ZX-edge is a Hadamard edge.
         min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
+        src_tgt_ids (optional): The exact IDs of the source and target cubes.
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
 
     Returns:
         clean_paths: A list of paths each containing the 3D cubes and pipes needed to connect source and target in the 3D space.
@@ -904,7 +896,7 @@ def run_pathfinder(
     """
 
     # Edge path management
-    valid_paths: Union[dict[StandardBlock, List[StandardBlock]], None] = None
+    valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
     step = init_step
@@ -977,13 +969,13 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
     This function takes a `simple_graph` containing the spiders and edges of a ZX graph and converts it into
     an NX graph. The resulting NX graph contains the same information as the `simple_graph` but has a number
     of placeholders that enable the algorithm to overwrite the NX graph with 3D information as the algorithm
-    traverses the graph making 3D placements. 
+    traverses the graph making 3D placements.
 
     Args:
         simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
 
     Returns:
-        nx_g: A nx_graph with the same spiders/edges as incoming ZX graph but in 3D-amicable format/structure.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
 
     """
 
@@ -991,8 +983,8 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
     nx_g = nx.Graph()
 
     # Get the spiders and edges of incoming `simple_graph`
-    nodes: List[Tuple[int, str]] = simple_graph.get("nodes", [])
-    edges: List[Tuple[Tuple[int, int], str]] = simple_graph.get("edges", [])
+    nodes: list[tuple[int, str]] = simple_graph.get("nodes", [])
+    edges: list[tuple[tuple[int, int], str]] = simple_graph.get("edges", [])
 
     # Add the spiders to the NX graph
     for n_id, n_type in nodes:

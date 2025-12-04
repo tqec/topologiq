@@ -1,36 +1,32 @@
-"""Objects and functions used by several visualisation files. 
+"""Util facilities to assist the main 3D grapher utility.
 
-This file contains auxiliary objects that are used to create different kinds of 
+This file contains auxiliary objects that are used to create different kinds of
 visualisations. Do NOT call anything in this file directly.
 
 Usage:
     Call any required object/function from a separate script.
 
-NB! AI policy. If you use AI to modify this file, refer to `./README` for appropriate disclaimer guidelines.
 """
 
 import io
-import numpy as np
-import networkx as nx
+import logging
+from collections.abc import Callable
+from typing import IO, Annotated, Any, Literal
 
 import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
-import matplotlib.text as mtext
+import matplotlib.patches as mpatches
 import matplotlib.path as mpath
-import matplotlib.animation as animation
-
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
+import matplotlib.pyplot as plt
+import matplotlib.text as mtext
+import networkx as nx
+import numpy as np
+from matplotlib import animation
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
-from typing import Any, Annotated, Callable, Dict, List, Literal, Tuple,  IO, Union
 
-
-from topologiq.utils.utils_misc import get_manhattan
 from topologiq.utils.classes import StandardBlock, StandardCoord
-from topologiq.utils.utils_pathfinder import check_is_exit, rot_o_kind
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-
+from topologiq.utils.utils_pathfinder import check_is_exit, get_manhattan, rot_o_kind
 
 #############
 # CONSTANTS #
@@ -68,13 +64,13 @@ node_hex_map = {
 ###################
 # TRANSFORMATIONS #
 ###################
-def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, List[StandardBlock]]) -> nx.Graph:
+def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, list[StandardBlock]]) -> nx.Graph:
     """Convert an edge_paths object into an nx.Graph.
 
     This function takes a list of 3D block-by-block `edge_paths` (which is how Topologiq stores progress)
-    into a NetworkX graph. The `edge_paths` object is convenient for creating visualisation objects quickly. 
+    into a NetworkX graph. The `edge_paths` object is convenient for creating visualisation objects quickly.
     However, the object may contain redundant blocks that are irrelevant for visualisation (they get rendered
-    on top of each other) but would be highly inconvenient in final outputs. Accordingly, this function is 
+    on top of each other) but would be highly inconvenient in final outputs. Accordingly, this function is
     NOT for usage in operations that produce final results.
 
     Args:
@@ -82,6 +78,7 @@ def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, List[StandardBlock]])
 
     Returns:
         nx_graph: An nx.Graph with the information in `edge_paths` in a format more amicable for visualisation.
+
     """
 
     # Create foundational NX graph
@@ -89,12 +86,12 @@ def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, List[StandardBlock]])
     block_count = 0
 
     # Iterate over `edge_paths` extracting objects
-    for _, path_data in edge_paths.items():
+    for path_data in edge_paths.values():
 
         # Preliminaries
         primary_blocks_and_edges = []
         path_blocks = path_data
-        
+
         if path_blocks == "error":
             continue
         path_index_map = {}
@@ -145,10 +142,10 @@ def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, List[StandardBlock]])
 
 def lattice_to_g(
     lat_nodes: dict[int, StandardBlock],
-    lat_edges: dict[Tuple[int, int], List[str]],
+    lat_edges: dict[tuple[int, int], list[str]],
     nx_g: nx.Graph,
-    pauli_webs: dict[Tuple[int, int], str] = {},
-) -> Tuple[nx.Graph, nx.Graph]:
+    pauli_webs: dict[tuple[int, int], str] = {},
+) -> tuple[nx.Graph, nx.Graph]:
     """Convert a set of lattice nodes and edges into an nx.Graph.
 
     This function converts two dictionaries of lattice nodes and lattice edges into a single NX graph.
@@ -158,9 +155,12 @@ def lattice_to_g(
     Args:
         lat_nodes: the cubes of the resulting space-time diagram with explicit position and kind information.
         lat_edges: the pipes of the resulting space-time diagram with explicit position and kind information.
+        nx_g: A NX graph containing all pre-existing 3D blocks placed throughout algorithmic process.
+        pauli_webs: An object containing information about how Pauli webs flow through the space-time diagram.
 
     Returns:
         final_graph: an nx.Graph with all the information in the lattice nodes and edges but in a format amicable for visualisation
+
     """
 
     # Create foundational graph
@@ -197,20 +197,21 @@ def lattice_to_g(
 
 def figure_to_png(
     fig: matplotlib.figure.Figure,
-    processed_ids: List[Union[str, int]],
-    processed_edges: List[Tuple[int, int]],
-    src_tgt_ids: Tuple[int, int] = None,
+    processed_ids: list[str | int],
+    processed_edges: list[tuple[int, int]],
+    src_tgt_ids: tuple[int, int] | None = None,
 ) -> IO[bytes]:
-    """Converts a Matplotlib Figure object to an in-memory PNG file with a transparent background.
+    """Convert a Matplotlib Figure object to an in-memory PNG file with a transparent background.
 
-    This function takes the Matplotlib figure of the original ZX graph, deconstructs it, and 
-    rebuilds it into a new figure that can be transformed into a PNG overlay to display 
-    over 3D visualisations. 
+    This function takes the Matplotlib figure of the original ZX graph, deconstructs it, and
+    rebuilds it into a new figure that can be transformed into a PNG overlay to display
+    over 3D visualisations.
 
     Args:
         fig: The Matplotlib Figure object.
         processed_ids: IDs of the nodes already processed by the algorithm.
         processed_edges: The (src, tgt) IDs composing the edges already processed by the algorithm.
+        src_tgt_ids: The (src, tgt) IDs for the current operation
 
     Returns:
         png_io: an in-memory binary stream (BytesIO object) containing the PNG data.
@@ -218,6 +219,7 @@ def figure_to_png(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Preliminaries
@@ -522,17 +524,17 @@ def figure_to_png(
 def render_block(
     ax: matplotlib.axes.Axes,
     node_id: int,
-    coords: Tuple[int, int, int],
+    coords: tuple[int, int, int],
     size: list[float],
     node_type: str,
     node_hex_map: dict[str, list[str]],
     alpha: float = 1.0,
     edge_col: str = "black",
     border_width: float = 0.5,
-    taken: List[StandardCoord] = [],
+    taken: list[StandardCoord] = [],
     **kwargs,
 ) -> Poly3DCollection:
-    """Renders a regular (non-'h') block.
+    """Render a regular (non-'h') block.
 
     This function creates a 3D cube to an existing Matplotlib ax. It takes the position,
     size and other graphical characteristics as parameters, applies specific face colors
@@ -541,14 +543,17 @@ def render_block(
 
     Args:
         ax: Matplotlib's 3D subplot object.
-        node_id: the ID of the node
-        coords: (x, y, z) coordinates of the block.
-        size: (size_x, size_y, size_z) of the block.
-        node_type: block's kind.
-        node_hex_map: map of (HEX) colours for block.
-        edge_col: color for the edges of blocks.
-        border_width: width for borders of block.
+        node_id: The ID of the node
+        coords: The (x, y, z) coordinates of the block.
+        size: The (size_x, size_y, size_z) of the block.
+        node_type: The block's kind.
+        node_hex_map: The map of (HEX) colours for block.
+        alpha: The transparency for the block
+        edge_col: The color for the edges of blocks.
+        border_width: The width for borders of block.
         taken: A list of coordinates occupied by any blocks/pipes placed as a result of previous operations.
+        **kwargs: Any additional optional format.
+
     """
 
     # General dimensions
@@ -636,11 +641,11 @@ def render_pipe(
         edge_col: str = "black",
         border_width: float = 0.5,
         alpha: float = 1.0
-) -> List[Poly3DCollection]:
+) -> list[Poly3DCollection]:
     """Add a pipe to the Matplotlib ax.
-    
+
     This function adds a pipe (regular or hadamard) to an existing Matplotlib ax.
-    It takes the position, size and other graphical characteristics as parameters, 
+    It takes the position, size and other graphical characteristics as parameters,
     applies specific face colors based on the `node_type`, and, if applicable,
     attaches invisible labels and direction quivers for debugging and interaction.
 
@@ -654,13 +659,14 @@ def render_pipe(
         alpha: any desired value for alpha (transparency).
 
     Returns:
-        List[Poly3DCollection]: A list containing the Matplotlib artists for the pipe sections.
+        list[Poly3DCollection]: A list containing the Matplotlib artists for the pipe sections.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
-    
+
     # Convert positions to np.arrays
     u_coords = np.array(u_coords)
     v_coords = np.array(v_coords)
@@ -676,7 +682,7 @@ def render_pipe(
         size = [1.0, 1.0, 1.0]
         size[orientation] = float(adjusted_length)
         face_cols = ["gray"] * 6
-        
+
         col = node_hex_map.get(block_kind.replace("*", ""), ["gray"] * 3)
         face_cols = [col[2]] * 2 + [col[1]] * 2 + [col[0]] * 2
 
@@ -733,7 +739,7 @@ def render_pipe(
 
                 # Far end of the hadamard
                 # Note. Keeping track of the correct rotations proved tricky
-                # Keep this bit spread out across lines – easier
+                # Keep this bit spread out across lines for comprehensibility
                 face_cols_2 = ["gray"] * 6
                 rotated_kind = rot_o_kind(block_kind[:3]) + "h"
                 col = node_hex_map.get(rotated_kind, ["gray"] * 3)
@@ -787,11 +793,11 @@ def render_pipe_section(
     alpha: float | int,
     border_width: float = 0.5,
 ) -> Poly3DCollection:
-    """Renders edges/pipes.
+    """Render edges/pipes.
 
     This function takes care of rendering a section of a 3D pipe/edge. It takes the coordinates
-    and size of the pipe alongside other visual formatting parameters and calculates all 
-    geometric objects needed to render it in 3D. 
+    and size of the pipe alongside other visual formatting parameters and calculates all
+    geometric objects needed to render it in 3D.
 
     Args:
         ax: Matplotlib's 3D subplot object.
@@ -801,10 +807,11 @@ def render_pipe_section(
         edge_col: color of the edges for the edge/pipe.
         alpha: any desired value for alpha (transparency)
         border_width: width for borders of edge.
-    
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Determine centre and size
@@ -852,19 +859,20 @@ def render_pipe_section(
 
 
 def render_prox_paths_view(fig, edge_col="white", border_width=3):
-    """Clears and redraws the proximate paths based on the current view mode.
+    """Clear and redraw the proximate paths based on the current view mode.
 
-    This function supports two distinct view modes: 'ALL' (shows all filtered paths) and 
-    'SINGLE' (shows only the path at fig.prox_current_index with a highlight). 
+    This function supports two distinct view modes: 'ALL' (shows all filtered paths) and
+    'SINGLE' (shows only the path at fig.prox_current_index with a highlight).
 
     Args:
         fig: The Matplotlib Figure object storing view state and data.
         edge_col (optional): The default color for the path edges in 'ALL' mode.
         border_width (optional): The default border width for the rendered blocks.
-    
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Clear previous artists
@@ -872,7 +880,7 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
         try:
             artist.remove()
         except Exception:
-            pass 
+            logging.exception("Exception occured. Couldn't remove artist. Moved on to next one.")
     fig.prox_path_artists.clear()
 
     if not fig.prox_filtered_paths:
@@ -905,8 +913,8 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
             # Cubes
             if "o" not in block_kind:
                 if block_coords in taken:
-                    continue 
-                    
+                    continue
+
                 artists = render_block(
                     fig.ax,
                     "TBD",
@@ -914,8 +922,8 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
                     size,
                     block_kind,
                     node_hex_map,
-                    edge_col=current_edge_col, 
-                    border_width=border_width, 
+                    edge_col=current_edge_col,
+                    border_width=border_width,
                     alpha=alpha,
                 )
                 if artists:
@@ -932,15 +940,15 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
                     fig.ax,
                     u_coords,
                     v_coords,
-                    block_kind, 
-                    edge_col=current_edge_col, 
+                    block_kind,
+                    edge_col=current_edge_col,
                     border_width=border_width,
                 )
                 if artists:
                     block_artists.extend(artists)
 
         fig.prox_path_artists.extend(block_artists)
-        
+
     fig.canvas.draw_idle()
 
 #################
@@ -949,7 +957,7 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
 def get_vertices(
     x: int, y: int, z: int, size_x: float, size_y: float, size_z: float
 ) -> Annotated[NDArray[np.float64], Literal[..., 3]]:
-    """Calculates the coordinates of the eight vertices of a cuboid.
+    """Calculate the coordinates of the eight vertices of a cuboid.
 
     This function calculates the exact position of the vertices of a cuboind based on
     a central position and the desired dimensions for the cuboid.
@@ -968,6 +976,7 @@ def get_vertices(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     half_size_x = size_x / 2
@@ -988,7 +997,7 @@ def get_vertices(
 
 
 def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
-    """Defines the faces of a cuboid based on its vertices.
+    """Define the faces of a cuboid based on its vertices.
 
     This function takes an array of vertices and returns a list that defines the faces of a
     cuboid to render as part of a 3D visualisation.
@@ -998,10 +1007,11 @@ def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
 
     Returns:
         list: list of lists where each inner list represents a face and contains the coords of the vertices for that face.
-    
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     return [
@@ -1017,7 +1027,7 @@ def get_faces(vertices: Annotated[NDArray[np.float64], Literal[..., 3]]):
 def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
     """Recalculate and sort search paths by the current MD threshold.
 
-    This function filters all raw search paths by the current MD threshold and sorts them 
+    This function filters all raw search paths by the current MD threshold and sorts them
     by their minimum distance to any tentative target.
 
     Args:
@@ -1027,6 +1037,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Preliminaries
@@ -1058,7 +1069,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
         try:
             artist.remove()
         except Exception:
-            pass 
+            logging.exception("Exception occured. Couldn't remove artist. Moved on to next one.")
     fig.prox_path_artists.clear()
 
     if not fig.prox_filtered_paths:
@@ -1094,12 +1105,12 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
             # Cubes
             if "o" not in block_kind:
                 if block_coords in taken:
-                    continue 
-                    
+                    continue
+
                 artists = render_block(
                     fig.ax, f"P-{i}", block_coords, size, block_kind, node_hex_map,
-                    edge_col=current_edge_col, 
-                    border_width=border_width, 
+                    edge_col=current_edge_col,
+                    border_width=border_width,
                     alpha=alpha,
                 )
                 if artists:
@@ -1113,8 +1124,8 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
                     v_coords = block_coords + ((np.array(u_coords) - np.array(block_coords)) * 2)
 
                 artists = render_pipe(
-                    fig.ax, u_coords, v_coords, block_kind, 
-                    edge_col=current_edge_col, 
+                    fig.ax, u_coords, v_coords, block_kind,
+                    edge_col=current_edge_col,
                     border_width=border_width,
                 )
                 if artists:
@@ -1128,7 +1139,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
 def _get_min_prox_distance(path_coords, tent_coords):
     """Calculate the minimum Manhattan Distance (MD) between a path and tentative targets.
 
-    This function iterates through all block coordinates in a path and all 
+    This function iterates through all block coordinates in a path and all
     tentative target coordinates to find the shortest MD between them.
 
     Args:
@@ -1140,7 +1151,8 @@ def _get_min_prox_distance(path_coords, tent_coords):
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
-        model: Gemini, 2.5 Flash.    
+        model: Gemini, 2.5 Flash.
+
     """
 
     # Return infinity if no targets defined
@@ -1151,7 +1163,7 @@ def _get_min_prox_distance(path_coords, tent_coords):
     # Calculate MD if targets defined
     for path_coord in path_coords:
         for target_coord in tent_coords:
-            dist = get_manhattan(path_coord, target_coord) 
+            dist = get_manhattan(path_coord, target_coord)
             min_dist = min(min_dist, dist)
 
     return min_dist
@@ -1161,18 +1173,19 @@ def _get_min_prox_distance(path_coords, tent_coords):
 #################
 def onpick_handler(e: matplotlib.backend_bases.PickEvent, ax: matplotlib.axes.Axes):
     """Handle click events on a visualisation to toggle associated labels/artists.
-    
-    Upon clicking a cube, this function looks up the cube ID and toggles the visibility of 
+
+    Upon clicking a cube, this function looks up the cube ID and toggles the visibility of
     its label and the 3D line pointing to it.
-    
+
     Args:
         e: The Matplotlib PickEvent object containing the clicked artist.
-        ax: The Matplotlib Axes object (specifically Axes3D in this context) 
+        ax: The Matplotlib Axes object (specifically Axes3D in this context)
             containing all the children artists.
-        
+
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Get event artist ID
@@ -1197,8 +1210,8 @@ def toggle_animation_handler(
     e: matplotlib.backend_bases.MouseEvent,
     fig: matplotlib.figure.Figure,
     btn_anim: matplotlib.widgets.Button,
-    persistent_green_artists: List[Dict[str, Any]],
-    update_func: Callable[[int], List[Any]],
+    persistent_green_artists: list[dict[str, Any]],
+    update_func: Callable[[int], list[Any]],
     num_frames: int,
     animation_interval_ms: int,
     num_paths: int,
@@ -1206,8 +1219,8 @@ def toggle_animation_handler(
 ) -> None:
     """Manage the state and replay of the search path animation.
 
-    Upon click, this function triggers and manages the sequence of visualisations that 
-    show all paths searched by the pathfinder. 
+    Upon click, this function triggers and manages the sequence of visualisations that
+    show all paths searched by the pathfinder.
 
     Args:
         e: The MouseEvent from the button click.
@@ -1223,35 +1236,36 @@ def toggle_animation_handler(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Hide pre-existent static paths
-    if fig.show_static_search_paths: 
+    if fig.show_static_search_paths:
         # Hide green paths
         for item in persistent_green_artists:
             if item:
                 # Assuming the artist is stored in item['artist']
-                item['artist'].set_alpha(0.0) 
-            
+                item['artist'].set_alpha(0.0)
+
         # Hide red paths (stored in fig state)
         for artist in fig.static_search_artists:
-            artist.remove() 
+            artist.remove()
         fig.static_search_artists = []
-        
+
         # Update state and button label
         fig.show_static_search_paths = False
         btn_anim.label.set_text('Replay Path Search')
-        
+
         # Redraw
         fig.canvas.draw_idle()
         return
 
     # Replay the animation
-    else:  
+    else:
         # Hide button before starting animation
-        btn_anim.ax.set_visible(False)   
+        btn_anim.ax.set_visible(False)
         btn_anim.label.set_visible(False)
-        
+
         # Clear paths (in case there was a prior failed animation or lingering paths)
         for item in persistent_green_artists:
             if item:
@@ -1259,12 +1273,12 @@ def toggle_animation_handler(
         for artist in fig.static_search_artists:
             # Check if artist is still visible before removing (robustness)
             if artist.axes:
-                artist.remove() 
+                artist.remove()
         fig.static_search_artists = []
-            
+
         # Create and start the animation
         anim = animation.FuncAnimation(
-            fig, 
+            fig,
             update_func, # Use the passed function
             frames=num_frames,
             interval=animation_interval_ms,
@@ -1279,11 +1293,11 @@ def toggle_animation_handler(
 
             # Manually execute the final frame logic
             update_func(num_paths) # Use the passed function and num_paths
-            
+
             # Update state flag and label
-            fig.show_static_search_paths = True 
+            fig.show_static_search_paths = True
             btn_anim.label.set_text('Hide Search Paths')
-            
+
             # Restore button visibility and activity
             btn_anim.ax.set_visible(True)
             btn_anim.label.set_visible(True)
@@ -1291,7 +1305,7 @@ def toggle_animation_handler(
             fig.canvas.draw_idle()
 
         # Set a timer to execute restore_button after animation completion
-        fig.canvas.manager.window.after(target_duration_ms + 250, restore_button)          
+        fig.canvas.manager.window.after(target_duration_ms + 250, restore_button)
         fig.canvas.draw_idle()
 
 
@@ -1310,12 +1324,13 @@ def toggle_winner_path_handler(e: matplotlib.backend_bases.MouseEvent, fig: matp
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
-    
+
     # Toggle the visibility state
     new_state: bool = not fig.show_winner_path
     fig.show_winner_path = new_state
-    
+
     # Toggle the visibility of all stored winner path artists
     for artist in fig.winner_path_artists:
         artist.set_visible(new_state)
@@ -1339,7 +1354,7 @@ def toggle_winner_path_handler(e: matplotlib.backend_bases.MouseEvent, fig: matp
 def toggle_beams_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib.figure.Figure, btn_beams: matplotlib.widgets.Button) -> None:
     """Toggle beams visibility in visualisation.
 
-    This function handles the show/hide functionality for the beams emanating 
+    This function handles the show/hide functionality for the beams emanating
     from any cube in the space-time diagram that still needs connections.
 
     Args:
@@ -1350,11 +1365,12 @@ def toggle_beams_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
     # Toggle the visibility state
     new_state: bool = not fig.show_beams
     fig.show_beams = new_state
-    
+
     # Toggle the visibility of all stored beam artists
     for artist in fig.beam_artists:
         artist.set_visible(new_state)
@@ -1370,7 +1386,7 @@ def toggle_targets_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotl
     """Toggle the visibility of the blocks marking tentative target coordinates.
 
     This function handles the show/hide functionality for the cubes used to denote valid tentative
-    positions and kinds for any new cube being added to space-time diagram. 
+    positions and kinds for any new cube being added to space-time diagram.
 
     Args:
         e: The MouseEvent from the button click.
@@ -1379,12 +1395,13 @@ def toggle_targets_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotl
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
-        model: Gemini, 2.5 Flash.
+        model: Gemini, 2.5 Flash
+
     """
     # Toggle the visibility state
     new_state: bool = not fig.show_tent_tgt_blocks
     fig.show_tent_tgt_blocks = new_state
-    
+
     # Toggle the visibility of all stored target artists
     for artist in fig.target_artists:
         artist.set_visible(new_state)
@@ -1416,11 +1433,13 @@ def toggle_valid_paths_handler(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
+
     # Toggle the visibility state
     new_state: bool = not fig.show_valid_paths
     fig.show_valid_paths = new_state
-    
+
     # Toggle the visibility of all stored valid path artists
     for artist in fig.valid_path_artists:
         artist.set_visible(new_state)
@@ -1433,7 +1452,7 @@ def toggle_valid_paths_handler(
             artist.set_visible(False)
         # Update the winner path button text to "Show Winner Path"
         btn_win.label.set_text('Show Winner Path')
-        
+
     # Update button text
     btn_valid.label.set_text('Hide Valid Paths' if new_state else 'Show Valid Paths')
 
@@ -1445,7 +1464,7 @@ def toggle_overlay_handler(
     e: matplotlib.backend_bases.MouseEvent,
     fig: matplotlib.figure.Figure,
     btn_overlay: matplotlib.widgets.Button,
-    btn_pos: List[float],
+    btn_pos: list[float],
 ) -> None:
     """Toggle the visibility of the ZX-graph overlay and dynamically update the button.
 
@@ -1458,17 +1477,18 @@ def toggle_overlay_handler(
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
     # Only proceed if the artist object exists
     if fig.overlay_image_artist is None:
         return
 
     # Extract button positioning info
-    BTN_W_MAX, BTN_W_MIN, BTN_BOTTOM, BTN_HEIGHT = btn_pos
+    btn_w_max, btn_w_min, btn_bottom, btn_height = btn_pos
 
     # Toggle the visibility state
     new_state: bool = not fig.show_overlay
-    fig.show_overlay = new_state 
+    fig.show_overlay = new_state
 
     # Toggle the alpha of the stored Image Artist
     new_alpha: float = 1.0 if new_state else 0.0
@@ -1476,14 +1496,14 @@ def toggle_overlay_handler(
 
     # Dynamic Resize, Reposition, and Text Update
     new_text: str = 'X' if new_state else 'Show Input ZX Graph'
-    new_width: float = BTN_W_MIN if new_state else BTN_W_MAX
-    
+    new_width: float = btn_w_min if new_state else btn_w_max
+
     # Keep the button flush right (align right edge to 1.0)
-    new_left: float = 1.0 - new_width 
+    new_left: float = 1.0 - new_width
 
     # Update the axis position and size
-    btn_overlay.ax.set_position([new_left, BTN_BOTTOM, new_width, BTN_HEIGHT])
-    
+    btn_overlay.ax.set_position([new_left, btn_bottom, new_width, btn_height])
+
     # Update button text
     btn_overlay.label.set_text(new_text)
 
@@ -1496,7 +1516,7 @@ def hide_overlay_handler(
     fig: matplotlib.figure.Figure,
     toggle_func: Callable[[matplotlib.backend_bases.MouseEvent, matplotlib.figure.Figure, matplotlib.widgets.Button, float, float, float, float], None],
     btn_overlay: matplotlib.widgets.Button,
-    btn_pos: List[float],
+    btn_pos: list[float],
 ) -> None:
     """Hide the overlay when the user clicks anywhere inside the overlay's plot area.
 
@@ -1509,11 +1529,12 @@ def hide_overlay_handler(
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
-        model: Gemini, 2.5 Flash.   
+        model: Gemini, 2.5 Flash.
+
     """
 
     # Extract positions
-    BTN_W_MAX, BTN_W_MIN, BTN_BOTTOM, BTN_HEIGHT = btn_pos
+    btn_w_max, btn_w_min, btn_bottom, btn_height = btn_pos
 
     # Check if the click happened inside the stored overlay axis bounds AND it's currently visible
     if hasattr(fig, 'ax_overlay') and e.inaxes == fig.ax_overlay and fig.show_overlay:
@@ -1522,18 +1543,15 @@ def hide_overlay_handler(
             e,
             fig,
             btn_overlay,
-            BTN_W_MAX,
-            BTN_W_MIN,
-            BTN_BOTTOM,
-            BTN_HEIGHT
+            [btn_w_max, btn_w_min, btn_bottom, btn_height]
         )
 
 
 def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
     """Toggles the display of proximate search paths.
-    
+
     This function toggles proximate paths on/off. A path is proximate
-    if any of its blocks is within `fig.prox_distance_threshold` 
+    if any of its blocks is within `fig.prox_distance_threshold`
     Manhattan Distance (MD) of any coordinate in `tent_coords`.
 
     Args:
@@ -1545,27 +1563,28 @@ def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Toggle to target mode
     fig.show_prox_paths = not fig.show_prox_paths
 
     # Show
-    if fig.show_prox_paths:    
+    if fig.show_prox_paths:
         if not tent_coords:
             print("Cannot show proximate paths: No tentative target coordinates found.")
             fig.show_prox_paths = False
             btn_prox.label.set_text("Prox Paths")
             fig.canvas.draw_idle()
             return
-            
+
         # Recalculate, filter, and sort all proximate paths based on current MD
         recalculate_and_sort_prox_paths(fig, tent_coords)
-        
+
         # Reset mode to 'ALL' and render the initial view
-        fig.prox_view_mode = 'ALL' 
+        fig.prox_view_mode = 'ALL'
         render_prox_paths_view(fig)
-        
+
         # Update Button Text
         count = len(fig.prox_filtered_paths)
         btn_prox.label.set_text(f"{count} Prox Paths @ MD {fig.prox_distance_threshold}")
@@ -1576,18 +1595,18 @@ def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
             try:
                 artist.remove()
             except Exception:
-                pass 
+                logging.exception("Exception occured. Couldn't remove artist. Moved on to next one.")
         fig.prox_path_artists.clear()
 
         # 2. Reset view mode and update button text
-        fig.prox_view_mode = 'ALL' 
+        fig.prox_view_mode = 'ALL'
         btn_prox.label.set_text('Prox Paths')
 
     fig.canvas.draw_idle()
 
 
 def keypress_handler(e, fig, btn_prox, tent_coords):
-    """Handles key presses for proximate paths view control.
+    """Handle key presses for proximate paths view control.
 
     This function handles key press actions for the proximate paths:
         - Up/down keys adjust the Manhattan Distance (MD) threshold.
@@ -1602,6 +1621,7 @@ def keypress_handler(e, fig, btn_prox, tent_coords):
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
         model: Gemini, 2.5 Flash.
+
     """
 
     # Only active when feature is ON
@@ -1634,7 +1654,7 @@ def keypress_handler(e, fig, btn_prox, tent_coords):
             return
 
         # Switch to SINGLE view mode if currently in 'ALL'
-        count = len(fig.prox_filtered_paths)        
+        count = len(fig.prox_filtered_paths)
         if fig.prox_view_mode == 'ALL':
             fig.prox_view_mode = 'SINGLE'
 

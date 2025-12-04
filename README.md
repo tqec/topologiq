@@ -1,4 +1,4 @@
-> NB!!! I have just merged a major folder re-structuring PR aimed at facilitating multiple contributors working in parallel across different aspects of Topologiq. I tested things, of course, and mmost things should work just fine. However, if something breaks, go back one merge and try again if you're looking to test Topologiq or open an Issue about and suggest a fix if you're looking to contribute. 
+> NB!!! There have been 3 recent major merges (folder restructuring, dependency clean-up, and Ruff) aimed at facilitating things for potential contributors. All seems to be running in order. However, if something does not work, go back a few merges and try again if you're looking to test Topologiq or open an Issue about and suggest a fix if you're looking to contribute.
 
 # Topologiq: Algorithmic Lattice Surgery
 **Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.

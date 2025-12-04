@@ -1,5 +1,4 @@
-"""
-Run Topologiq from the command line using pre-defined example circuits.
+"""Run Topologiq from the command line using pre-defined example circuits.
 
 Script looks for a PyZX graph if called using '--pyzx'
 or a native `simple_graph` if called using '--graph'.
@@ -19,25 +18,25 @@ Options:
     --hide_boundaries       Keep boundary nodes in graph but do not show corresponding cubes in visualisations.
     --log_stats             Log key performance metrics for the run.
     --debug                 Run in debug mode (enables verbose logging and more detailed visualisations).
-     
 
 Notes:
     If command uses '--graph', example circuit must exist in `./assets/graphs/simple_graphs.py`.
     If command uses '--pyzx', example circuit must exist in `./assets/graphs/pyzx_graphs.py`.
     MP4 animations require FFmpeg (the actual thing, not just the Python wrapper).
     Examples of how to run this file using combined options are available in the README.
+
 """
 
 import sys
-from typing import Tuple
+
 from matplotlib.figure import Figure
 
+from topologiq.assets import pyzx_graphs, simple_graphs
+from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
+from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.simple_grapher import simple_graph_vis
-from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS, LENGTH_OF_BEAMS
-from topologiq.utils.classes import SimpleDictGraph
-from topologiq.assets import simple_graphs, pyzx_graphs
 
 
 ####################
@@ -46,13 +45,13 @@ from topologiq.assets import simple_graphs, pyzx_graphs
 def run():
     """Execute command-line instruction to run Topologiq on a pre-defined circuit.
 
-    This function serves as main entry point for command-line operations. It relies 
+    This function serves as main entry point for command-line operations. It relies
     on arguments passed via the command-line and requires calling a pre-defined example
     circuit available from either `./assets/graphs/simple_graphs.py`
     or `./assets/graphs/pyzx_graphs.py`.
 
     Outputs:
-        The purpose of this function is to produce visualisations and file-based outputs. 
+        The purpose of this function is to produce visualisations and file-based outputs.
         Depending on the options given via the command line, the function will:
             * Save a TXT file with detailed information about the run.
             * (Optional) Pop up an interactive 3D viewer to examine process and/or outcome.
@@ -63,6 +62,7 @@ def run():
 
     Notes:
         To run Topologiq for programmatic use (i.e., call it from another script), see `./scripts/runner.py`.
+
     """
 
     # Misc options
@@ -71,7 +71,7 @@ def run():
         sys.exit(0)
 
     # Assemble kwargs
-    kwargs: dict[str, Tuple[int, int] | int] = {
+    kwargs: dict[str, tuple[int, int] | int] = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "length_of_beams": LENGTH_OF_BEAMS,
     }
