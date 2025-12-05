@@ -1,6 +1,13 @@
+"""Simple dictionary-based graph circuits to use in examples, demonstrations and testing.
+
+Usage:
+    Call any graph from a separate script.
+
+"""
+
 from topologiq.utils.classes import SimpleDictGraph
 
-
+# Steane code with minimal spider count
 steane: SimpleDictGraph = {
     "nodes": [
         (1, "X"),
@@ -38,6 +45,8 @@ steane: SimpleDictGraph = {
     ],
 }
 
+# Slightly obfuscated Steane code
+# +1 spider relative to minimal spider-count
 steane_obfs: SimpleDictGraph = {
     "nodes": [
         (1, "Z"),
@@ -76,6 +85,7 @@ steane_obfs: SimpleDictGraph = {
     ],
 }
 
+# Line of Hadamards
 hadamard_line: SimpleDictGraph = {
     "nodes": [
         (0, "Z"),
@@ -94,6 +104,7 @@ hadamard_line: SimpleDictGraph = {
     ],
 }
 
+# Y-shaped graph made of Hadamards
 hadamard_bend: SimpleDictGraph = {
     "nodes": [
         (0, "Z"),
@@ -112,6 +123,7 @@ hadamard_bend: SimpleDictGraph = {
     ],
 }
 
+# Steane-like encoding with several Hadamards
 hadamard_mess: SimpleDictGraph = {
     "nodes": [
         (1, "X"),
