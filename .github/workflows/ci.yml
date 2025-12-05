@@ -32,4 +32,4 @@ jobs:
 
       # Ruff using local deps
       - name: Ruff
-        run: uv run ruff format . --check --diff
+        run: uv run ruff check .
