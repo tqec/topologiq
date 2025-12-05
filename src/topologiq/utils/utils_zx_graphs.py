@@ -41,7 +41,7 @@ def check_zx_types(g: SimpleDictGraph) -> bool:
     """Check that all nodes in an incoming ZX graph have valid types.
 
     Args:
-        - g: ZX graph as a simple dictionary with nodes and edges.
+        g: ZX graph as a simple dictionary with nodes and edges.
 
     Returns:
         (bool): True if types are valid else False.
