@@ -1,11 +1,27 @@
+"""PyZX graphs to use in examples, demonstrations and testing.
+
+Usage:
+    Call any graph from a separate script.
+
+"""
+
 import matplotlib
+import matplotlib.figure
 import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
-from typing import Optional, Tuple, Union
-import matplotlib.figure
 
-def cnot(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
+
+def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Produce a PyZX graph corresponding to a CNOT.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        g: The PyZX graph corresponding to the requested circuit.
+
+    """
 
     c = zx.Circuit(2)
     c.add_gate("CNOT", 1, 0)
@@ -18,7 +34,16 @@ def cnot(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[m
     return g, fig
 
 
-def cnots(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
+def cnots(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Produce a PyZX graph corresponding to three CNOTs.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        g: The PyZX graph corresponding to the requested circuit.
+
+    """
 
     c = zx.Circuit(2)
     c.add_gate("CNOT", 0, 1)
@@ -34,7 +59,16 @@ def cnots(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[
     return g, fig
 
 
-def simple_mess(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Optional[matplotlib.figure.Figure]]:
+def simple_mess(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Produce a PyZX graph corresponding to a small CNOT-based circuit.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        g: The PyZX graph corresponding to the requested circuit.
+
+    """
 
     c = zx.Circuit(3)
     c.add_gate("CNOT", 1, 2)
@@ -45,7 +79,7 @@ def simple_mess(draw_graph: bool = False) -> Tuple[Union[BaseGraph, GraphS], Opt
     c.add_gate("CNOT", 0, 2)
 
     g = c.to_graph()
-    
+
     fig = None
     if draw_graph:
         fig = zx.draw(g, labels=True)
@@ -57,7 +91,18 @@ def random_graph(
     qubit_n: int,
     depth: int,
     draw_graph: bool = False
-) -> Tuple[Union[BaseGraph, GraphS] | None, matplotlib.figure.Figure] | None:
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Produce a random PyZX graph.
+
+    Args:
+        qubit_n: The number of qubit lines in the desired graph.
+        depth: The depth of the desired graph.
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        g: The PyZX graph corresponding to the requested circuit.
+
+    """
 
     # Generate inside loop to check graph integrity
     # PyZX sometimes generates graphs of disconnected subgraphs,
@@ -94,7 +139,7 @@ def random_graph(
             # Return if all IDs are present
             if draw_graph:
                 fig = zx.draw(g)
-            
+
             # Return graph and figure
             return g, fig
 
