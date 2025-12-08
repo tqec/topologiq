@@ -9,35 +9,42 @@ import random
 
 import networkx as nx
 
-from topologiq.utils.classes import NodeBeams, StandardBlock, StandardCoord
+from topologiq.utils.classes import StandardBlock, StandardCoord
 
 
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_first_id(nx_g: nx.Graph) -> int:
+def find_first_id(nx_g: nx.Graph, deterministic: bool = False) -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        deterministic (optional): Boolean flag to change between deterministic and probabilistic mode.
 
     Returns:
         first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
 
     """
 
-    # TERMINATE IF THERE ARE NO NODES
+    # Terminate if graph is empty
     if not nx_g.nodes:
         raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
 
-    # LOOP OVER NODES FINDING NODES WITH HIGHEST DEGREE
-    max_degree = -1
-    central_nodes: list[int] = []
+    # If deterministic mode is ON, first ID is ID of first non-boundary node.
+    if deterministic:
+        all_node_ids = sorted([node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"])
+        first_id = all_node_ids[0]
 
-    node_degrees = nx_g.degree
-    if isinstance(node_degrees, int):
-        raise ValueError("ERROR: nx_g.degree() returned int. Cannot determine first ID.")
+    # Otherwise, first ID chosen randomly from high-centrality nodes.
     else:
+        max_degree = -1
+        central_nodes: list[int] = []
+        node_degrees = nx_g.degree
+
+        if isinstance(node_degrees, int):
+            raise ValueError("ERROR: nx_g.degree() returned int. Cannot determine first ID.")
+
         for node, degree in node_degrees:
             if degree > max_degree:
                 max_degree = degree
@@ -45,10 +52,9 @@ def find_first_id(nx_g: nx.Graph) -> int:
             elif degree == max_degree:
                 central_nodes.append(node)
 
-    # PICK A HIGHEST DEGREE NODE
-    first_id: int = random.choice(central_nodes)
+        # PICK A HIGHEST DEGREE NODE
+        first_id: int = random.choice(central_nodes)
 
-    # RETURN FIRST NODE
     return first_id
 
 
@@ -86,12 +92,12 @@ def gen_tent_tgt_coords(
     """Generate a number of potential placement positions for target node.
 
     Args:
-        src_c: (x, y, z) coordinates for the originating block.
+        src_c: The (x, y, z) coordinates for the originating block.
         max_manhattan: Max. (Manhattan) distance between origin and target blocks.
-        taken: a list of coordinates already taken by previous operations.
+        taken: A list of coordinates already taken by previous operations.
 
     Returns:
-        tent_coords: a list of tentative target coordinates that make good candidates for placing the target block.
+        all_coords_at_distance: A list of tentative target coordinates that make good candidates for placing the target block.
 
     """
 
@@ -122,25 +128,7 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz + 3),
                 (dx, dy, dz - 3),
             ]
-
-            tent_coords[6].extend(
-                [
-                    t
-                    for t in tgts
-                    if all(
-                        [
-                            abs(t[0]) - abs(sx) != 6,
-                            abs(t[1]) - abs(sy) != 6,
-                            abs(t[2]) - abs(sz) != 6,
-                        ]
-                    )
-                    and sum(
-                        [abs(t[0]) - abs(sx), abs(t[1]) - abs(sy), abs(t[2]) - abs(sz)]
-                    )
-                    == 6
-                    and t not in taken
-                ]
-            )
+            tent_coords[6].extend([t for t in tgts if t not in taken and t != src_c])
 
     # MANHATTAN 9
     if max_manhattan > 6:
@@ -154,55 +142,23 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz + 3),
                 (dx, dy, dz - 3),
             ]
+            tent_coords[9].extend([t for t in tgts if t not in taken and t != src_c])
 
-            tent_coords[9].extend(
-                [
-                    t
-                    for t in tgts
-                    if all(
-                        [
-                            abs(t[0]) - abs(sx) != 9,
-                            abs(t[1]) - abs(sy) != 9,
-                            abs(t[2]) - abs(sz) != 9,
-                        ]
-                    )
-                    and sum(
-                        [abs(t[0]) - abs(sx), abs(t[1]) - abs(sy), abs(t[2]) - abs(sz)]
-                    )
-                    == 9
-                    and t not in taken
-                ]
-            )
-
-    # RETURN ALL COORDS WITHIN DISTANCE
-    return tent_coords[min(max_manhattan, 9)]
+    all_coords_at_distance = tent_coords[min(max_manhattan, 9)]
+    return all_coords_at_distance
 
 
-def prune_beams(
-    nx_g: nx.Graph, all_beams: list[NodeBeams], taken: list[StandardCoord]
-) -> tuple[nx.Graph, list[NodeBeams]]:
+def prune_beams(nx_g: nx.Graph, taken: list[StandardCoord]) -> nx.Graph:
     """Remove beams that have already been broken.
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph.
-        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+        taken: A list of coordinates taken by any blocks placed as a result of previous operations.
 
     Returns:
-        new_beams: list of beams without any beams where any of the coordinates in the path of the beam overlap with taken coords.
+        nx_g: Updated nx_graph with pruned beams.
 
     """
-
-    try:
-        new_beams = []
-        for beams in all_beams:
-            iter_beams = [
-                beam for beam in beams if all([coord not in taken for coord in beam])
-            ]
-            if iter_beams:
-                new_beams.append(iter_beams)
-    except (IndexError, ValueError, LookupError, KeyError):
-        new_beams = all_beams
 
     try:
         for n_id in nx_g.nodes():
@@ -216,26 +172,38 @@ def prune_beams(
                 if old_beams:
                     for beam in old_beams:
                         if all([(c not in taken) for c in beam]):
-                            new_beams.append(beam)
+                            new_beams += [beam]
 
                     nx_g.nodes[n_id]["beams"] = new_beams
     except (IndexError, ValueError, LookupError, KeyError):
         pass
 
-    return nx_g, new_beams
+    return nx_g
 
 
-def reindex_path_dict(edge_paths: dict) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
-    """Distil an edge_path object into a final list of nodes/blocks and edges/pipes for the space-time diagram.
+def reindex_path_dict(edge_paths: dict, fix_errors: bool = False) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
+    """Distil an edge_path object into a list of nodes/blocks and edges/pipes for the space-time diagram.
+
+    This function converts an edge_paths dictionary into a list of cubes and pipes in the final space-time diagram.
+    The function can be called during the process to output a temporary snapshot of progress, or at the end
+    to produce final results. If used to convert objects for visualisation, the `fix_errors` optional parameter
+    should be used to avoid indexing errors. However, using the `fix_errors` parameter in final outputs
+    might conceal errors one would want to see explicitly.
 
     Args:
-        edge_paths: a dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        edge_paths: A dictionary containing a number of edge paths, i.e., full paths between two blocks, each path made of 3D blocks and pipes.
+        fix_errors: When True, exclude any errors from edge_paths before processing.
 
     Returns:
-        lat_nodes: the nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
-        lat_edges: the edges/pipes of the resulting space-time diagram / lattice surgery (without redundant pipes)
+        lat_nodes: The nodes/blocks of the resulting space-time diagram / lattice surgery (without redundant blocks)
+        lat_edges: The edges/pipes of the resulting space-time diagram / lattice surgery (without redundant pipes)
 
     """
+
+    # Exclude any errors in edge_paths
+    if fix_errors is True:
+        new_edge_paths = {key: path_data for key, path_data in edge_paths.items() if isinstance(path_data["src_tgt_ids"], tuple)}
+        edge_paths = new_edge_paths
 
     max_id = 0
     idx_paths = {}
@@ -244,7 +212,6 @@ def reindex_path_dict(edge_paths: dict) -> tuple[dict[int, StandardBlock], dict[
     nxt_id = max_id + 1
 
     for path in edge_paths.values():
-
         idxd_path = {}
         key_1, key_2 = path["src_tgt_ids"]
         path_nodes = path["path_nodes"]

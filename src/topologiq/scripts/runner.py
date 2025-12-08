@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.figure
+from pyzx.graph.base import BaseGraph
+from pyzx.graph.graph_s import GraphS
 
 from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.graph_manager import graph_manager_bfs
@@ -21,6 +23,7 @@ from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 from topologiq.utils.grapher import vis_3d
 from topologiq.utils.grapher_common import lattice_to_g
+from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.utils_misc import write_outputs
 from topologiq.utils.utils_zx_graphs import break_single_spider_graph, strip_boundaries
 
@@ -232,3 +235,66 @@ def runner(
             print("Unable to delete temp files or temp folder does not exist", e)
 
     return simple_graph, edge_paths, lat_nodes, lat_edges
+
+
+def run_topologiq_standard_hyperparams(
+    zx_graph: SimpleDictGraph | BaseGraph | GraphS,
+    circuit_name: str = "circuit",
+    vis_options: tuple[None | str, None | str] = (None, None),
+    fig_data: matplotlib.figure.Figure | None = None,
+) -> tuple[
+    SimpleDictGraph,
+    None | dict,
+    None | dict[int, StandardBlock],
+    None | dict[tuple[int, int], list[str]],
+]:
+    """Run topologiq on an arbitrary ZX graph using standard hyperparameters.
+
+    This function is a wrapper for Topologiq's main runner. It takes a ZX graph give as either
+    a simple dictionary graph or a PyZX graph, converts it if needed, and then calls Topologiq's
+    main runner using standard hyperparameters. The function gives less flexibility that calling
+    the runner directly, but it's also less verbose to use in example notebooks and the like.
+
+    Args:
+        zx_graph: The input ZX graph given either as a simple graph or as PyZX graph.
+        circuit_name: The name of the ZX circuit.
+        vis_options (optional): Visualisation settings provided as a tuple.
+            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
+                (None): No visualisation.
+                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
+            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
+                (None): No animation.
+                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
+        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+
+    Returns:
+        simple_graph: The original `simple_graph` given to function (returned for ease of use and traceability).
+        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
+
+    """
+
+    # Convert incoming PyZX graph into a simple_graph
+    if isinstance(zx_graph, BaseGraph) or isinstance(zx_graph, GraphS):
+        simple_graph = pyzx_g_to_simple_g(zx_graph)
+    else:
+        simple_graph = zx_graph
+
+
+    # Force standard hyperparams
+    kwargs: dict[str, tuple[int, int] | int] = {
+        "weights": VALUE_FUNCTION_HYPERPARAMS,
+        "length_of_beams": LENGTH_OF_BEAMS,
+    }
+
+    # Run Topolgiq
+    simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges = runner(
+        simple_graph,
+        circuit_name,
+        vis_options=vis_options,
+        fig_data=fig_data,
+        **kwargs
+    )
+
+    return simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges

@@ -43,6 +43,7 @@ dependencies = [
     "numpy>=2.2.6,<2.4",
     "pandas>=2.0,<2.4",
     "pillow>=11.2.1",
+    "pip>=25.3",
     "pywin32==311 ; sys_platform == 'win32'",
     "pyzx==0.9.0",
     "qiskit==2.1.2",
@@ -60,11 +61,17 @@ Issues = "https://github.com/jbolns/topologiq/issues"
 [dependency-groups]
 dev = [
     "deptry>=0.24.0",
-    "ruff==0.14.7",  # Fixed to ensure all contributors adhere to same exact rules. 
+    "notebook>=7.5.0",
+    "ruff==0.14.7", # Ensures all contributors adhere to exact same rules.
+]
+
+integration = [
+    "tqec>=0.1.0",
 ]
 
 all = [
-  { include-group = "dev" }
+  { include-group = "dev" },
+  { include-group = "integration" }
 ]
 
 
