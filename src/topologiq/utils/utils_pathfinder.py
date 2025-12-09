@@ -220,8 +220,8 @@ def check_exits(
             node_beams = nx_g.nodes[node_id]["beams"]
             if node_beams != [] and node_beams is not None:
                 for beam in node_beams:
-                    if not any([coord in coords_in_path for coord in beam]):
-                        if any([(coord in target_node_beam) for coord in beam]):
+                    if not any([coord in coords_in_path for coord in beam[:9]]):
+                        if any([(coord in target_node_beam[:9]) for coord in beam]):
                             delete_beams.extend([i])
     delete_idxs = list(set(delete_beams))
     if n_beams and delete_idxs:

@@ -137,7 +137,7 @@ def runner(
         if log_stats:
             unique_run_id = t1_inner.strftime("%Y%m%d_%H%M%S_%f")
         else:
-            print(".")
+            print(f"\nCircuit name: {circuit_name}. Attempt #{i}.")
 
         # Call algorithm
         edge_paths = None

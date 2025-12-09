@@ -795,7 +795,7 @@ def place_nxt_block(
 
             # Explicit warning if log_stats or debug are enabled
             if log_stats_id or debug > 0:
-                print(f"ERROR. New path creation: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms).")
+                print(f"{'ERROR' if init_step > 6 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms). -> Increasing search distance")
 
             # Fill edge_paths with error
             edge = tuple(sorted((src_id, tgt_id)))

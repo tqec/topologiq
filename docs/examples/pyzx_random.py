@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # Topologiq generation parameters
     vis_options = ("final", None)
     stop_on_first_success = True
-    log_stats = True
+    log_stats = False
     debug = 1
 
     # Parameters for random generation of input graph
