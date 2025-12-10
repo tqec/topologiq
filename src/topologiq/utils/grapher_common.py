@@ -61,6 +61,7 @@ node_hex_map = {
     "beam": ["yellow"],
 }
 
+
 ###################
 # TRANSFORMATIONS #
 ###################
@@ -87,7 +88,6 @@ def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, list[StandardBlock]])
 
     # Iterate over `edge_paths` extracting objects
     for path_data in edge_paths.values():
-
         # Preliminaries
         primary_blocks_and_edges = []
         path_blocks = path_data
@@ -129,13 +129,8 @@ def edge_paths_to_nx_graph(edge_paths: dict[StandardBlock, list[StandardBlock]])
                 ) and 0 <= next_index_path < len(primary_blocks_and_edges):
                     prev_cube_index = primary_blocks_and_edges[prev_index_path][0]
                     next_cube_index = primary_blocks_and_edges[next_index_path][0]
-                    if (
-                        prev_cube_index in nx_graph
-                        and next_cube_index in nx_graph
-                    ):
-                        nx_graph.add_edge(
-                            prev_cube_index, next_cube_index, pipe_type=pipe_kind
-                        )
+                    if prev_cube_index in nx_graph and next_cube_index in nx_graph:
+                        nx_graph.add_edge(prev_cube_index, next_cube_index, pipe_type=pipe_kind)
 
     return nx_graph
 
@@ -358,7 +353,9 @@ def figure_to_png(
             new_circle = mpatches.Circle(
                 (new_x, new_y),
                 props["radius"],
-                facecolor=props["facecolor"] if props["facecolor"] != (0.8, 1.0, 0.8, 1.0) else "#b9cdff",
+                facecolor=props["facecolor"]
+                if props["facecolor"] != (0.8, 1.0, 0.8, 1.0)
+                else "#b9cdff",
                 edgecolor=props["edgecolor"],
                 transform=new_ax.transData,
                 zorder=1,
@@ -518,6 +515,7 @@ def figure_to_png(
 
     return png
 
+
 #####################
 # PRIMARY RENDERERS #
 #####################
@@ -581,7 +579,6 @@ def render_block(
 
     # Attach labels if node has ID
     if node_id != "TBD":
-
         diffs = [
             (2, 0, 0),
             (0, 0, 2),
@@ -599,8 +596,7 @@ def render_block(
             )
 
             if (
-                check_is_exit(coords, node_type, label_pos) is not True
-                or node_type == "ooo"
+                check_is_exit(coords, node_type, label_pos) is not True or node_type == "ooo"
             ) and label_pos not in taken:
                 ax.text(
                     label_pos[0],
@@ -634,13 +630,13 @@ def render_block(
 
 
 def render_pipe(
-        ax: matplotlib.axes.Axes,
-        u_coords: StandardCoord,
-        v_coords: StandardCoord,
-        block_kind: str,
-        edge_col: str = "black",
-        border_width: float = 0.5,
-        alpha: float = 1.0
+    ax: matplotlib.axes.Axes,
+    u_coords: StandardCoord,
+    v_coords: StandardCoord,
+    block_kind: str,
+    edge_col: str = "black",
+    border_width: float = 0.5,
+    alpha: float = 1.0,
 ) -> list[Poly3DCollection]:
     """Add a pipe to the Matplotlib ax.
 
@@ -700,7 +696,6 @@ def render_pipe(
 
         # Hadamard pipes
         elif "h" in block_kind:
-
             # Break into three sections
             #   2 * coloured ends
             #   1 * middle yellow ring
@@ -720,12 +715,8 @@ def render_pipe(
                 offset1 = np.zeros(3)
                 offset3 = np.zeros(3)
 
-                offset1[orientation] = -(
-                    yellow_length / 2 + colored_length / 2
-                )
-                offset3[orientation] = (
-                    yellow_length / 2 + colored_length / 2
-                )
+                offset1[orientation] = -(yellow_length / 2 + colored_length / 2)
+                offset3[orientation] = yellow_length / 2 + colored_length / 2
 
                 centre1 = midpoint + offset1
                 centre2 = midpoint
@@ -889,23 +880,23 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
 
     # Determine which paths to render
     alpha = 1
-    if fig.prox_view_mode == 'ALL':
+    if fig.prox_view_mode == "ALL":
         paths_to_render = fig.prox_filtered_paths
         current_edge_col = edge_col
-    elif fig.prox_view_mode == 'SINGLE':
+    elif fig.prox_view_mode == "SINGLE":
         # Use modulo for safe looping through the index
         idx = fig.prox_current_index % len(fig.prox_filtered_paths)
         paths_to_render = [fig.prox_filtered_paths[idx]]
-        current_edge_col = 'cyan' # Use a distinct color for the focused path
+        current_edge_col = "cyan"  # Use a distinct color for the focused path
     else:
         paths_to_render = []
         current_edge_col = edge_col
 
     # Rendering loop
     size = [1.0, 1.0, 1.0]
-    taken = getattr(fig, 'taken', [])
+    taken = getattr(fig, "taken", [])
     for path_data in paths_to_render:
-        full_path = path_data['full_path']
+        full_path = path_data["full_path"]
         block_artists = []
 
         # Render Blocks and Pipes
@@ -930,9 +921,9 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
                     block_artists.extend(artists)
             # Pipes
             else:
-                u_coords = full_path[i-1][0]
+                u_coords = full_path[i - 1][0]
                 try:
-                    v_coords = full_path[i+1][0]
+                    v_coords = full_path[i + 1][0]
                 except Exception as _:
                     v_coords = block_coords + ((np.array(u_coords) - np.array(block_coords)) * 2)
 
@@ -950,6 +941,7 @@ def render_prox_paths_view(fig, edge_col="white", border_width=3):
         fig.prox_path_artists.extend(block_artists)
 
     fig.canvas.draw_idle()
+
 
 #################
 # AUXILIARY OPS #
@@ -1046,7 +1038,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
 
     # Get Manhattan distances for all search paths
     for path_data in fig.all_search_paths_raw:
-        path_coords = path_data['coords']
+        path_coords = path_data["coords"]
 
         min_dist = _get_min_prox_distance(path_coords, tent_coords)
 
@@ -1062,7 +1054,7 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
 
     # Reset view index and mode
     fig.prox_current_index = 0
-    fig.prox_view_mode = 'ALL'
+    fig.prox_view_mode = "ALL"
 
     # Clear previous artists
     for artist in fig.prox_path_artists:
@@ -1079,24 +1071,24 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
     # Render
     edge_col = "black"
     alpha = 1
-    if fig.prox_view_mode == 'ALL':
+    if fig.prox_view_mode == "ALL":
         paths_to_render = fig.prox_filtered_paths
         current_edge_col = edge_col
-    elif fig.prox_view_mode == 'SINGLE':
+    elif fig.prox_view_mode == "SINGLE":
         # Use modulo for safe looping through the index
         idx = fig.prox_current_index % len(fig.prox_filtered_paths)
         paths_to_render = [fig.prox_filtered_paths[idx]]
-        current_edge_col = 'cyan' # Use a distinct color for the focused path
+        current_edge_col = "cyan"  # Use a distinct color for the focused path
     else:
         paths_to_render = []
         current_edge_col = edge_col
 
     # Rendering loop
     size = [1.0, 1.0, 1.0]
-    taken = getattr(fig, 'taken', [])
+    taken = getattr(fig, "taken", [])
 
     for path_data in paths_to_render:
-        full_path = path_data['full_path']
+        full_path = path_data["full_path"]
         block_artists = []
 
         # Render Blocks and Pipes
@@ -1108,7 +1100,12 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
                     continue
 
                 artists = render_block(
-                    fig.ax, f"P-{i}", block_coords, size, block_kind, node_hex_map,
+                    fig.ax,
+                    f"P-{i}",
+                    block_coords,
+                    size,
+                    block_kind,
+                    node_hex_map,
                     edge_col=current_edge_col,
                     border_width=border_width,
                     alpha=alpha,
@@ -1117,14 +1114,17 @@ def recalculate_and_sort_prox_paths(fig: matplotlib.figure.Figure, tent_coords):
                     block_artists.extend(artists)
             # Pipes
             else:
-                u_coords = full_path[i-1][0]
+                u_coords = full_path[i - 1][0]
                 try:
-                    v_coords = full_path[i+1][0]
+                    v_coords = full_path[i + 1][0]
                 except Exception as _:
                     v_coords = block_coords + ((np.array(u_coords) - np.array(block_coords)) * 2)
 
                 artists = render_pipe(
-                    fig.ax, u_coords, v_coords, block_kind,
+                    fig.ax,
+                    u_coords,
+                    v_coords,
+                    block_kind,
                     edge_col=current_edge_col,
                     border_width=border_width,
                 )
@@ -1156,7 +1156,7 @@ def _get_min_prox_distance(path_coords, tent_coords):
     """
 
     # Return infinity if no targets defined
-    min_dist = float('inf')
+    min_dist = float("inf")
     if not tent_coords:
         return min_dist
 
@@ -1167,6 +1167,7 @@ def _get_min_prox_distance(path_coords, tent_coords):
             min_dist = min(min_dist, dist)
 
     return min_dist
+
 
 ##################
 # EVENT HANDLERS #
@@ -1245,7 +1246,7 @@ def toggle_animation_handler(
         for item in persistent_green_artists:
             if item:
                 # Assuming the artist is stored in item['artist']
-                item['artist'].set_alpha(0.0)
+                item["artist"].set_alpha(0.0)
 
         # Hide red paths (stored in fig state)
         for artist in fig.static_search_artists:
@@ -1254,7 +1255,7 @@ def toggle_animation_handler(
 
         # Update state and button label
         fig.show_static_search_paths = False
-        btn_anim.label.set_text('Replay Path Search')
+        btn_anim.label.set_text("Replay Path Search")
 
         # Redraw
         fig.canvas.draw_idle()
@@ -1269,7 +1270,7 @@ def toggle_animation_handler(
         # Clear paths (in case there was a prior failed animation or lingering paths)
         for item in persistent_green_artists:
             if item:
-                item['artist'].set_alpha(0.0)
+                item["artist"].set_alpha(0.0)
         for artist in fig.static_search_artists:
             # Check if artist is still visible before removing (robustness)
             if artist.axes:
@@ -1279,24 +1280,23 @@ def toggle_animation_handler(
         # Create and start the animation
         anim = animation.FuncAnimation(
             fig,
-            update_func, # Use the passed function
+            update_func,  # Use the passed function
             frames=num_frames,
             interval=animation_interval_ms,
             blit=True,
             repeat=False,
-            init_func=lambda: []
+            init_func=lambda: [],
         )
         fig.animation_handle = anim
 
         # Handle completion to ensure paths are drawn and button returns
         def restore_button():
-
             # Manually execute the final frame logic
-            update_func(num_paths) # Use the passed function and num_paths
+            update_func(num_paths)  # Use the passed function and num_paths
 
             # Update state flag and label
             fig.show_static_search_paths = True
-            btn_anim.label.set_text('Hide Search Paths')
+            btn_anim.label.set_text("Hide Search Paths")
 
             # Restore button visibility and activity
             btn_anim.ax.set_visible(True)
@@ -1309,7 +1309,12 @@ def toggle_animation_handler(
         fig.canvas.draw_idle()
 
 
-def toggle_winner_path_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib.figure.Figure, btn_win: matplotlib.widgets.Button, btn_valid: matplotlib.widgets.Button) -> None:
+def toggle_winner_path_handler(
+    e: matplotlib.backend_bases.MouseEvent,
+    fig: matplotlib.figure.Figure,
+    btn_win: matplotlib.widgets.Button,
+    btn_valid: matplotlib.widgets.Button,
+) -> None:
     """Toggle the visibility of the optimal winner path.
 
     This function handles the show/hide functionality for the winner path
@@ -1342,16 +1347,20 @@ def toggle_winner_path_handler(e: matplotlib.backend_bases.MouseEvent, fig: matp
         for artist in fig.valid_path_artists:
             artist.set_visible(False)
         # Update the valid path button text to "Show Valid Paths"
-        btn_valid.label.set_text('Show Valid Paths')
+        btn_valid.label.set_text("Show Valid Paths")
 
     # Update button text
-    btn_win.label.set_text('Hide Winner Path' if new_state else 'Show Winner Path')
+    btn_win.label.set_text("Hide Winner Path" if new_state else "Show Winner Path")
 
     # Force a redraw
     fig.canvas.draw_idle()
 
 
-def toggle_beams_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib.figure.Figure, btn_beams: matplotlib.widgets.Button) -> None:
+def toggle_beams_handler(
+    e: matplotlib.backend_bases.MouseEvent,
+    fig: matplotlib.figure.Figure,
+    btn_beams: matplotlib.widgets.Button,
+) -> None:
     """Toggle beams visibility in visualisation.
 
     This function handles the show/hide functionality for the beams emanating
@@ -1376,13 +1385,17 @@ def toggle_beams_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib
         artist.set_visible(new_state)
 
     # Update button text
-    btn_beams.label.set_text('Hide Beams' if new_state else 'Show Beams')
+    btn_beams.label.set_text("Hide Beams" if new_state else "Show Beams")
 
     # Force a redraw
     fig.canvas.draw_idle()
 
 
-def toggle_targets_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotlib.figure.Figure, btn_tgt: matplotlib.widgets.Button) -> None:
+def toggle_targets_handler(
+    e: matplotlib.backend_bases.MouseEvent,
+    fig: matplotlib.figure.Figure,
+    btn_tgt: matplotlib.widgets.Button,
+) -> None:
     """Toggle the visibility of the blocks marking tentative target coordinates.
 
     This function handles the show/hide functionality for the cubes used to denote valid tentative
@@ -1407,7 +1420,7 @@ def toggle_targets_handler(e: matplotlib.backend_bases.MouseEvent, fig: matplotl
         artist.set_visible(new_state)
 
     # Update button text
-    btn_tgt.label.set_text('Hide Targets' if new_state else 'Show Targets')
+    btn_tgt.label.set_text("Hide Targets" if new_state else "Show Targets")
 
     # Force a redraw
     fig.canvas.draw_idle()
@@ -1417,7 +1430,7 @@ def toggle_valid_paths_handler(
     e: matplotlib.backend_bases.MouseEvent,
     fig: matplotlib.figure.Figure,
     btn_valid: matplotlib.widgets.Button,
-    btn_win: matplotlib.widgets.Button
+    btn_win: matplotlib.widgets.Button,
 ) -> None:
     """Toggle the visibility of all valid paths.
 
@@ -1451,10 +1464,10 @@ def toggle_valid_paths_handler(
         for artist in fig.winner_path_artists:
             artist.set_visible(False)
         # Update the winner path button text to "Show Winner Path"
-        btn_win.label.set_text('Show Winner Path')
+        btn_win.label.set_text("Show Winner Path")
 
     # Update button text
-    btn_valid.label.set_text('Hide Valid Paths' if new_state else 'Show Valid Paths')
+    btn_valid.label.set_text("Hide Valid Paths" if new_state else "Show Valid Paths")
 
     # Force a redraw
     fig.canvas.draw_idle()
@@ -1495,7 +1508,7 @@ def toggle_overlay_handler(
     fig.overlay_image_artist.set_alpha(new_alpha)
 
     # Dynamic Resize, Reposition, and Text Update
-    new_text: str = 'X' if new_state else 'Show Input ZX Graph'
+    new_text: str = "X" if new_state else "Show Input ZX Graph"
     new_width: float = btn_w_min if new_state else btn_w_max
 
     # Keep the button flush right (align right edge to 1.0)
@@ -1514,7 +1527,18 @@ def toggle_overlay_handler(
 def hide_overlay_handler(
     e: matplotlib.backend_bases.MouseEvent,
     fig: matplotlib.figure.Figure,
-    toggle_func: Callable[[matplotlib.backend_bases.MouseEvent, matplotlib.figure.Figure, matplotlib.widgets.Button, float, float, float, float], None],
+    toggle_func: Callable[
+        [
+            matplotlib.backend_bases.MouseEvent,
+            matplotlib.figure.Figure,
+            matplotlib.widgets.Button,
+            float,
+            float,
+            float,
+            float,
+        ],
+        None,
+    ],
     btn_overlay: matplotlib.widgets.Button,
     btn_pos: list[float],
 ) -> None:
@@ -1537,14 +1561,9 @@ def hide_overlay_handler(
     btn_w_max, btn_w_min, btn_bottom, btn_height = btn_pos
 
     # Check if the click happened inside the stored overlay axis bounds AND it's currently visible
-    if hasattr(fig, 'ax_overlay') and e.inaxes == fig.ax_overlay and fig.show_overlay:
+    if hasattr(fig, "ax_overlay") and e.inaxes == fig.ax_overlay and fig.show_overlay:
         # Call the external toggle logic to hide it, passing all required arguments
-        toggle_func(
-            e,
-            fig,
-            btn_overlay,
-            [btn_w_max, btn_w_min, btn_bottom, btn_height]
-        )
+        toggle_func(e, fig, btn_overlay, [btn_w_max, btn_w_min, btn_bottom, btn_height])
 
 
 def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
@@ -1582,7 +1601,7 @@ def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
         recalculate_and_sort_prox_paths(fig, tent_coords)
 
         # Reset mode to 'ALL' and render the initial view
-        fig.prox_view_mode = 'ALL'
+        fig.prox_view_mode = "ALL"
         render_prox_paths_view(fig)
 
         # Update Button Text
@@ -1595,12 +1614,14 @@ def toggle_prox_paths_handler(e, fig, btn_prox, tent_coords):
             try:
                 artist.remove()
             except Exception:
-                logging.exception("Exception occured. Couldn't remove artist. Moved on to next one.")
+                logging.exception(
+                    "Exception occured. Couldn't remove artist. Moved on to next one."
+                )
         fig.prox_path_artists.clear()
 
         # 2. Reset view mode and update button text
-        fig.prox_view_mode = 'ALL'
-        btn_prox.label.set_text('Prox Paths')
+        fig.prox_view_mode = "ALL"
+        btn_prox.label.set_text("Prox Paths")
 
     fig.canvas.draw_idle()
 
@@ -1629,16 +1650,15 @@ def keypress_handler(e, fig, btn_prox, tent_coords):
         return
 
     # Handle MD Threshold Change (Up/down)
-    if e.key in ['up', 'down']:
+    if e.key in ["up", "down"]:
         old_md = fig.prox_distance_threshold
-        if e.key == 'up':
-            fig.prox_distance_threshold = min(100, old_md + 1) # Max 100
-        elif e.key == 'down':
+        if e.key == "up":
+            fig.prox_distance_threshold = min(100, old_md + 1)  # Max 100
+        elif e.key == "down":
             fig.prox_distance_threshold = max(1, old_md - 1)  # Min 1
 
         # Recalculate, sort, and reset view to 'ALL'
         if fig.prox_distance_threshold != old_md:
-
             recalculate_and_sort_prox_paths(fig, tent_coords)
             render_prox_paths_view(fig)
 
@@ -1647,28 +1667,27 @@ def keypress_handler(e, fig, btn_prox, tent_coords):
             btn_prox.label.set_text(f"{count} Prox Paths @ MD: {fig.prox_distance_threshold}")
 
     # Handle Path Cycling (Left/right)
-    elif e.key in ['left', 'right']:
-
+    elif e.key in ["left", "right"]:
         # Pass if no proximate paths
         if not fig.prox_filtered_paths:
             return
 
         # Switch to SINGLE view mode if currently in 'ALL'
         count = len(fig.prox_filtered_paths)
-        if fig.prox_view_mode == 'ALL':
-            fig.prox_view_mode = 'SINGLE'
+        if fig.prox_view_mode == "ALL":
+            fig.prox_view_mode = "SINGLE"
 
         # Calculate new index
         current_idx = fig.prox_current_index
-        if e.key == 'right':
+        if e.key == "right":
             fig.prox_current_index = (current_idx + 1) % count
-        elif e.key == 'left':
+        elif e.key == "left":
             fig.prox_current_index = (current_idx - 1 + count) % count
 
         # Render the single path and update the button label
         render_prox_paths_view(fig)
         current_path = fig.prox_filtered_paths[fig.prox_current_index]
-        min_dist = _get_min_prox_distance(current_path['coords'], tent_coords)
+        min_dist = _get_min_prox_distance(current_path["coords"], tent_coords)
 
         # Update button
         btn_prox.label.set_text(f"Path {fig.prox_current_index + 1}/{count} @ MD: {min_dist}")

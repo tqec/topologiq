@@ -96,12 +96,24 @@ def write_outputs(
     lines.append("\n")
     lines.extend([f"Edge ID: {edge[0]}. Type: {edge[1]}\n" for edge in simple_graph["edges"]])
 
-    lines.append('\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n')
-    lines.extend([f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n" for key, edge_path in edge_paths.items()])
+    lines.append(
+        '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
+    )
+    lines.extend(
+        [
+            f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
+            for key, edge_path in edge_paths.items()
+        ]
+    )
 
     lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
     lines.extend([f"Node ID: {key}. Info: {node}\n" for key, node in lat_nodes.items()])
-    lines.extend([f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n" for key, edge_info in lat_edges.items()])
+    lines.extend(
+        [
+            f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
+            for key, edge_info in lat_edges.items()
+        ]
+    )
 
     with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
         f.writelines(lines)
@@ -167,7 +179,6 @@ def prep_stats_n_log(
 
     # Fill arrays as determined by the `stats_type`
     if "graph_manager" in stats_type:
-
         total_cubes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
         total_pipes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
         volume = len([True for _, kind in lat_nodes.values() if kind != "ooo"]) if lat_nodes else 0
@@ -193,21 +204,39 @@ def prep_stats_n_log(
         ]
 
         try:
-            edge_paths_summary = [
-                {
-                    p["src_tgt_ids"][0] if p["src_tgt_ids"] != "error" else key[0]: p["path_nodes"][0][1] if (p["path_nodes"] != "error" and p["path_nodes"][0][1]) else None,
-                    p["src_tgt_ids"][1] if p["src_tgt_ids"] != "error" else key[1]: p["path_nodes"][-1][1] if (p["path_nodes"] != "error"  and p["path_nodes"][-1][1]) else None,
-                }
-                for key, p in edge_paths.items()] if edge_paths else ["error"]
+            edge_paths_summary = (
+                [
+                    {
+                        p["src_tgt_ids"][0] if p["src_tgt_ids"] != "error" else key[0]: p[
+                            "path_nodes"
+                        ][0][1]
+                        if (p["path_nodes"] != "error" and p["path_nodes"][0][1])
+                        else None,
+                        p["src_tgt_ids"][1] if p["src_tgt_ids"] != "error" else key[1]: p[
+                            "path_nodes"
+                        ][-1][1]
+                        if (p["path_nodes"] != "error" and p["path_nodes"][-1][1])
+                        else None,
+                    }
+                    for key, p in edge_paths.items()
+                ]
+                if edge_paths
+                else ["error"]
+            )
 
         except Exception as e:
             print(f"Minor error with logging of aux stats: {e}.")
-            edge_paths_summary = [
-                {
-                    src_id: None,
-                    tgt_id: None,
-                }
-                for [src_id, tgt_id] in edge_paths.keys()] if edge_paths else ["error"]
+            edge_paths_summary = (
+                [
+                    {
+                        src_id: None,
+                        tgt_id: None,
+                    }
+                    for [src_id, tgt_id] in edge_paths.keys()
+                ]
+                if edge_paths
+                else ["error"]
+            )
 
         aux_stats = [
             log_stats_id,
@@ -224,14 +253,22 @@ def prep_stats_n_log(
         )
 
         if op_success is not True or run_params["weights"] != (-1, -1):
-
             repo_root: Path = Path(__file__).resolve().parent.parent
             stats_dir_path = repo_root / "assets/stats"
-            path_to_debug_file = stats_dir_path / f"debug{'_tests' if log_stats_id.endswith('*') else ''}.csv"
+            path_to_debug_file = (
+                stats_dir_path / f"debug{'_tests' if log_stats_id.endswith('*') else ''}.csv"
+            )
 
             if path_to_debug_file.is_file():
                 debug_cases = list(set(get_debug_cases(path_to_debug_file)))
-                new_case_info = tuple([circuit_name, list(aux_stats[4][0].keys())[0], list(aux_stats[4][0].values())[0], *list(run_params.values())])
+                new_case_info = tuple(
+                    [
+                        circuit_name,
+                        list(aux_stats[4][0].keys())[0],
+                        list(aux_stats[4][0].values())[0],
+                        *list(run_params.values()),
+                    ]
+                )
             if not path_to_debug_file.is_file() or (new_case_info not in debug_cases):
                 log_stats(
                     aux_stats,
@@ -267,9 +304,7 @@ def prep_stats_n_log(
         main_stats,
         f"{stats_type}{'_tests' if log_stats_id.endswith('*') else ''}",
         opt_header=(
-            HEADER_BFS_MANAGER_STATS
-            if "graph_manager" in stats_type
-            else HEADER_PATHFINDER_STATS
+            HEADER_BFS_MANAGER_STATS if "graph_manager" in stats_type else HEADER_PATHFINDER_STATS
         ),
     )
 
@@ -319,7 +354,7 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     debug_cases_full = []
     try:
         with open(path_to_stats) as f:
-            entries = list(csv.reader(f, delimiter=';'))[1:]
+            entries = list(csv.reader(f, delimiter=";"))[1:]
             debug_cases_full.extend(entry for entry in entries)
         f.close()
     except FileNotFoundError:
@@ -333,6 +368,8 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
         circuit_name = case[2]
         min_success_rate, weights, len_of_beams = literal_eval(case[3]).values()
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
-        debug_cases.append((circuit_name, first_id, first_kind, min_success_rate, weights, len_of_beams))
+        debug_cases.append(
+            (circuit_name, first_id, first_kind, min_success_rate, weights, len_of_beams)
+        )
 
     return debug_cases

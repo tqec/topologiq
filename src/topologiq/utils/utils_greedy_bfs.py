@@ -33,7 +33,9 @@ def find_first_id(nx_g: nx.Graph, deterministic: bool = False) -> int:
 
     # If deterministic mode is ON, first ID is ID of first non-boundary node.
     if deterministic:
-        all_node_ids = sorted([node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"])
+        all_node_ids = sorted(
+            [node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"]
+        )
         first_id = all_node_ids[0]
 
     # Otherwise, first ID chosen randomly from high-centrality nodes.
@@ -181,7 +183,9 @@ def prune_beams(nx_g: nx.Graph, taken: list[StandardCoord]) -> nx.Graph:
     return nx_g
 
 
-def reindex_path_dict(edge_paths: dict, fix_errors: bool = False) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
+def reindex_path_dict(
+    edge_paths: dict, fix_errors: bool = False
+) -> tuple[dict[int, StandardBlock], dict[tuple[int, int], list[str]]]:
     """Distil an edge_path object into a list of nodes/blocks and edges/pipes for the space-time diagram.
 
     This function converts an edge_paths dictionary into a list of cubes and pipes in the final space-time diagram.
@@ -202,7 +206,11 @@ def reindex_path_dict(edge_paths: dict, fix_errors: bool = False) -> tuple[dict[
 
     # Exclude any errors in edge_paths
     if fix_errors is True:
-        new_edge_paths = {key: path_data for key, path_data in edge_paths.items() if isinstance(path_data["src_tgt_ids"], tuple)}
+        new_edge_paths = {
+            key: path_data
+            for key, path_data in edge_paths.items()
+            if isinstance(path_data["src_tgt_ids"], tuple)
+        }
         edge_paths = new_edge_paths
 
     max_id = 0

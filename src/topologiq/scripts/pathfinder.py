@@ -46,13 +46,17 @@ def pathfinder(
     hdm: bool = False,
     min_succ_rate: int = 60,
     critical_beams: dict[int, tuple[int, NodeBeams]] = {},
-    src_tgt_ids: tuple[int,int] | None = None,
+    src_tgt_ids: tuple[int, int] | None = None,
     log_stats_id: str | None = None,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
-    tuple[list[StandardCoord], list[str],
-    dict[StandardBlock, list[StandardBlock]] | None,
-    dict[StandardBlock, list[StandardBlock]]] | None,
+    tuple[
+        list[StandardCoord],
+        list[str],
+        dict[StandardBlock, list[StandardBlock]] | None,
+        dict[StandardBlock, list[StandardBlock]],
+    ]
+    | None,
 ]:
     """Call core pathfinder after generating list of possible kinds for the given operation.
 
@@ -108,7 +112,6 @@ def pathfinder(
 
     # Log stats if needed
     if log_stats_id is not None:
-
         # End timers
         t_end_pathfinder = datetime.now()
         duration_pathfinder = (t_end_pathfinder - t_start_pathfinder).total_seconds()
@@ -161,11 +164,11 @@ def core_pathfinder_bfs(
     taken: list[StandardCoord] = [],
     hdm: bool = False,
     critical_beams: dict[int, tuple[int, NodeBeams]] = {},
-    src_tgt_ids: tuple[int,int] | None = None,
+    src_tgt_ids: tuple[int, int] | None = None,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
     dict[StandardBlock, list[StandardBlock]] | None,
-    tuple[int, int]
+    tuple[int, int],
 ]:
     """Create topologically-correct paths between a source and one or more target coordinates/kinds.
 
@@ -220,9 +223,7 @@ def core_pathfinder_bfs(
 
     # Define exit conditions in case something goes wrong
     tgts_filled = 0
-    tgts_to_fill = (
-        int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
-    )
+    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
     if len(tent_coords) > 1:
         max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
         src_tgt_manhattan = max_manhattan
@@ -237,7 +238,6 @@ def core_pathfinder_bfs(
 
     # Manage queue
     while queue:
-
         # Unpack current block (source for iteration)
         current_block: StandardBlock = queue.popleft()
         curr_coords, curr_kind = current_block
@@ -283,7 +283,6 @@ def core_pathfinder_bfs(
         # Try moving in all directions
         scale = 2 if "o" in curr_kind else 1  # Block is pipe iff "o" in kind
         for dx, dy, dz in moves:
-
             # Set exploration parameters to next position in moves
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
@@ -315,10 +314,10 @@ def core_pathfinder_bfs(
                                 # using the cushion that allows breaking some beams
                                 if node_id not in src_tgt_ids:
                                     for n_id in nodes_with_critical_beams_id:
-                                            all_beams = critical_beams[n_id][1]
-                                            for single_beam in all_beams:
-                                                if any([coord in beam[:6] for coord in single_beam]):
-                                                    broken_beams += 1
+                                        all_beams = critical_beams[n_id][1]
+                                        for single_beam in all_beams:
+                                            if any([coord in beam[:6] for coord in single_beam]):
+                                                broken_beams += 1
 
                         adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
                         if len(beams) + adjust_for_source_node - broken_beams < min_exit_num:
@@ -363,23 +362,31 @@ def core_pathfinder_bfs(
             alt_curr_kind = None
             if "h" in curr_kind:
                 hdm = False
-                direction = sum([p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))])
+                direction = sum(
+                    [p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))]
+                )
                 if direction < 0:
                     pass
                 else:
                     alt_curr_kind = rot_o_kind(curr_kind)
 
             # Create a list of kinds that are valid for the next block
-            possible_nxt_types = nxt_kinds(curr_coords, curr_kind if not alt_curr_kind else alt_curr_kind, nxt_coords)
+            possible_nxt_types = nxt_kinds(
+                curr_coords, curr_kind if not alt_curr_kind else alt_curr_kind, nxt_coords
+            )
             for possible_nxt_type in possible_nxt_types:
-
                 # Create a copy of next type to avoid re-writting the actual loop variable
                 nxt_type = possible_nxt_type
 
                 # Place Hadamard instead of regular pipe if all corresponding flags are present
                 if hdm and "o" in nxt_type:
                     nxt_type += "h"
-                    direction = sum([p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))])
+                    direction = sum(
+                        [
+                            p[1] - p[0] if p[0] != p[1] else 0
+                            for p in list(zip(curr_coords, nxt_coords))
+                        ]
+                    )
                     if direction < 0:
                         nxt_type = rot_o_kind(nxt_type)
 
@@ -398,9 +405,7 @@ def core_pathfinder_bfs(
                     new_path_len = path_len[current_block] + 1
                     nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
 
-                    if (
-                        (nxt_b_info, (dx, dy, dz))
-                    ) not in visited or new_path_len < visited[
+                    if ((nxt_b_info, (dx, dy, dz))) not in visited or new_path_len < visited[
                         (nxt_b_info, (dx, dy, dz))
                     ]:
                         visited[(nxt_b_info, (dx, dy, dz))] = new_path_len

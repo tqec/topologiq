@@ -123,25 +123,26 @@ def break_single_spider_graph(simple_graph: SimpleDictGraph) -> SimpleDictGraph:
     new_simple_graph: SimpleDictGraph = {"nodes": [], "edges": []}
 
     for spider_id, zx_type in simple_graph["nodes"]:
-        boundaries.append((spider_id, zx_type)) if zx_type == "O" else spiders.append((spider_id, zx_type))
+        boundaries.append((spider_id, zx_type)) if zx_type == "O" else spiders.append(
+            (spider_id, zx_type)
+        )
 
     # DETERMINE IF GRAPH HAS ONLY ONE COLOUR SPIDER
     single_spider_graph = True if len(spiders) == 1 else False
 
     # PROCESS SINGLE SPIDER GRAPH
     if single_spider_graph is True:
-
         # Get spider ZX_type
         zx_type = spiders[0][1]
 
         # Calculate number of required spiders
-        n_spiders_required = max(1, math.ceil(2 + (len(boundaries)-6)/2))
+        n_spiders_required = max(1, math.ceil(2 + (len(boundaries) - 6) / 2))
 
         # Add required number of spiders
-        for i in range(1,n_spiders_required+1):
+        for i in range(1, n_spiders_required + 1):
             new_spiders.append((i, zx_type))
             if i != n_spiders_required:
-                new_edges.append(((i,i+1), "SIMPLE"))
+                new_edges.append(((i, i + 1), "SIMPLE"))
 
         # Connect boundaries
         current_spider_id = 1
@@ -149,7 +150,9 @@ def break_single_spider_graph(simple_graph: SimpleDictGraph) -> SimpleDictGraph:
         zx_type = "O"
 
         for i, (_, edge_type) in enumerate(simple_graph["edges"]):
-            num_edges_current_spider = sum([current_spider_id in (src, tgt) for ((src, tgt), _) in new_edges])
+            num_edges_current_spider = sum(
+                [current_spider_id in (src, tgt) for ((src, tgt), _) in new_edges]
+            )
 
             if num_edges_current_spider >= 4:
                 current_spider_id += 1

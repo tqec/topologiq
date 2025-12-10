@@ -104,11 +104,23 @@ def vis_3d(
 
     (
         is_final_vis,
-        show_src_block, src_coords, src_kind,
-        tgt_kind, valid_paths_mini_graph,
-        valid_paths_block_positions, taken
-    ) = _init_vis(fig, edge_paths, valid_paths, winner_path, src_block_info, tent_coords, tent_tgt_kinds, debug)
-
+        show_src_block,
+        src_coords,
+        src_kind,
+        tgt_kind,
+        valid_paths_mini_graph,
+        valid_paths_block_positions,
+        taken,
+    ) = _init_vis(
+        fig,
+        edge_paths,
+        valid_paths,
+        winner_path,
+        src_block_info,
+        tent_coords,
+        tent_tgt_kinds,
+        debug,
+    )
 
     # Static elements
     # ---
@@ -120,7 +132,17 @@ def vis_3d(
     # Source
     if src_block_info and show_src_block:
         edge_col = "gold"
-        _ = render_block(ax, src_tgt_ids[0], src_coords, size, src_kind, node_hex_map, edge_col=edge_col, border_width=3, taken=taken)
+        _ = render_block(
+            ax,
+            src_tgt_ids[0],
+            src_coords,
+            size,
+            src_kind,
+            node_hex_map,
+            edge_col=edge_col,
+            border_width=3,
+            taken=taken,
+        )
 
     # Winner path
     if winner_path and not is_final_vis:
@@ -186,13 +208,9 @@ def vis_3d(
         return []
 
     if all_search_paths and debug > 2:
-        (
-            animation_sequence,
-            num_paths,
-            num_frames,
-            animation_interval_ms,
-            tgt_duration_ms
-        ) = _prepare_search_paths_data(fig, all_search_paths, valid_paths)
+        (animation_sequence, num_paths, num_frames, animation_interval_ms, tgt_duration_ms) = (
+            _prepare_search_paths_data(fig, all_search_paths, valid_paths)
+        )
 
         if num_paths > 0:
             update, persistent_green_artists = _setup_path_animation(
@@ -215,7 +233,16 @@ def vis_3d(
 
     # Plot adjustments
     # ---
-    _adjust_plot_dimensions(fig, ax, partial_nx_g, valid_paths, tent_coords, src_block_info, is_final_vis, pathfinder_success=True if winner_path else False)
+    _adjust_plot_dimensions(
+        fig,
+        ax,
+        partial_nx_g,
+        valid_paths,
+        tent_coords,
+        src_block_info,
+        is_final_vis,
+        pathfinder_success=True if winner_path else False,
+    )
 
     # Interactive buttons & elements
     # ---
@@ -227,8 +254,8 @@ def vis_3d(
     # Show in high-debug modes
     if debug > 2:
         # Replay path search
-        ax_anim = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*5, btn_w, btn_h])
-        btn_anim = Button(ax_anim, 'Replay Path Search')
+        ax_anim = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad) * 5, btn_w, btn_h])
+        btn_anim = Button(ax_anim, "Replay Path Search")
         btn_anim.set_active(True)
         btn_anim.on_clicked(
             lambda e: toggle_animation_handler(
@@ -236,57 +263,40 @@ def vis_3d(
                 fig,
                 btn_anim,
                 persistent_green_artists,
-                update, # The locally defined update function from Section 5
+                update,  # The locally defined update function from Section 5
                 num_frames,
                 animation_interval_ms,
                 num_paths,
-                tgt_duration_ms
+                tgt_duration_ms,
             )
         )
 
         # Show/hide winner path (NEW)
-        ax_win = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*4, btn_w, btn_h])
-        btn_win = Button(ax_win, 'Hide Winner Path')
-        btn_win.on_clicked(
-            lambda e: toggle_winner_path_handler(
-                e,
-                fig,
-                btn_win,
-                btn_valid
-            )
-        )
+        ax_win = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad) * 4, btn_w, btn_h])
+        btn_win = Button(ax_win, "Hide Winner Path")
+        btn_win.on_clicked(lambda e: toggle_winner_path_handler(e, fig, btn_win, btn_valid))
 
         # Show/hide beams
-        ax_beams = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*3, btn_w, btn_h])
-        btn_beams = Button(ax_beams, 'Show Beams')
-        btn_beams.on_clicked(
-            lambda e: toggle_beams_handler(
-                e,
-                fig,
-                btn_beams
-            )
-        )
+        ax_beams = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad) * 3, btn_w, btn_h])
+        btn_beams = Button(ax_beams, "Show Beams")
+        btn_beams.on_clicked(lambda e: toggle_beams_handler(e, fig, btn_beams))
 
         # Show/hide targets
-        ax_tgt = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad)*2, btn_w, btn_h])
-        btn_tgt = Button(ax_tgt, 'Hide Targets' if fig.show_tent_tgt_blocks else 'Show Targets')
-        btn_tgt.on_clicked(
-            lambda e: toggle_targets_handler(
-                e,
-                fig,
-                btn_tgt
-            )
-        )
+        ax_tgt = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad) * 2, btn_w, btn_h])
+        btn_tgt = Button(ax_tgt, "Hide Targets" if fig.show_tent_tgt_blocks else "Show Targets")
+        btn_tgt.on_clicked(lambda e: toggle_targets_handler(e, fig, btn_tgt))
 
         # Show/hide valid paths
-        ax_valid = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad), btn_w, btn_h]) # Position next to Targets
-        btn_valid = Button(ax_valid, 'Show Valid Paths')
+        ax_valid = fig.add_axes(
+            [btn_l, btn_b + (btn_h + btn_pad), btn_w, btn_h]
+        )  # Position next to Targets
+        btn_valid = Button(ax_valid, "Show Valid Paths")
         btn_valid.on_clicked(
             lambda e: toggle_valid_paths_handler(
                 e,
                 fig,
                 btn_valid,
-                btn_win # Dependency on the winner path button handle
+                btn_win,  # Dependency on the winner path button handle
             )
         )
 
@@ -294,23 +304,20 @@ def vis_3d(
         ax_prox = fig.add_axes([btn_l, btn_b, btn_w, btn_h])
         btn_prox = Button(ax_prox, "Prox Paths")
         btn_prox.set_active(True)
-        btn_prox.on_clicked(
-            lambda e: toggle_prox_paths_handler(e, fig, btn_prox, tent_coords)
-        )
+        btn_prox.on_clicked(lambda e: toggle_prox_paths_handler(e, fig, btn_prox, tent_coords))
 
     # Show always if constituent elements exist
     if fig_data:
-
         # Overlay of input ZX-graph
         btn_w_min, btn_b = (0.04, 0.0)
         current_width = btn_w_min if fig.show_overlay else btn_w
         ax_overlay_btn = fig.add_axes([1 - current_width, btn_b, current_width, btn_h])
 
         for spine in ax_overlay_btn.spines.values():
-            spine.set_edgecolor('gray')
+            spine.set_edgecolor("gray")
             spine.set_linestyle("dotted")
 
-        initial_btn_text = 'X' if fig.show_overlay else 'Show Input ZX Graph'
+        initial_btn_text = "X" if fig.show_overlay else "Show Input ZX Graph"
         btn_overlay = Button(ax_overlay_btn, initial_btn_text)
         fig.overlay_button_handle = btn_overlay
 
@@ -320,16 +327,20 @@ def vis_3d(
         )
 
         # Overlay click-to-hide functionality
-        if fig_data and hasattr(fig, 'ax_overlay'):
+        if fig_data and hasattr(fig, "ax_overlay"):
             btn_pos = [btn_w, btn_w_min, btn_b, btn_h]
             fig.canvas.mpl_connect(
-                'button_press_event',
-                lambda e: hide_overlay_handler(e, fig, toggle_overlay_handler, btn_overlay, btn_pos)
+                "button_press_event",
+                lambda e: hide_overlay_handler(
+                    e, fig, toggle_overlay_handler, btn_overlay, btn_pos
+                ),
             )
 
     # Connect events
     fig.canvas.mpl_connect("pick_event", lambda e: onpick_handler(e, ax))
-    fig.canvas.mpl_connect('key_press_event', lambda e: keypress_handler(e, fig, btn_prox, tent_coords))
+    fig.canvas.mpl_connect(
+        "key_press_event", lambda e: keypress_handler(e, fig, btn_prox, tent_coords)
+    )
 
     # Save to file if applicable
     repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
@@ -476,7 +487,7 @@ def _init_vis(
     fig.prox_path_artists = []
     fig.prox_distance_threshold = 1
     fig.prox_filtered_paths = []
-    fig.prox_view_mode = 'ALL'
+    fig.prox_view_mode = "ALL"
     fig.prox_current_index = 0
 
     # Get source and target info for current pathfinder iteration
@@ -487,18 +498,17 @@ def _init_vis(
 
     if not is_final_vis:
         if src_block_info:
-             src_coords, src_kind = src_block_info
+            src_coords, src_kind = src_block_info
         if len(tent_tgt_kinds) == 1:
             tgt_kind = tent_tgt_kinds[0]
         else:
             # NOTE: Assumes tent_tgt_kinds is not empty.
             zx_type = kind_to_zx_type(tent_tgt_kinds[0])
-            tgt_kind = zx_type.lower()*3 if zx_type in ["X", "Y", "Z"] else "ooo"
+            tgt_kind = zx_type.lower() * 3 if zx_type in ["X", "Y", "Z"] else "ooo"
 
         # Valid paths mini-graph
         valid_paths_mini_graph = edge_paths_to_nx_graph(valid_paths) if valid_paths else nx.Graph()
         valid_paths_block_positions = nx.get_node_attributes(valid_paths_mini_graph, "coords")
-
 
     # Recalculate taken from incoming parameters
     taken = []
@@ -532,24 +542,24 @@ def _init_vis(
         tgt_kind,
         valid_paths_mini_graph,
         valid_paths_block_positions,
-        taken
+        taken,
     )
 
     return init_objects
 
 
 def _render_winner_path(
-        fig: matplotlib.figure.Figure,
-        ax: matplotlib.axes.Axes,
-        winner_path: PathBetweenNodes | list[StandardBlock] | None,
-        tent_coords: list[StandardCoord] | None,
-        src_coords: tuple[int, int, int],
-        node_hex_map: dict[str, list[str]],
-        src_tgt_ids: tuple[int, int] | None = None,
-        hide_ports: bool = False,
-        edge_col: str = "black",
-        taken: list[StandardCoord] | list[None] | None = None,
-        ):
+    fig: matplotlib.figure.Figure,
+    ax: matplotlib.axes.Axes,
+    winner_path: PathBetweenNodes | list[StandardBlock] | None,
+    tent_coords: list[StandardCoord] | None,
+    src_coords: tuple[int, int, int],
+    node_hex_map: dict[str, list[str]],
+    src_tgt_ids: tuple[int, int] | None = None,
+    hide_ports: bool = False,
+    edge_col: str = "black",
+    taken: list[StandardCoord] | list[None] | None = None,
+):
     """Render the blocks and pipes of the winner path.
 
     This function handles the rendering of blocks and pipe segments in the path selected as
@@ -576,7 +586,9 @@ def _render_winner_path(
 
     # Preliminaries
     border_width = 1
-    winner_path = winner_path.all_nodes_in_path if isinstance(winner_path, PathBetweenNodes) else winner_path
+    winner_path = (
+        winner_path.all_nodes_in_path if isinstance(winner_path, PathBetweenNodes) else winner_path
+    )
 
     if taken is None:
         taken = []
@@ -609,11 +621,18 @@ def _render_winner_path(
         # Pipes
         elif "o" in block_kind:
             if i > 0 and i < path_length - 1:  # A pipe segment must have nodes before and after it.
-                u_coords = winner_path[i-1][0]
-                v_coords = winner_path[i+1][0]
+                u_coords = winner_path[i - 1][0]
+                v_coords = winner_path[i + 1][0]
 
                 if u_coords is not None and v_coords is not None:
-                    current_artists = render_pipe(ax, u_coords, v_coords, block_kind,  border_width=border_width, edge_col=edge_col)
+                    current_artists = render_pipe(
+                        ax,
+                        u_coords,
+                        v_coords,
+                        block_kind,
+                        border_width=border_width,
+                        edge_col=edge_col,
+                    )
 
         # Add to artists & manage visibility
         if current_artists:
@@ -653,21 +672,21 @@ def _render_tent_tgts(
 
     # Add loop
     for tent_coord in tent_coords:
-            artists = render_block(
-                ax,
-                "TBD" if len(tent_coords) > 1 else src_tgt_ids[1],
-                tent_coord,
-                [0.9, 0.9, 0.9] if tgt_kind != "ooo" else [0.7, 0.7, 0.7],
-                tgt_kind,
-                node_hex_map,
-                edge_col="violet",
-                border_width=2,
-            )
+        artists = render_block(
+            ax,
+            "TBD" if len(tent_coords) > 1 else src_tgt_ids[1],
+            tent_coord,
+            [0.9, 0.9, 0.9] if tgt_kind != "ooo" else [0.7, 0.7, 0.7],
+            tgt_kind,
+            node_hex_map,
+            edge_col="violet",
+            border_width=2,
+        )
 
         # Add to artists & manage visibility
-            fig.target_artists.extend(artists)
-            for artist in artists:
-                artist.set_visible(fig.show_tent_tgt_blocks)
+        fig.target_artists.extend(artists)
+        for artist in artists:
+            artist.set_visible(fig.show_tent_tgt_blocks)
 
 
 def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g: nx.Graph):
@@ -744,7 +763,9 @@ def _render_zx_graph_overlay(
     """
 
     # Prepare PNG buffer of the input ZX graph
-    processed_edges = [*list(edge_paths.keys()), src_tgt_ids] if not is_final_vis else list(edge_paths.keys())
+    processed_edges = (
+        [*list(edge_paths.keys()), src_tgt_ids] if not is_final_vis else list(edge_paths.keys())
+    )
 
     png_buffer = figure_to_png(
         fig_data,
@@ -759,9 +780,7 @@ def _render_zx_graph_overlay(
     # Calculate optimal size and position for the overlay axes
     desired_height_ratio = 0.25
     calculated_width_ratio = (
-        desired_height_ratio
-        * (fig.get_figheight() / fig.get_figwidth())
-        * aspect_ratio
+        desired_height_ratio * (fig.get_figheight() / fig.get_figwidth()) * aspect_ratio
     )
 
     # Width constraint (20% to 50%)
@@ -774,17 +793,13 @@ def _render_zx_graph_overlay(
 
     # Recalculate height to maintain ratio
     calculated_height_ratio = (
-        calculated_width_ratio
-        / aspect_ratio
-        * (fig.get_figwidth() / fig.get_figheight())
+        calculated_width_ratio / aspect_ratio * (fig.get_figwidth() / fig.get_figheight())
     )
 
     # New axes for overlay, positioned bottom-right ([left, bottom, width, height])
     left = 1 - calculated_width_ratio  # Align to right
     bottom = 0.0  # Align to bottom
-    ax_overlay = fig.add_axes(
-        [left, bottom, calculated_width_ratio, calculated_height_ratio]
-    )
+    ax_overlay = fig.add_axes([left, bottom, calculated_width_ratio, calculated_height_ratio])
 
     # Hide unnecessary features
     ax_overlay.set_xticks([])
@@ -800,7 +815,7 @@ def _render_zx_graph_overlay(
     fig.overlay_image_artist = overlay_artist
 
     # Set initial alpha based on the correct state flag (fig.show_overlay)
-    fig.ax_overlay.set_visible(True) # Keep the axis active
+    fig.ax_overlay.set_visible(True)  # Keep the axis active
     fig.overlay_image_artist.set_alpha(1.0 if fig.show_overlay else 0.0)
 
 
@@ -859,7 +874,12 @@ def _render_nx_graph(
             cube_kind = cube_kinds.get(cube_id)
             if cube_kind and ("o" not in cube_kind or (not hide_ports and cube_kind == "ooo")):
                 cube_coords = block_positions.get(cube_id)
-                if cube_coords and (is_final_vis or (cube_coords != src_coords and cube_coords not in valid_paths_block_positions)):
+                if cube_coords and (
+                    is_final_vis
+                    or (
+                        cube_coords != src_coords and cube_coords not in valid_paths_block_positions
+                    )
+                ):
                     size = [1.0, 1.0, 1.0] if cube_kind != "ooo" else [0.9, 0.9, 0.9]
                     if not is_final_vis and len(tent_coords) == 1 and cube_coords in tent_coords:
                         edge_col = "gold"
@@ -885,7 +905,10 @@ def _render_nx_graph(
             pipe_kind = pipe_kinds.get((u_id, v_id), "gray")
 
             if u_coords is not None and v_coords is not None:
-                if is_final_vis or (u_coords not in valid_paths_block_positions and v_coords not in valid_paths_block_positions):
+                if is_final_vis or (
+                    u_coords not in valid_paths_block_positions
+                    and v_coords not in valid_paths_block_positions
+                ):
                     _ = render_pipe(ax, u_coords, v_coords, pipe_kind)
 
     # If there is tgt_kind the call is for valid paths
@@ -897,7 +920,9 @@ def _render_nx_graph(
                 cube_coords = block_positions.get(cube_id)
 
                 if cube_coords:
-                    border_width = 3 if cube_coords == src_coords else 2 if cube_coords in tent_coords else 0.5
+                    border_width = (
+                        3 if cube_coords == src_coords else 2 if cube_coords in tent_coords else 0.5
+                    )
 
                     if tgt_kind == "ooo" and cube_coords in tent_coords:
                         size = [0.9, 0.9, 0.9]
@@ -926,7 +951,9 @@ def _render_nx_graph(
             pipe_kind = pipe_kinds.get((u_id, v_id), "gray")
 
             if u_coords is not None and v_coords is not None:
-                current_artists = render_pipe(ax, u_coords, v_coords, pipe_kind, edge_col=edge_col, alpha=alpha)
+                current_artists = render_pipe(
+                    ax, u_coords, v_coords, pipe_kind, edge_col=edge_col, alpha=alpha
+                )
                 artists.extend(current_artists)
 
         # Apply initial visibility state
@@ -976,12 +1003,14 @@ def _adjust_plot_dimensions(
             list(nx.get_node_attributes(nx_g, "coords").values())
             + tent_coords
             + [src_block_info[0]]
-            )
+        )
 
     # Apply dimensions
     if valid_paths:
         for path in valid_paths.values():
-            all_static_coords = np.vstack([all_static_coords, np.array([block[0] for block in path])])
+            all_static_coords = np.vstack(
+                [all_static_coords, np.array([block[0] for block in path])]
+            )
 
     if all_static_coords.size > 0:
         max_x, min_x = all_static_coords[:, 0].max(), all_static_coords[:, 0].min()
@@ -989,7 +1018,7 @@ def _adjust_plot_dimensions(
         max_z, min_z = all_static_coords[:, 2].max(), all_static_coords[:, 2].min()
 
         max_range = max((max_x - min_x), (max_y - min_y), (max_z - min_z)) / 2.0
-        mid = np.array([(max_x + min_x)/2, (max_y + min_y)/2, (max_z + min_z)/2])
+        mid = np.array([(max_x + min_x) / 2, (max_y + min_y) / 2, (max_z + min_z) / 2])
 
         ax.set_xlim(mid[0] - max_range - 1, mid[0] + max_range + 1)
         ax.set_ylim(mid[1] - max_range - 1, mid[1] + max_range + 1)
@@ -1037,24 +1066,27 @@ def _prepare_search_paths_data(fig, all_search_paths, valid_paths):
     if all_search_paths:
         # NOTE: Ensure fig.all_search_paths_raw is initialized (e.g., in _init_vis)
         for path in all_search_paths.values():
-
             # Convert path blocks to a numpy array of coordinates
             path_coords = np.array([block[0] for block in path])
 
             # Populate fig.all_search_paths_raw (master list)
-            fig.all_search_paths_raw.append({
-                'full_path': path,
-                'coords': path_coords,
-                # Check for validity using the actual path object
-                'is_valid': path in valid_paths.values() if valid_paths else False
-            })
+            fig.all_search_paths_raw.append(
+                {
+                    "full_path": path,
+                    "coords": path_coords,
+                    # Check for validity using the actual path object
+                    "is_valid": path in valid_paths.values() if valid_paths else False,
+                }
+            )
 
             is_valid = path in valid_paths.values() if valid_paths else False
-            animation_sequence.append({
-                'coords': path_coords,
-                'color': 'green' if is_valid else 'red',
-                'persist': is_valid
-            })
+            animation_sequence.append(
+                {
+                    "coords": path_coords,
+                    "color": "green" if is_valid else "red",
+                    "persist": is_valid,
+                }
+            )
 
     num_paths = len(fig.all_search_paths_raw)
     num_frames = num_paths + 1
@@ -1093,19 +1125,24 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
     # Pre-create persistent paths (green, valid paths that will fade in)
     persistent_green_artists = []
     for item in animation_sequence:
-        if item['persist']:
-            path_artist, = ax.plot(
-                item['coords'][:, 0], item['coords'][:, 1], item['coords'][:, 2],
-                color='green', linestyle=":", zorder=8, alpha=0,
+        if item["persist"]:
+            (path_artist,) = ax.plot(
+                item["coords"][:, 0],
+                item["coords"][:, 1],
+                item["coords"][:, 2],
+                color="green",
+                linestyle=":",
+                zorder=8,
+                alpha=0,
             )
-            persistent_green_artists.append({'artist': path_artist, 'index': len(persistent_green_artists)})
+            persistent_green_artists.append(
+                {"artist": path_artist, "index": len(persistent_green_artists)}
+            )
         else:
             persistent_green_artists.append(None)
 
     # Initialize the Single Dynamic Path Line (for red/current path visualization)
-    dynamic_red_path_line, = ax.plot(
-        [], [], [], color='red', linestyle=":", zorder=8
-    )
+    (dynamic_red_path_line,) = ax.plot([], [], [], color="red", linestyle=":", zorder=8)
 
     # The Update function MUST be defined here to access the artists (closure)
     def update(frame):
@@ -1123,27 +1160,28 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
             current_item = animation_sequence[frame]
 
             # Draw ALL paths (green or red) using the dynamic artist for visualization
-            dynamic_red_path_line.set_data(current_item['coords'][:, 0], current_item['coords'][:, 1])
-            dynamic_red_path_line.set_3d_properties(current_item['coords'][:, 2])
+            dynamic_red_path_line.set_data(
+                current_item["coords"][:, 0], current_item["coords"][:, 1]
+            )
+            dynamic_red_path_line.set_3d_properties(current_item["coords"][:, 2])
 
-        else: # Static final frame (== num_paths) with full wireframe
+        else:  # Static final frame (== num_paths) with full wireframe
             # Clear pre-existent dynamic line
             dynamic_red_path_line.set_data([], [])
             dynamic_red_path_line.set_3d_properties([])
 
             # Iterate through ALL paths and statically draw them
             for i in range(num_paths):
-
                 item = animation_sequence[i]
-                path_coords = item['coords']
+                path_coords = item["coords"]
 
                 # Colour and z-order based on persistence
-                color = 'green' if item['persist'] else 'red'
-                zorder = 8 if item['persist'] else 7
-                alpha = 1.0 if item['persist'] else 0.5
+                color = "green" if item["persist"] else "red"
+                zorder = 8 if item["persist"] else 7
+                alpha = 1.0 if item["persist"] else 0.5
 
                 # Plot
-                static_path, = ax.plot(
+                (static_path,) = ax.plot(
                     path_coords[:, 0],
                     path_coords[:, 1],
                     path_coords[:, 2],
@@ -1151,7 +1189,7 @@ def _setup_path_animation(fig, ax, animation_sequence, num_paths):
                     linestyle=":",
                     zorder=zorder,
                     alpha=alpha,
-                    visible=True
+                    visible=True,
                 )
                 artists_to_return.append(static_path)
 

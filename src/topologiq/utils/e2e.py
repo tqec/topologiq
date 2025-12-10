@@ -36,7 +36,7 @@ def test_qasm_circuit(
 ) -> tuple[
     None | dict[int, StandardBlock],
     None | dict[tuple[int, int], list[str]],
-    dict[str, bool | int | float]
+    dict[str, bool | int | float],
 ]:
     """Call Topologiq to perform algorithmic lattice surgery on circuit.
 

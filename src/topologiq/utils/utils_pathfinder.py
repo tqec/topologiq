@@ -15,8 +15,7 @@ from topologiq.utils.classes import NodeBeams, StandardBeam, StandardBlock, Stan
 # BFS MANAGEMENT #
 ##################
 def prune_visited(
-    visited: dict[tuple[StandardBlock, StandardCoord], int],
-    curr_block_info: StandardBlock
+    visited: dict[tuple[StandardBlock, StandardCoord], int], curr_block_info: StandardBlock
 ) -> dict[tuple[StandardBlock, StandardCoord], int]:
     """Prune the visited dictionary from the pathfinder.
 
@@ -32,8 +31,8 @@ def prune_visited(
     new_visited = {}
     for k, v in visited.items():
         block_info = k[0]
-        new_visited[(block_info, (0,0,0))] = v
-        new_visited[(curr_block_info, (0,0,0))] = 0
+        new_visited[(block_info, (0, 0, 0))] = v
+        new_visited[(curr_block_info, (0, 0, 0))] = 0
 
     return new_visited
 
@@ -206,9 +205,7 @@ def check_exits(
         )
 
         if check_is_exit(src_c, src_k, tgt_c):
-            is_unobstr, exit_beam = check_unobstr(
-                src_c, tgt_c, taken, [], beams_len
-            )
+            is_unobstr, exit_beam = check_unobstr(src_c, tgt_c, taken, [], beams_len)
             if is_unobstr and not any([coord in coords_in_path for coord in exit_beam]):
                 unobstr_exits_n += 1
                 n_beams.append(exit_beam)

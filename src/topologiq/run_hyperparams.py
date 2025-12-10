@@ -34,7 +34,7 @@ Example:
                 log_stats=log_stats,
                 debug=debug,
                 fig_data=fig_data,
-                **kwargs
+                **kwargs,
             )
 
 Notes:

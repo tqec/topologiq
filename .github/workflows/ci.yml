@@ -31,5 +31,9 @@ jobs:
         run: uv sync --group dev
 
       # Ruff using local deps
-      - name: Ruff
+      - name: Ruff linting
         run: uv run ruff check .
+      
+      # Ruff formatting using local deps
+      - name: Ruff formatting
+        run: uv run ruff format --check --diff .
