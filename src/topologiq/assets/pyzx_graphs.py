@@ -61,7 +61,9 @@ def cnots(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figu
     return pyzx_graph, fig
 
 
-def simple_mess(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def simple_mess(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
     """Produce a PyZX graph corresponding to a small CNOT-based circuit.
 
     Args:
@@ -90,7 +92,9 @@ def simple_mess(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotli
     return pyzx_graph, fig
 
 
-def steane_pyzx(draw_graph: bool = False) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+def steane_pyzx(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Return an full (unreduced) PyZX graph of a Steane encoding.
 
     Args:
@@ -106,7 +110,7 @@ def steane_pyzx(draw_graph: bool = False) -> tuple[BaseGraph | GraphS | None, ma
     pyzx_circuit = zx.Circuit(10)
 
     ancilla_qubits = [0, 1, 2]
-    qubits= [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
+    qubits = [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
     for i, ancilla_qubit in enumerate(ancilla_qubits):
         pyzx_circuit.add_gate("HAD", ancilla_qubit)
         for qubit in qubits[i]:
@@ -133,10 +137,7 @@ def steane_pyzx(draw_graph: bool = False) -> tuple[BaseGraph | GraphS | None, ma
 
 
 def random_graph(
-    qubit_n: int,
-    depth: int,
-    graph_type: str = "cnot",
-    draw_graph: bool = False
+    qubit_n: int, depth: int, graph_type: str = "cnot", draw_graph: bool = False
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Produce a random PyZX graph.
 
@@ -167,12 +168,16 @@ def random_graph(
 
         # Generate a graph
         if graph_type == "cnot_had_phase":
-            pyzx_circuit = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubit_n, depth=depth, clifford=False)
+            pyzx_circuit = zx.generate.CNOT_HAD_PHASE_circuit(
+                qubits=qubit_n, depth=depth, clifford=False
+            )
             pyzx_graph = pyzx_circuit.to_graph()
         elif graph_type == "cnot":
             pyzx_graph = zx.generate.cnots(qubits=qubit_n, depth=depth)
         else:
-            raise ValueError('ERROR generating random graph. Invalid graph type. Valid graph types are: "cnot", "cnot_had_phase".')
+            raise ValueError(
+                'ERROR generating random graph. Invalid graph type. Valid graph types are: "cnot", "cnot_had_phase".'
+            )
 
         # Run a canonical BFS loop to confirm all spiders are hit by BFS
         queue = []

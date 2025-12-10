@@ -123,7 +123,9 @@ def graph_manager_bfs(
     lat_edges: dict[tuple[int, int], list[str]] | None = None
 
     # Key parameters - BFS management
-    first_id: int | None = find_first_id(nx_g, deterministic=False) if first_cube[0] is None else first_cube[0]
+    first_id: int | None = (
+        find_first_id(nx_g, deterministic=False) if first_cube[0] is None else first_cube[0]
+    )
     taken: list[StandardCoord] = []
     edge_paths: dict = {}
     queue: deque[int] = deque([first_id])
@@ -140,7 +142,9 @@ def graph_manager_bfs(
 
     # Place first spider at origin
     # Get first spider kind from type family
-    tentative_kinds: list[str] | None = nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
+    tentative_kinds: list[str] | None = (
+        nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
+    )
     first_kind = random.choice(tentative_kinds) if tentative_kinds else None
 
     # Update list of taken coords with node's position & beams
@@ -165,16 +169,13 @@ def graph_manager_bfs(
 
     # Graph manager BFS
     while queue:
-
         # Get current parent node
         src_id: int = queue.popleft()
 
         # Iterate over neighbours of current parent node
         for tgt_id in cast(list[int], nx_g.neighbors(src_id)):
-
             # Queue and add to visited set if BFS just arrived at node
             if tgt_id not in visited:
-
                 # Start iteration timer for 1st pass iteration
                 t1_1st_pass_iter = datetime.now()
 
@@ -188,7 +189,6 @@ def graph_manager_bfs(
                 # Try to place blocks as close to one another as as possible
                 step: int = 3
                 while step <= 9:
-
                     taken, edge_paths, edge_success = place_nxt_block(
                         src_id,
                         tgt_id,
@@ -208,7 +208,9 @@ def graph_manager_bfs(
 
                     # Stop and log timers
                     t_end_1st_pass_iter = datetime.now()
-                    duration_1st_pass_edges += (t_end_1st_pass_iter - t1_1st_pass_iter).total_seconds()
+                    duration_1st_pass_edges += (
+                        t_end_1st_pass_iter - t1_1st_pass_iter
+                    ).total_seconds()
 
                     # Move to next if there is a succesful placement
                     if edge_success:
@@ -217,8 +219,9 @@ def graph_manager_bfs(
                         break
 
                     else:
-                        if step >= 9:  # If edge did not complete at max distance currently available, Topologiq will fail
-
+                        if (
+                            step >= 9
+                        ):  # If edge did not complete at max distance currently available, Topologiq will fail
                             # Stop timers & calculate durations
                             t_end = datetime.now()
                             duration_total = (t_end - t_start).total_seconds()
@@ -239,11 +242,16 @@ def graph_manager_bfs(
                                     "num_input_nodes": num_input_nodes,
                                     "num_input_edges": num_input_edges,
                                     "num_input_nodes_processed": num_1st_pass_edges + 1,
-                                    "num_input_edges_processed": num_1st_pass_edges + num_2nd_pass_edges,
+                                    "num_input_edges_processed": num_1st_pass_edges
+                                    + num_2nd_pass_edges,
                                     "num_1st_pass_edges_processed": num_1st_pass_edges,
                                     "num_2n_pass_edges_processed": num_2nd_pass_edges,
                                 }
-                                times = {"t_1st_pass": duration_1st_pass_edges, "t_2nd_pass": duration_2nd_pass_edges, "t_total": duration_total}
+                                times = {
+                                    "t_1st_pass": duration_1st_pass_edges,
+                                    "t_2nd_pass": duration_2nd_pass_edges,
+                                    "t_total": duration_total,
+                                }
 
                                 try:
                                     prep_stats_n_log(
@@ -261,15 +269,12 @@ def graph_manager_bfs(
                                 except Exception as e:
                                     print(f"Unable to log stats for failed iteration: {e}")
 
-                            raise ValueError(
-                                f"ERROR with edge: {src_id} -> {tgt_id}."
-                            )
+                            raise ValueError(f"ERROR with edge: {src_id} -> {tgt_id}.")
 
                     # Increase distance between nodes if placement not possible
                     step += 3
 
             elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
-
                 # Start iteration timer for 2st pass iteration
                 t1_2nd_pass_iter = datetime.now()
 
@@ -284,7 +289,6 @@ def graph_manager_bfs(
                 # Process edge only if both src_id and tgt_id have already been placed in the 3D space
                 # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
                 if u_coords is not None and v_coords is not None:
-
                     # Format adjustments to match existing operations
                     u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
                     v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
@@ -292,7 +296,6 @@ def graph_manager_bfs(
 
                     # Call pathfinder on any graph edge that does not have an entry in edge_paths
                     if edge not in edge_paths:
-
                         critical_beams: dict[int, tuple[int, NodeBeams]] = {}
                         num_edges_still_to_complete = 0
                         for node_id in nx_g.nodes():
@@ -335,19 +338,32 @@ def graph_manager_bfs(
 
                             # Stop & log times
                             t_end_2nd_pass_iter = datetime.now()
-                            duration_current_2nd_pass_iter = (t_end_2nd_pass_iter - t1_2nd_pass_iter).total_seconds()
-                            duration_2nd_pass_edges += (t_end_2nd_pass_iter - t1_2nd_pass_iter).total_seconds()
+                            duration_current_2nd_pass_iter = (
+                                t_end_2nd_pass_iter - t1_2nd_pass_iter
+                            ).total_seconds()
+                            duration_2nd_pass_edges += (
+                                t_end_2nd_pass_iter - t1_2nd_pass_iter
+                            ).total_seconds()
 
                             # For visualisation, create a new graph on each step irrespective of outcome
-                            debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
+                            debug = (
+                                debug
+                                if debug >= 1
+                                else 1
+                                if vis_options[0] == "detail" or vis_options[1]
+                                else 0
+                            )
                             if debug > 0:
-
                                 # Create partial progress graph from current edges
-                                partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths))
-                                partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
+                                partial_lat_nodes, partial_lat_edges = reindex_path_dict(edge_paths)
+                                partial_nx_g, _ = lattice_to_g(
+                                    partial_lat_nodes, partial_lat_edges, nx_g
+                                )
 
                                 # Detailed interactive visualisation of progress
-                                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
+                                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = (
+                                    pathfinder_vis_data
+                                )
                                 vis_3d(
                                     nx_g,
                                     partial_nx_g,
@@ -363,18 +379,21 @@ def graph_manager_bfs(
                                     vis_options=vis_options,
                                     src_tgt_ids=(src_id, tgt_id),
                                     fig_data=fig_data,
-                                    filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
+                                    filename_info=(circuit_name, len(edge_paths) + 1)
+                                    if vis_options[1] or debug == 4
+                                    else None,
                                 )
 
                             # Write to edge_paths if an edge is found
                             if clean_paths:
-
                                 # Update edge counters
                                 num_2nd_pass_edges += 1
                                 num_edges_processed += 1
 
                                 # Update edge paths
-                                coords_in_path = [p[0] for p in clean_paths[0]]  # Take the first path
+                                coords_in_path = [
+                                    p[0] for p in clean_paths[0]
+                                ]  # Take the first path
                                 edge_type = zx_edge_type
                                 edge_paths[edge] = {
                                     "src_tgt_ids": (src_id, tgt_id),
@@ -390,7 +409,8 @@ def graph_manager_bfs(
                                 nx_g.nodes[tgt_id]["completed"] += 1
                                 nx_g.nodes[tgt_id]["beams"] = (
                                     []
-                                    if nx_g.nodes[tgt_id]["completed"] >= get_node_degree(nx_g, tgt_id)
+                                    if nx_g.nodes[tgt_id]["completed"]
+                                    >= get_node_degree(nx_g, tgt_id)
                                     else nx_g.nodes[tgt_id]["beams"]
                                 )
 
@@ -403,13 +423,15 @@ def graph_manager_bfs(
 
                                 # Update user if log_stats or debug mode are enabled
                                 if log_stats_id or debug > 0:
-                                    volume = len([block for block in clean_paths[0] if "o" not in block[1]])
-                                    print(f"Path between fixed cubes found: {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms) (+{volume-2} vol).")
-
+                                    volume = len(
+                                        [block for block in clean_paths[0] if "o" not in block[1]]
+                                    )
+                                    print(
+                                        f"Path between fixed cubes found: {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter * 1000)}ms) (+{volume - 2} vol)."
+                                    )
 
                             # Log stats and raise if 2nd pass iteration fails
                             else:
-
                                 # Create animation of failed attempt
                                 if vis_options[1]:
                                     create_animation(
@@ -428,11 +450,16 @@ def graph_manager_bfs(
                                         "num_input_nodes": num_input_nodes,
                                         "num_input_edges": num_input_edges,
                                         "num_input_nodes_processed": num_1st_pass_edges + 1,
-                                        "num_input_edges_processed": num_1st_pass_edges + num_2nd_pass_edges,
+                                        "num_input_edges_processed": num_1st_pass_edges
+                                        + num_2nd_pass_edges,
                                         "num_1st_pass_edges_processed": num_1st_pass_edges,
                                         "num_2n_pass_edges_processed": num_2nd_pass_edges,
                                     }
-                                    times = {"t_1st_pass": duration_1st_pass_edges, "t_2nd_pass": duration_2nd_pass_edges, "t_total": duration_total}
+                                    times = {
+                                        "t_1st_pass": duration_1st_pass_edges,
+                                        "t_2nd_pass": duration_2nd_pass_edges,
+                                        "t_total": duration_total,
+                                    }
 
                                     try:
                                         prep_stats_n_log(
@@ -448,10 +475,14 @@ def graph_manager_bfs(
                                             run_params={"min_succ_rate": min_succ_rate, **kwargs},
                                         )
                                     except Exception as e:
-                                        print(f"Unable to log stats for failed run in second pass: {e}")
+                                        print(
+                                            f"Unable to log stats for failed run in second pass: {e}"
+                                        )
 
                                 # Raise
-                                raise ValueError(f"ERROR. Path between fixed cubes {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms).")
+                                raise ValueError(
+                                    f"ERROR. Path between fixed cubes {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter * 1000)}ms)."
+                                )
 
     # Since it is used extensively, so prune it again
     taken = list(set(taken))
@@ -473,7 +504,11 @@ def graph_manager_bfs(
             "num_1st_pass_edges_processed": num_1st_pass_edges,
             "num_2n_pass_edges_processed": num_2nd_pass_edges,
         }
-        times = {"t_1st_pass": duration_1st_pass_edges, "t_2nd_pass": duration_2nd_pass_edges, "t_total": duration_total}
+        times = {
+            "t_1st_pass": duration_1st_pass_edges,
+            "t_2nd_pass": duration_2nd_pass_edges,
+            "t_total": duration_total,
+        }
 
         try:
             prep_stats_n_log(
@@ -570,7 +605,6 @@ def place_nxt_block(
 
     # Process targets that have yet to be placed in the 3D space
     if nxt_neigh_coords is None:
-
         # Geat target information
         nxt_neigh_node_data = nx_g.nodes[tgt_id]
         nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
@@ -603,7 +637,6 @@ def place_nxt_block(
         viable_paths = []
         nxt_neigh_neigh_n = int(get_node_degree(nx_g, tgt_id))
         for clean_path in clean_paths:
-
             # Extract key path information
             tgt_coords, tgt_kind = clean_path[-1]
             coords_in_path = get_taken_coords(clean_path)
@@ -625,7 +658,9 @@ def place_nxt_block(
 
             # Guarantee minimum necessary number of exits
             src_cube_beams = nx_g.nodes[src_id]["beams"]
-            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1 and any([clean_path[1][0] in beam for beam in src_cube_beams]):
+            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1 and any(
+                [clean_path[1][0] in beam for beam in src_cube_beams]
+            ):
                 # Allow path to break some beams
                 # but ensure it does not break more beams than needed
                 beams_broken_by_path = 0
@@ -641,7 +676,10 @@ def place_nxt_block(
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
                         num_edges_still_to_complete = n_degree - n_edges_completed
-                        if len(nx_g.nodes[n_id]["beams"]) - broken + adjust_for_source_node < num_edges_still_to_complete:
+                        if (
+                            len(nx_g.nodes[n_id]["beams"]) - broken + adjust_for_source_node
+                            < num_edges_still_to_complete
+                        ):
                             critical_beams_broken = True
 
                 # Watch out for critical beam clashes
@@ -660,9 +698,11 @@ def place_nxt_block(
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
                         num_edges_still_to_complete = n_degree - n_edges_completed
-                        if len(nx_g.nodes[n_id]["beams"]) - beam_clash_count < num_edges_still_to_complete:
+                        if (
+                            len(nx_g.nodes[n_id]["beams"]) - beam_clash_count
+                            < num_edges_still_to_complete
+                        ):
                             critical_beams_clash = True
-
 
                 # Append path to viable paths if path clears all checks
                 if critical_beams_broken is not True and critical_beams_clash is not True:
@@ -699,9 +739,8 @@ def place_nxt_block(
         # For visualisation, create a new graph on each step
         debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
         if debug > 0:
-
             # Create partial progress graph from current edges
-            partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths, fix_errors=True))
+            partial_lat_nodes, partial_lat_edges = reindex_path_dict(edge_paths, fix_errors=True)
             partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
 
             # Detailed interactive visualisation of progress
@@ -721,22 +760,19 @@ def place_nxt_block(
                 vis_options=vis_options,
                 src_tgt_ids=(src_id, tgt_id),
                 fig_data=fig_data,
-                filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
+                filename_info=(circuit_name, len(edge_paths) + 1)
+                if vis_options[1] or debug == 4
+                else None,
             )
 
         # Write winner path and related info
         if winner_path:
             # Beautify path
             pretty_winner_path = [
-                (block[0], kind_to_zx_type(block[1]))
-                for block in winner_path.all_nodes_in_path
+                (block[0], kind_to_zx_type(block[1])) for block in winner_path.all_nodes_in_path
             ]
             pretty_winner_path = [
-                (
-                    block
-                    if len(block[1]) == 1 or block[1] == "BOUNDARY"
-                    else (f"{block[1]} EDGE")
-                )
+                (block if len(block[1]) == 1 or block[1] == "BOUNDARY" else (f"{block[1]} EDGE"))
                 for block in pretty_winner_path
             ]
 
@@ -772,8 +808,12 @@ def place_nxt_block(
 
             # Update user if log_stats or debug are enabled
             if log_stats_id or debug > 0:
-                volume = len([block for block in winner_path.all_nodes_in_path if "o" not in block[1]])
-                print(f"New path created: {src_id} -> {tgt_id} (~{int(duration_iter*1000)}ms) (+{volume - 1} vol).")
+                volume = len(
+                    [block for block in winner_path.all_nodes_in_path if "o" not in block[1]]
+                )
+                print(
+                    f"New path created: {src_id} -> {tgt_id} (~{int(duration_iter * 1000)}ms) (+{volume - 1} vol)."
+                )
 
             # Return updated list of taken coords, edge_paths, and a fail/success flag
             nx_g = prune_beams(nx_g, taken)
@@ -781,10 +821,11 @@ def place_nxt_block(
 
         # Handle cases where no winner is found
         if not winner_path:
-
             # Explicit warning if log_stats or debug are enabled
             if log_stats_id or debug > 0:
-                print(f"{'ERROR' if init_step > 6 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter*1000)}ms). -> Increasing search distance")
+                print(
+                    f"{'ERROR' if init_step > 6 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter * 1000)}ms). -> Increasing search distance"
+                )
 
             # Fill edge_paths with error
             edge = tuple(sorted((src_id, tgt_id)))
@@ -815,12 +856,11 @@ def run_pathfinder(
     hdm: bool = False,
     min_succ_rate: int = 60,
     critical_beams: dict[int, tuple[int, NodeBeams]] = {},
-    src_tgt_ids: tuple[int,int] | None = None,
+    src_tgt_ids: tuple[int, int] | None = None,
     log_stats_id: str | None = None,
 ) -> tuple[
     list[Any],
-    tuple[list[StandardCoord], list[str],
-    dict[StandardBlock, list[StandardBlock]] | None],
+    tuple[list[StandardCoord], list[str], dict[StandardBlock, list[StandardBlock]] | None],
 ]:
     """Call the pathfinder algorithm for an arbitrary combination of source and target spiders/cubes.
 
@@ -1006,10 +1046,7 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
             random.shuffle(neighs)
 
             for neigh in neighs:
-                if (
-                    shuffle_c >= degree_to_shuffle
-                    or get_node_degree(nx_g, node_to_sanitise) <= 4
-                ):
+                if shuffle_c >= degree_to_shuffle or get_node_degree(nx_g, node_to_sanitise) <= 4:
                     break
                 if nx_g.has_edge(node_to_sanitise, neigh) and not nx_g.has_edge(
                     twin_node_id, neigh

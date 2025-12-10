@@ -36,6 +36,7 @@ CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent.parent
 DATA_DIR = ROOT_DIR / "benchmark/data"
 
+
 #################
 # DEBUG MANAGER #
 #################

@@ -197,7 +197,9 @@ def runner(
                         debug=debug,
                         vis_options=vis_options,
                         fig_data=fig_data,
-                        filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
+                        filename_info=(circuit_name, len(edge_paths) + 1)
+                        if vis_options[1] or debug == 4
+                        else None,
                     )
 
                     # Animation
@@ -281,7 +283,6 @@ def run_topologiq_standard_hyperparams(
     else:
         simple_graph = zx_graph
 
-
     # Force standard hyperparams
     kwargs: dict[str, tuple[int, int] | int] = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
@@ -290,11 +291,7 @@ def run_topologiq_standard_hyperparams(
 
     # Run Topolgiq
     simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges = runner(
-        simple_graph,
-        circuit_name,
-        vis_options=vis_options,
-        fig_data=fig_data,
-        **kwargs
+        simple_graph, circuit_name, vis_options=vis_options, fig_data=fig_data, **kwargs
     )
 
     return simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges

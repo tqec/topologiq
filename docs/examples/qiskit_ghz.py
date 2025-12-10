@@ -16,7 +16,6 @@ Notes:
 
 """
 
-
 import random
 
 import pyzx as zx
@@ -42,8 +41,8 @@ def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
 
     # GHZ encoding
     qc.h(0)
-    for i in range(n_qubits-1):
-        qc.cx(i, i+1)
+    for i in range(n_qubits - 1):
+        qc.cx(i, i + 1)
     print(f"\n======> Foundational {circuit_name.upper()}:\n", qc)
 
     # Convert to QASM
@@ -53,7 +52,7 @@ def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
     return qasm_str
 
 
-def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
+def qasm_to_pyzx(qasm_str: str) -> BaseGraph:
     """Import a circuit from QASM and convert it to a PyZX graph.
 
     Args:
@@ -65,7 +64,7 @@ def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
     zx_graph = zx_circuit.to_graph()
 
     # Draw
-    zx.draw(zx_graph, labels = True)
+    zx.draw(zx_graph, labels=True)
 
     return zx_graph
 
@@ -83,21 +82,20 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
 
     # Apply states
     num_apply_state = zx_graph_copy.num_inputs()
-    zx_graph_copy.apply_state('0' * num_apply_state)
+    zx_graph_copy.apply_state("0" * num_apply_state)
 
     # No post-selection needed (but here to signal where to do it if ever necessary)
-    zx_graph_copy.apply_effect('////////////////')
+    zx_graph_copy.apply_effect("////////////////")
 
     # Reduce & draw
     zx.full_reduce(zx_graph_copy)
-    zx.draw(zx_graph_copy, labels = True)
+    zx.draw(zx_graph_copy, labels=True)
 
     return zx_graph_copy
 
 
 def run_topologiq(
-    zx_graph: BaseGraph,
-    circuit_name:str
+    zx_graph: BaseGraph, circuit_name: str
 ) -> tuple[
     dict[int, StandardBlock] | None,
     dict[tuple[int, int], list[str]] | None,

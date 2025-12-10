@@ -37,7 +37,7 @@ def run_random(
     vis_options: tuple[str | None, str | None] = (None, None),
     stop_on_first_success: bool = False,
     log_stats: bool = False,
-    debug: int = 0
+    debug: int = 0,
 ):
     """Run a single random PyZX graph m_times.
 
@@ -60,7 +60,6 @@ def run_random(
 
     # call Topologiq on graph if graph is available
     if pyzx_graph is not None:
-
         # Convert graph to simple graph
         simple_graph = pyzx_g_to_simple_g(pyzx_graph)
 
@@ -76,17 +75,18 @@ def run_random(
                 log_stats=log_stats,
                 debug=debug,
                 fig_data=fig_data,
-                **kwargs
+                **kwargs,
             )
 
     # Explain why graph wouldn't be available and close shop.
     else:
-        print("Try again. Valid graph not available.\nPyZX sometimes generates graphs with disconnected subgraphs, which are incompatible with Topologiq and need to be discarded.")
+        print(
+            "Try again. Valid graph not available.\nPyZX sometimes generates graphs with disconnected subgraphs, which are incompatible with Topologiq and need to be discarded."
+        )
 
 
 # ...
 if __name__ == "__main__":
-
     # Topologiq generation parameters
     vis_options = ("final", None)
     stop_on_first_success = True
@@ -106,4 +106,12 @@ if __name__ == "__main__":
 
     # Build and run Topologiq on random graph
     m_times = 1  # Number of times to repeat the run of single random graph
-    run_random(pyzx_graph, fig_data, m_times, vis_options=vis_options, stop_on_first_success=stop_on_first_success, log_stats=log_stats, debug=debug)
+    run_random(
+        pyzx_graph,
+        fig_data,
+        m_times,
+        vis_options=vis_options,
+        stop_on_first_success=stop_on_first_success,
+        log_stats=log_stats,
+        debug=debug,
+    )

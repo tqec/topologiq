@@ -19,7 +19,7 @@ from topologiq.utils.classes import SimpleDictGraph
 #########################
 # PyZX METHODS WRAPPERS #
 #########################
-def pyzx_to_qasm(pyzx_circuit: zx.Circuit, circuit_name:str, save_dir_path: Path) -> str:
+def pyzx_to_qasm(pyzx_circuit: zx.Circuit, circuit_name: str, save_dir_path: Path) -> str:
     """Export a PyZX graph to QASM.
 
     Args:
@@ -37,7 +37,8 @@ def pyzx_to_qasm(pyzx_circuit: zx.Circuit, circuit_name:str, save_dir_path: Path
 
     return qasm_str
 
-def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
+
+def qasm_to_pyzx(qasm_str: str) -> BaseGraph:
     """Import a circuit from QASM and convert it to a PyZX graph.
 
     Args:
@@ -70,7 +71,6 @@ def get_dict_from_pyzx(g: BaseGraph | GraphS):
 
     # GET AND TRANSFER DATA FROM PyZX
     try:
-
         # Dump graph into dict
         dict_graph = g.to_dict(include_scalar=True)
 
@@ -123,11 +123,7 @@ def pyzx_g_to_simple_g(g: BaseGraph | GraphS) -> SimpleDictGraph:
     # TRANSFER INTO A SIMPLE GRAPH
     g_simple: SimpleDictGraph = {"nodes": [], "edges": []}
     for n in g_full["nodes"]:
-        n_type = (
-            "O"
-            if g_full["nodes"][n]["type"] == "BOUNDARY"
-            else g_full["nodes"][n]["type"]
-        )
+        n_type = "O" if g_full["nodes"][n]["type"] == "BOUNDARY" else g_full["nodes"][n]["type"]
         g_simple["nodes"].append((n, n_type))
 
     for e in g_full["edges"]:

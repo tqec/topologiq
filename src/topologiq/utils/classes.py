@@ -5,13 +5,13 @@ Usage:
 
 """
 
-
 from dataclasses import dataclass
 from typing import TypedDict
 
 # Types for input ZX graph
 GraphNode = tuple[int, str]
 GraphEdge = tuple[tuple[int, int], str]
+
 
 class SimpleDictGraph(TypedDict):
     """A simple graph composed of nodes and edges."""

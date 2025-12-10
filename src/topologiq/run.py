@@ -94,7 +94,6 @@ def run():
 
     # Handle any arguments passed via the command
     for arg in sys.argv:
-
         # Visualisation settings
         if arg == "--strip_boundaries":
             strip_ports = True
@@ -155,7 +154,7 @@ def run():
             log_stats=log_stats,
             debug=debug,
             fig_data=fig_data,
-            **kwargs
+            **kwargs,
         )
 
 

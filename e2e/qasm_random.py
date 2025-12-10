@@ -14,7 +14,6 @@ from topologiq.utils.e2e import test_qasm_circuit
 
 # ...
 if __name__ == "__main__":
-
     # Adjustable parameters
     generic_circuit_name = "random"
     random_seed = 0
@@ -49,5 +48,5 @@ if __name__ == "__main__":
     print(
         Colors.BLUE,
         f"\n===> E2E QASM->Blockgraph for {generic_circuit_name}. END.",
-        f"{Colors.GREEN + 'SUCCESS' if success else Colors.RED +'FAIL'}{Colors.RESET}. Duration: {duration:.2f}.\n",
+        f"{Colors.GREEN + 'SUCCESS' if success else Colors.RED + 'FAIL'}{Colors.RESET}. Duration: {duration:.2f}.\n",
     )
