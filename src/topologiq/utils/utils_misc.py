@@ -21,6 +21,8 @@ HEADER_BFS_MANAGER_STATS = [
     "unique_run_id",
     "run_success",
     "circuit_name",
+    "num_input_nodes",
+    "num_input_edges",
     "len_beams",
     "num_input_nodes_processed",
     "num_input_edges_processed",
@@ -29,6 +31,7 @@ HEADER_BFS_MANAGER_STATS = [
     "num_edges_in_edge_paths",
     "num_blocks_output",
     "num_edges_output",
+    "volume",
     "duration_first_pass",
     "duration_second_pass",
     "duration_total",
@@ -116,7 +119,7 @@ def prep_stats_n_log(
     lat_nodes: dict[int, StandardBlock] | None = None,
     lat_edges: dict[tuple[int, int], list[str]] | None = None,
     src_block_info: StandardBlock | None = None,
-    tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
+    tgt_block_info: tuple[StandardCoord | None | list[StandardCoord], str | None] = (None, None),
     tgt_zx_type: str | None = None,
     visit_stats: tuple[int, int] = (0, 0),
     run_params: dict[str, Any] = {},
@@ -165,57 +168,46 @@ def prep_stats_n_log(
     # Fill arrays as determined by the `stats_type`
     if "graph_manager" in stats_type:
 
-        durations = {
-            "first_pass": (
-                (times["t2"] - times["t1"]).total_seconds()
-                if times["t2"] and times["t1"]
-                else "error"
-            ),
-            "second_pass": (
-                (times["t_end"] - times["t2"]).total_seconds()
-                if times["t2"] and times["t_end"]
-                else "error"
-            ),
-            "total": (
-                (times["t_end"] - times["t1"]).total_seconds()
-                if times["t1"] and times["t_end"]
-                else "error"
-            ),
-        }
+        total_cubes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
+        total_pipes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
+        volume = len([True for _, kind in lat_nodes.values() if kind != "ooo"]) if lat_nodes else 0
 
         main_stats = [
             log_stats_id,
             op_success,
             circuit_name,
+            counts["num_input_nodes"],
+            counts["num_input_edges"],
             run_params["length_of_beams"],
-            counts["num_input_nodes_processed"] if op_success else 0,
-            counts["num_input_edges_processed"] if op_success else 0,
-            counts["num_1st_pass_edges_processed"] if op_success else 0,
-            counts["num_2n_pass_edges_processed"] if op_success else 0,
+            counts["num_input_nodes_processed"],
+            counts["num_input_edges_processed"],
+            counts["num_1st_pass_edges_processed"],
+            counts["num_2n_pass_edges_processed"],
             len(edge_paths) if edge_paths else 0,
-            len(lat_nodes.keys()) if lat_nodes else 0,
-            len(lat_edges.keys()) if lat_edges else 0,
-            durations["first_pass"],
-            durations["second_pass"],
-            durations["total"],
+            total_cubes_in_output,
+            total_pipes_in_output,
+            volume,
+            round(times["t_1st_pass"], 3),
+            round(times["t_2nd_pass"], 3),
+            round(times["t_total"], 3),
         ]
 
         try:
             edge_paths_summary = [
                 {
-                    edge_path["src_tgt_ids"][0]: edge_path["path_nodes"][0][1] if edge_path["path_nodes"][0][1] else None,
-                    edge_path["src_tgt_ids"][1]: edge_path["path_nodes"][-1][1] if edge_path["path_nodes"][-1][1] else None,
+                    p["src_tgt_ids"][0] if p["src_tgt_ids"] != "error" else key[0]: p["path_nodes"][0][1] if (p["path_nodes"] != "error" and p["path_nodes"][0][1]) else None,
+                    p["src_tgt_ids"][1] if p["src_tgt_ids"] != "error" else key[1]: p["path_nodes"][-1][1] if (p["path_nodes"] != "error"  and p["path_nodes"][-1][1]) else None,
                 }
-                for edge_path in edge_paths.values()] if edge_paths else ["error"]
+                for key, p in edge_paths.items()] if edge_paths else ["error"]
 
         except Exception as e:
-            print(f"Minor error with logging of aux stats: {e}")
+            print(f"Minor error with logging of aux stats: {e}.")
             edge_paths_summary = [
                 {
-                    edge_path["src_tgt_ids"][0]: "Undefined",
-                    edge_path["src_tgt_ids"][1]: "Undefined",
+                    src_id: None,
+                    tgt_id: None,
                 }
-                for edge_path in edge_paths.values()] if edge_paths else ["error"]
+                for [src_id, tgt_id] in edge_paths.keys()] if edge_paths else ["error"]
 
         aux_stats = [
             log_stats_id,
@@ -249,13 +241,8 @@ def prep_stats_n_log(
 
     elif "pathfinder" in stats_type:
         op_type = "creation" if not tgt_block_info[1] else "discovery"
-        durations = {
-            "total": (
-                (times["t_end"] - times["t1"]).total_seconds()
-                if times["t1"] and times["t_end"]
-                else "error"
-            )
-        }
+        tgt_coords = tgt_block_info[0]
+        tgt_kind = tgt_block_info[1]
 
         main_stats = [
             log_stats_id,
@@ -263,16 +250,16 @@ def prep_stats_n_log(
             op_success,
             src_block_info[0] if src_block_info else "error",
             src_block_info[1] if src_block_info else "error",
-            tgt_block_info[0] if tgt_block_info[0] else "TBD",
+            tgt_coords,
             tgt_zx_type,
-            tgt_block_info[1] if tgt_block_info[1] else "TBD",
+            tgt_kind,
             counts["num_tent_coords"],
             counts["num_tent_coords_filled"],
             counts["max_manhattan"],
             counts["len_longest_path"],
             visit_stats[0],
             visit_stats[1],
-            durations["total"],
+            round(times["duration_pathfinder"], 3),
         ]
 
     # Call logger

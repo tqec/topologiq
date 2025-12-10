@@ -74,10 +74,8 @@ def pathfinder(
     """
 
     # Preliminaries
-    t1 = None
-    t_end = None
-    if log_stats_id is not None:
-        t1 = datetime.now()
+    t_start_pathfinder = datetime.now()
+    t_end_pathfinder = None
 
     # Unpack incoming data
     src_coords, _ = src_block_info
@@ -112,9 +110,10 @@ def pathfinder(
     if log_stats_id is not None:
 
         # End timers
-        t_end = datetime.now()
-        times = {"t1": t1, "t_end": t_end}
-        iter_success = True if valid_paths else False
+        t_end_pathfinder = datetime.now()
+        duration_pathfinder = (t_end_pathfinder - t_start_pathfinder).total_seconds()
+        times = {"duration_pathfinder": duration_pathfinder}
+        pathfinder_iter_success = True if valid_paths else False
 
         # Calculate key metrics
         len_longest_path = 0
@@ -134,14 +133,15 @@ def pathfinder(
         }
 
         # Log
+        adjusted_target_info = (tent_coords, tent_tgt_kinds)
         prep_stats_n_log(
             "pathfinder",
             log_stats_id,
-            iter_success,
+            pathfinder_iter_success,
             counts,
             times,
             src_block_info=src_block_info,
-            tgt_block_info=tgt_block_info,
+            tgt_block_info=adjusted_target_info,
             tgt_zx_type=tgt_zx_type,
             visit_stats=visit_stats,
         )
@@ -385,6 +385,11 @@ def core_pathfinder_bfs(
 
                 # Log to visited and update path lengths if all conditions met
                 # Note. If conditions not met, move would break topology
+                # Increase counter of times pathfinder tries visits something new
+                visit_attempts += 1
+
+                # Undertake checks and visit if move is valid
+                # Do NOT visit otherwise so site is not taken for a different path
                 if (
                     nxt_coords not in curr_path_coords
                     and nxt_coords not in taken
@@ -413,9 +418,6 @@ def core_pathfinder_bfs(
                                 break
                         else:
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
-
-                        # Increase counter of times pathfinder tries visits something new
-                        visit_attempts += 1
 
                     if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                         break

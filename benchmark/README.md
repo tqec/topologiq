@@ -24,6 +24,8 @@ Schemas for the data files inside the data folder are as follows:
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,
 - run_success: whether the process was successful, i.e., it produced a complete lattice surgery/space-time diagram of the original circuit,
 - circuit_name: the name of the circuit,
+- num_input_nodes: the number of spiders in the input ZX graph,
+- num_input_edges: the number of spiders in the input ZX graph,
 - len_beams: the length of the beams used for the specific run,
 - num_input_nodes_processed: the number of nodes in the original/input ZX graph that were processed successfully,
 - num_input_edges_processed: the number of edges in the original/input ZX graph that were processed successfully,
@@ -32,6 +34,7 @@ Schemas for the data files inside the data folder are as follows:
 - num_edges_in_edge_paths: the total number of edges in the final set of edges produced by the algorithm (same as `num_input_edges_processed` if `run_success==True`),
 - num_blocks_output: the number of 3D spider blocks (cubes) in the output,
 - num_edges_output: the number of 3D edge blocks (pipes) in the output,
+- volume: the volume of the resulting space-time diagram (measured by number of non-port cubes)
 - duration_first_pass: the total duration of the first pass of the algorithm, i.e., the "while" loop that takes care of "first pass" edges,
 - duration_second_pass: the total duration of the second pass of the algorithm, i.e., the "while" loop that takes care of "second pass" edges,
 - duration_total: the total duration of the entire algorithmic lattice surgery process for this circuit, irrespective of `run_success`. 

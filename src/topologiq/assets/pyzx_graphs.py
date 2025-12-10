@@ -102,22 +102,34 @@ def steane_pyzx(draw_graph: bool = False) -> tuple[BaseGraph | GraphS | None, ma
 
     """
 
+    # Foundational circuit
     pyzx_circuit = zx.Circuit(10)
 
     ancilla_qubits = [0, 1, 2]
     qubits= [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
-
     for i, ancilla_qubit in enumerate(ancilla_qubits):
         pyzx_circuit.add_gate("HAD", ancilla_qubit)
         for qubit in qubits[i]:
             pyzx_circuit.add_gate("CNOT", ancilla_qubit, qubit)
         pyzx_circuit.add_gate("HAD", ancilla_qubit)
-        pyzx_circuit.add_gate("PostSelect", ancilla_qubit)
-
     pyzx_graph = pyzx_circuit.to_graph()
-    pyzx_graph.apply_state('0'*10)
 
-    return pyzx_graph
+    # States & effects
+    num_apply_state = pyzx_graph.num_inputs()
+    pyzx_graph.apply_state("0" * num_apply_state)
+    pyzx_graph.apply_effect("000///////")
+
+    # Reduction
+    zx.full_reduce(pyzx_graph)
+    zx.to_rg(pyzx_graph)
+    zx.phase_free_simp(pyzx_graph)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
 
 
 def random_graph(
