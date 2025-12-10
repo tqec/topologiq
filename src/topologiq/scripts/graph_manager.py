@@ -64,7 +64,6 @@ def graph_manager_bfs(
 ) -> tuple[
     nx.Graph,
     dict,
-    int,
     dict[int, StandardBlock] | None,
     dict[tuple[int, int], list[str]] | None,
 ]:
@@ -99,7 +98,8 @@ def graph_manager_bfs(
     Returns:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
-        num_edges_processed: a counter for the number of completed (top-level) iterations by the main loop in this function (used to organise visualisations).
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
 
     """
 
@@ -132,11 +132,11 @@ def graph_manager_bfs(
     # Validity checks
     if not check_zx_types(simple_graph):
         print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
-        return (nx_g, edge_paths, 0, lat_nodes, lat_edges)
+        return nx_g, edge_paths, lat_nodes, lat_edges
 
     if first_id is None:
         print(Colors.RED + "Graph has no nodes." + Colors.RESET)
-        return nx_g, edge_paths, 0, lat_nodes, lat_edges
+        return nx_g, edge_paths, lat_nodes, lat_edges
 
     # Place first spider at origin
     # Get first spider kind from type family
@@ -338,6 +338,34 @@ def graph_manager_bfs(
                             duration_current_2nd_pass_iter = (t_end_2nd_pass_iter - t1_2nd_pass_iter).total_seconds()
                             duration_2nd_pass_edges += (t_end_2nd_pass_iter - t1_2nd_pass_iter).total_seconds()
 
+                            # For visualisation, create a new graph on each step irrespective of outcome
+                            debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
+                            if debug > 0:
+
+                                # Create partial progress graph from current edges
+                                partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths))
+                                partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
+
+                                # Detailed interactive visualisation of progress
+                                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
+                                vis_3d(
+                                    nx_g,
+                                    partial_nx_g,
+                                    edge_paths,
+                                    valid_paths if valid_paths else None,
+                                    clean_paths[0] if clean_paths else None,
+                                    (u_coords, u_kind),
+                                    tent_coords,
+                                    tent_tgt_kinds,
+                                    hide_ports=hide_ports,
+                                    all_search_paths=all_search_paths,
+                                    debug=debug,
+                                    vis_options=vis_options,
+                                    src_tgt_ids=(src_id, tgt_id),
+                                    fig_data=fig_data,
+                                    filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
+                                )
+
                             # Write to edge_paths if an edge is found
                             if clean_paths:
 
@@ -376,8 +404,7 @@ def graph_manager_bfs(
                                 # Update user if log_stats or debug mode are enabled
                                 if log_stats_id or debug > 0:
                                     volume = len([block for block in clean_paths[0] if "o" not in block[1]])
-                                    print(f"Found path between pre-existent cubes: {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms) (+{volume-2} vol).")
-                                    print(f" - Num 2nd pass edges processed thus far: {num_2nd_pass_edges}")
+                                    print(f"Path between fixed cubes found: {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms) (+{volume-2} vol).")
 
 
                             # Log stats and raise if 2nd pass iteration fails
@@ -424,35 +451,7 @@ def graph_manager_bfs(
                                         print(f"Unable to log stats for failed run in second pass: {e}")
 
                                 # Raise
-                                raise ValueError(f"ERROR. Path between pre-existent cubes {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms).")
-
-                            # For visualisation, create a new graph on each step irrespective of outcome
-                            debug = debug if debug >= 1 else 1 if vis_options[0] == "detail" or vis_options[1] else 0
-                            if debug > 0:
-
-                                # Create partial progress graph from current edges
-                                partial_lat_nodes, partial_lat_edges = (reindex_path_dict(edge_paths))
-                                partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
-
-                                # Detailed interactive visualisation of progress
-                                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
-                                vis_3d(
-                                    nx_g,
-                                    partial_nx_g,
-                                    edge_paths,
-                                    valid_paths if valid_paths else None,
-                                    clean_paths[0] if clean_paths else None,
-                                    (u_coords, u_kind),
-                                    tent_coords,
-                                    tent_tgt_kinds,
-                                    hide_ports=hide_ports,
-                                    all_search_paths=all_search_paths,
-                                    debug=debug,
-                                    vis_options=vis_options,
-                                    src_tgt_ids=(src_id, tgt_id),
-                                    fig_data=fig_data,
-                                    filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
-                                )
+                                raise ValueError(f"ERROR. Path between fixed cubes {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter*1000)}ms).")
 
     # Since it is used extensively, so prune it again
     taken = list(set(taken))
@@ -492,7 +491,7 @@ def graph_manager_bfs(
         except Exception as e:
             print(f"Unable to log stats for successful run: {e}")
 
-    return nx_g, edge_paths, num_edges_processed, lat_nodes, lat_edges
+    return nx_g, edge_paths, lat_nodes, lat_edges
 
 
 ##################

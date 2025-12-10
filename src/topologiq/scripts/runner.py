@@ -144,7 +144,7 @@ def runner(
         lat_nodes = None
         lat_edges = None
         try:
-            nx_g, edge_paths, c, lat_nodes, lat_edges = graph_manager_bfs(
+            nx_g, edge_paths, lat_nodes, lat_edges = graph_manager_bfs(
                 simple_graph,
                 circuit_name=circuit_name,
                 min_succ_rate=min_succ_rate,
@@ -197,7 +197,7 @@ def runner(
                         debug=debug,
                         vis_options=vis_options,
                         fig_data=fig_data,
-                        filename_info=(circuit_name, c) if vis_options[1] or debug == 4 else None,
+                        filename_info=(circuit_name, len(edge_paths) + 1) if vis_options[1] or debug == 4 else None,
                     )
 
                     # Animation

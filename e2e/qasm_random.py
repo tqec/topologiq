@@ -30,7 +30,7 @@ if __name__ == "__main__":
     )
     # Run circuits on a loop, without reduction
     circuit_names = ["qasm_random_05_05", "qasm_random_10_10"]  # Moderate runtimes.
-    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_03_30"]  # Significant runtimes.
+    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20"]  # Significant runtimes.
     # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_03_30", "qasm_random_10_50"]  # VERY significant runtimes.
     reduce_mode = False
     for circuit_name in circuit_names:
