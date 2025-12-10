@@ -91,20 +91,19 @@ if __name__ == "__main__":
     vis_options = ("final", None)
     stop_on_first_success = True
     log_stats = False
-    debug = 0
+    debug = 1
 
     # Parameters for random generation of input graph
-    seed = 0
+    seed = 1
     random.seed(seed)
-    min_qubits, max_qubits = (2, 5)
-    min_depth, max_depth = (25, 50)
-    qubit_n = random.randrange(min_qubits, max_qubits)
-    depth = random.randrange(min_depth, max_depth)
+    qubit_n = 5
+    depth = 15
 
     # Get a valid random PyZX circuit graph
-    circuit_name: str = f"random_{seed}_{qubit_n}_{depth}"
-    pyzx_graph, fig_data = random_graph(qubit_n, depth, draw_graph=True)
+    circuit_name = f"random_{seed}_{qubit_n}_{depth}"
+    graph_type = "cnot"
+    pyzx_graph, fig_data = random_graph(qubit_n, depth, graph_type=graph_type, draw_graph=True)
 
     # Build and run Topologiq on random graph
-    m_times = 10  # Number of times to repeat the run of single random graph
+    m_times = 1  # Number of times to repeat the run of single random graph
     run_random(pyzx_graph, fig_data, m_times, vis_options=vis_options, stop_on_first_success=stop_on_first_success, log_stats=log_stats, debug=debug)

@@ -32,6 +32,9 @@ from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import get_debug_cases
 
+CURRENT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = CURRENT_DIR.parent.parent
+DATA_DIR = ROOT_DIR / "benchmark/data"
 
 #################
 # DEBUG MANAGER #
@@ -70,10 +73,10 @@ def run_debug():
     len_of_beams = LENGTH_OF_BEAMS
 
     # Get list of edge cases
-    path_to_stats = Path(__file__).parent.resolve() / "assets/stats/debug.csv"
+    path_to_stats = DATA_DIR / "debug.csv"
 
     if not path_to_stats.exists():
-        raise FileNotFoundError(f"File `{path_to_stats}` must exist.\n")
+        raise FileNotFoundError("Debug file must exist.\n")
 
     debug_cases = list(set(get_debug_cases(path_to_stats)))
 

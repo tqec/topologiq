@@ -47,4 +47,4 @@ Notes:
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 
 # Length of beams
-LENGTH_OF_BEAMS = 9
+LENGTH_OF_BEAMS = 99

@@ -31,10 +31,13 @@ Currently, the best way to test **Topologiq** is to clone the repository, recrea
 git clone https://github.com/jbolns/topologiq.git
 
 # 2. Sync environment.
-uv sync
+uv sync  # Topologiq
+# or
+uv sync --group integration  # Topologiq w. TQEC/tqec
 
 # Additional steps needed only for contributors
 # 3. Opt for an editable installation
+uv sync --group all
 uv pip install -e .
 ```
 

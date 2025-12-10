@@ -5,8 +5,10 @@ Usage:
 
 """
 
+from pathlib import Path
 from typing import cast
 
+import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType
@@ -14,8 +16,43 @@ from pyzx.utils import EdgeType
 from topologiq.utils.classes import SimpleDictGraph
 
 
+#########################
+# PyZX METHODS WRAPPERS #
+#########################
+def pyzx_to_qasm(pyzx_circuit: zx.Circuit, circuit_name:str, save_dir_path: Path) -> str:
+    """Export a PyZX graph to QASM.
+
+    Args:
+        pyzx_circuit: A PyZX circuit.
+        circuit_name: The name of the circuit being saved.
+        save_dir_path: A path specifying the destination folder.
+
+    """
+    # QASM --> PyZX circuit --> PyZX graph
+    qasm_str = zx.Circuit.to_qasm(pyzx_circuit)
+    file_path = save_dir_path / f"{circuit_name}.qasm"
+    with open(file_path, "w") as f:
+        f.write(qasm_str)
+        f.close
+
+    return qasm_str
+
+def qasm_to_pyzx(qasm_str:str) -> BaseGraph:
+    """Import a circuit from QASM and convert it to a PyZX graph.
+
+    Args:
+        qasm_str: A quantum circuit encoded as a QASM string.
+
+    """
+    # QASM --> PyZX circuit --> PyZX graph
+    zx_circuit = zx.Circuit.from_qasm(qasm_str)
+    pyzx_graph = zx_circuit.to_graph()
+
+    return zx_circuit, pyzx_graph
+
+
 ########################
-# PYZX EXTRACTION JOBS #
+# EXTRACT & MANIPULATE #
 ########################
 def get_dict_from_pyzx(g: BaseGraph | GraphS):
     """Extract circuit information from a PyZX graph and dumps it into a dictionary.

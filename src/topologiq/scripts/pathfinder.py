@@ -74,10 +74,8 @@ def pathfinder(
     """
 
     # Preliminaries
-    t1 = None
-    t_end = None
-    if log_stats_id is not None:
-        t1 = datetime.now()
+    t_start_pathfinder = datetime.now()
+    t_end_pathfinder = None
 
     # Unpack incoming data
     src_coords, _ = src_block_info
@@ -112,9 +110,10 @@ def pathfinder(
     if log_stats_id is not None:
 
         # End timers
-        t_end = datetime.now()
-        times = {"t1": t1, "t_end": t_end}
-        iter_success = True if valid_paths else False
+        t_end_pathfinder = datetime.now()
+        duration_pathfinder = (t_end_pathfinder - t_start_pathfinder).total_seconds()
+        times = {"duration_pathfinder": duration_pathfinder}
+        pathfinder_iter_success = True if valid_paths else False
 
         # Calculate key metrics
         len_longest_path = 0
@@ -134,14 +133,15 @@ def pathfinder(
         }
 
         # Log
+        adjusted_target_info = (tent_coords, tent_tgt_kinds)
         prep_stats_n_log(
             "pathfinder",
             log_stats_id,
-            iter_success,
+            pathfinder_iter_success,
             counts,
             times,
             src_block_info=src_block_info,
-            tgt_block_info=tgt_block_info,
+            tgt_block_info=adjusted_target_info,
             tgt_zx_type=tgt_zx_type,
             visit_stats=visit_stats,
         )
@@ -211,10 +211,10 @@ def core_pathfinder_bfs(
     all_search_paths: dict[StandardBlock, list[StandardBlock]] | None = {}
     moves_unadjusted = [
         (1, 0, 0),
-        (-1, 0, 0),
         (0, 1, 0),
-        (0, -1, 0),
         (0, 0, 1),
+        (-1, 0, 0),
+        (0, -1, 0),
         (0, 0, -1),
     ]
 
@@ -288,26 +288,44 @@ def core_pathfinder_bfs(
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
             curr_path_coords = [n[0] for n in path[current_block]]
-
+            try:
+                full_path_coords = get_taken_coords(path[current_block])
+            except Exception as _:
+                full_path_coords = None
             # Abort if next position has been taken
             if nxt_coords in taken:
                 continue
 
             # Abort if next position clashes with a critical beam
+            continue_flag = False
             if critical_beams:
                 nodes_with_critical_beams_id = critical_beams.keys()
                 if nodes_with_critical_beams_id:
-                    continue_flag = False
                     for node_id in nodes_with_critical_beams_id:
+                        broken_beams = 0
                         min_exit_num = critical_beams[node_id][0]
                         beams = critical_beams[node_id][1]
-                        beams_broken_for_node = sum(
-                            [nxt_coords in beam[:3] for beam in beams]
-                        )
+                        for beam in beams:
+                            # If a coord breaks a beam, add one to broken beams because beam
+                            # of node has been broken
+                            if any([coord in beam[:6] for coord in full_path_coords]):
+                                broken_beams += 1
+                                # Additionally, add any number of beam-to-beam clashes for the node
+                                # currently under investigation because, if they exist, they likely are already
+                                # using the cushion that allows breaking some beams
+                                if node_id not in src_tgt_ids:
+                                    for n_id in nodes_with_critical_beams_id:
+                                            all_beams = critical_beams[n_id][1]
+                                            for single_beam in all_beams:
+                                                if any([coord in beam[:6] for coord in single_beam]):
+                                                    broken_beams += 1
+
                         adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
-                        if len(beams) - beams_broken_for_node < (min_exit_num - adjust_for_source_node):
+                        if len(beams) + adjust_for_source_node - broken_beams < min_exit_num:
                             continue_flag = True
                             break
+                        else:
+                            continue_flag = False
                     if continue_flag:
                         continue
 
@@ -326,13 +344,14 @@ def core_pathfinder_bfs(
                     if nodes_with_critical_beams_id:
                         continue_flag = False
                         for node_id in nodes_with_critical_beams_id:
+                            broken_beams = 0
                             min_exit_num = critical_beams[node_id][0]
                             beams = critical_beams[node_id][1]
-                            beams_broken_for_node = sum(
-                                [mid_coords in beam[:3] for beam in beams]
-                            )
+                            for beam in beams:
+                                if any([coord in beam for coord in full_path_coords]):
+                                    broken_beams += 1
                             adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
-                            if len(beams) - beams_broken_for_node < (min_exit_num - adjust_for_source_node):
+                            if len(beams) - broken_beams < (min_exit_num - adjust_for_source_node):
                                 continue_flag = True
                                 break
                         if continue_flag:
@@ -366,6 +385,11 @@ def core_pathfinder_bfs(
 
                 # Log to visited and update path lengths if all conditions met
                 # Note. If conditions not met, move would break topology
+                # Increase counter of times pathfinder tries visits something new
+                visit_attempts += 1
+
+                # Undertake checks and visit if move is valid
+                # Do NOT visit otherwise so site is not taken for a different path
                 if (
                     nxt_coords not in curr_path_coords
                     and nxt_coords not in taken
@@ -394,9 +418,6 @@ def core_pathfinder_bfs(
                                 break
                         else:
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
-
-                        # Increase counter of times pathfinder tries visits something new
-                        visit_attempts += 1
 
                     if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                         break

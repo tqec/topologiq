@@ -5,6 +5,7 @@ Usage:
 
 """
 
+import networkx as nx
 import numpy as np
 
 from topologiq.utils.classes import NodeBeams, StandardBeam, StandardBlock, StandardCoord
@@ -127,11 +128,11 @@ def check_unobstr(
     This function should typically be called after verifying a face is exit.
 
     Args:
-        src_c: (x, y, z) coordinates for the current block/pipe.
-        tgt_c: coordinates for the target block/pipe.
-        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
-        beams_len: int representing how long does each beam spans from its originating block.
+        src_c: The (x, y, z) coordinates for the current block/pipe.
+        tgt_c: The coordinates for the target block/pipe.
+        taken: The list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+        all_beams: The list of coordinates taken by the beams of all blocks in original ZX-graph
+        beams_len: The int representing how long does each beam spans from its originating block.
 
     Returns:
         (bool): True if face is unobstructed else False.
@@ -161,7 +162,8 @@ def check_exits(
     src_c: StandardCoord,
     src_k: str | None,
     taken: list[StandardCoord],
-    all_beams: list[NodeBeams],
+    coords_in_path: list[StandardCoord],
+    nx_g: nx.Graph,
     beams_len: int,
 ) -> tuple[int, NodeBeams]:
     """Find the number of unobstructed exits for an arbitrary block.
@@ -171,15 +173,16 @@ def check_exits(
     exit is unobstructed.
 
     Args:
-        src_c: (x, y, z) coordinates for the block/pipe of interest.
-        src_k: kind/type of the block/pipe of interest.
-        taken: list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-        all_beams: list of coordinates taken by the beams of all blocks in original ZX-graph
-        beams_len: int representing how long does each beam spans from its originating block.
+        src_c: The (x, y, z) coordinates for the block.
+        src_k: The kind of the block.
+        taken: A list of coordinates taken by any blocks placed as a result of previous operations.
+        coords_in_path: The coordinates taken by the path under current evaluation.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        beams_len: An integer representing how far each beam spans from its originating block.
 
     Returns:
-        unobstrexits_n: the number of unobstructed exist for the block/pipe of interest.
-        n_beams: the beams emanating from the block/pipe of interest.
+        unobstr_exits_n: the number of unobstructed exist for the block.
+        beams_for_block: the beams emanating from the block.
 
     """
 
@@ -204,11 +207,29 @@ def check_exits(
 
         if check_is_exit(src_c, src_k, tgt_c):
             is_unobstr, exit_beam = check_unobstr(
-                src_c, tgt_c, taken, all_beams, beams_len
+                src_c, tgt_c, taken, [], beams_len
             )
-            if is_unobstr:
+            if is_unobstr and not any([coord in coords_in_path for coord in exit_beam]):
                 unobstr_exits_n += 1
                 n_beams.append(exit_beam)
+
+    # Remove any beams with beam clashes
+    delete_beams = []
+    for i, target_node_beam in enumerate(n_beams):
+        for node_id in nx_g.nodes():
+            node_beams = nx_g.nodes[node_id]["beams"]
+            if node_beams != [] and node_beams is not None:
+                for beam in node_beams:
+                    if not any([coord in coords_in_path for coord in beam[:9]]):
+                        if any([(coord in target_node_beam[:9]) for coord in beam]):
+                            delete_beams.extend([i])
+    delete_idxs = list(set(delete_beams))
+    if n_beams and delete_idxs:
+        for idx in sorted(delete_idxs, reverse=True):
+            del n_beams[idx]
+
+    # Reset number of unobstructed exits
+    unobstr_exits_n = len(n_beams)
 
     return unobstr_exits_n, n_beams
 
