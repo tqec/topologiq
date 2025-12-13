@@ -13,7 +13,21 @@ from matplotlib.patches import Circle
 
 from topologiq.utils.classes import SimpleDictGraph
 
+#############
+# CONSTANTS #
+#############
+hex_map = {
+    "X": "#d7a4a1",
+    "Y": "#a8e6cf",
+    "Z": "#b9cdff",
+    "O": "#555",
+    "SIMPLE": "#000",
+    "HADAMARD": "#1f2df1",
+}
 
+############
+# GRAPHERS #
+############
 def simple_graph_vis(simple_graph: SimpleDictGraph, layout_method: str = "spectral") -> Figure:
     """Visualise a graph using only Matplotlib objects.
 
@@ -22,16 +36,6 @@ def simple_graph_vis(simple_graph: SimpleDictGraph, layout_method: str = "spectr
         layout_method: The NX layout method to use to define node positions.
 
     """
-
-    # Colours
-    hex_map = {
-        "X": "#d7a4a1",
-        "Y": "#a8e6cf",
-        "Z": "#b9cdff",
-        "O": "#555",
-        "SIMPLE": "#000",
-        "HADAMARD": "#1f2df1",
-    }
 
     # Temporary NX graph for layout purposes
     temp_g = nx.Graph()

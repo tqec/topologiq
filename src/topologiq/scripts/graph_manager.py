@@ -44,7 +44,11 @@ from topologiq.utils.utils_greedy_bfs import (
 )
 from topologiq.utils.utils_misc import prep_stats_n_log
 from topologiq.utils.utils_pathfinder import check_exits
-from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
+from topologiq.utils.utils_zx_graphs import (
+    check_zx_types,
+    get_zx_type_fam,
+    kind_to_zx_type,
+)
 
 
 ###############################
@@ -669,7 +673,7 @@ def place_nxt_block(
                     if nx_g.nodes[n_id]["beams"]:
                         broken = 0
                         for bm in nx_g.nodes[n_id]["beams"]:
-                            if any([(c in coords_in_path) for c in bm[:7]]):
+                            if any([(c in coords_in_path) for c in bm[:9]]):
                                 beams_broken_by_path += 1
                                 broken += 1
                         adjust_for_source_node = 1 if n_id == src_id else 0
@@ -694,7 +698,7 @@ def place_nxt_block(
                             for b in tgt_beams:
                                 beam_clashes_for_node = sum([(c in b[:9]) for c in bm[:9]])
                                 if beam_clashes_for_node > len(tgt_beams) - nxt_neigh_neigh_n:
-                                    beam_clash_count += 1
+                                    beam_clash_count += beam_clashes_for_node
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
                         num_edges_still_to_complete = n_degree - n_edges_completed
@@ -1057,4 +1061,8 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
                     nx_g.remove_edge(node_to_sanitise, neigh)
                     shuffle_c += 1
 
+    # Attempt reversing bi-algebra rule applications in the incoming graph
+    # This particular rule seems at root of many "second pass" edges,
+    # which take longer to resolve than normal edges.
+    # TO BE IMPLEMENTED
     return nx_g

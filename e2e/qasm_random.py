@@ -9,6 +9,8 @@ Usage:
 
 """
 
+import random
+
 from topologiq.utils.classes import Colors
 from topologiq.utils.e2e import test_qasm_circuit
 
@@ -16,7 +18,9 @@ from topologiq.utils.e2e import test_qasm_circuit
 if __name__ == "__main__":
     # Adjustable parameters
     generic_circuit_name = "random"
-    random_seed = 0
+    random_seed = None
+    #random.seed(random_seed)
+    max_attempts = 10
     vis_options = (None, None)  # Change to none for GitHub mode. Enable for debugging locally.
     debug = 0
     save_to_file = True
@@ -28,14 +32,16 @@ if __name__ == "__main__":
         Colors.RESET,
     )
     # Run circuits on a loop, without reduction
-    circuit_names = ["qasm_random_05_05", "qasm_random_10_10"]  # Moderate runtimes.
-    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20"]  # Significant runtimes.
-    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_03_30", "qasm_random_10_50"]  # VERY significant runtimes.
+    circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_05_15", "qasm_random_10_20", "qasm_random_10_30", "qasm_random_03_30", "qasm_random_10_50"]  # VERY significant runtimes.
+    #circuit_names = ["qasm_random_03_30", "qasm_random_10_50"]  # VERY significant runtimes.
+    #circuit_names = ["qasm_random_10_20"]
+    #circuit_names = ["qasm_random_05_05", "qasm_random_10_10"]
     reduce_mode = False
     for circuit_name in circuit_names:
         _, _, test_stats = test_qasm_circuit(
             circuit_name,
             reduce=reduce_mode,
+            max_attempts=max_attempts,
             vis_options=vis_options,
             debug=debug,
             random_seed=random_seed,

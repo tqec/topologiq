@@ -29,6 +29,7 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 def test_qasm_circuit(
     circuit_name: str,
     reduce: bool = False,
+    max_attempts: int = 10,
     vis_options: tuple[str | None, str | None] = (None, None),
     debug: int = 0,
     random_seed: int | None = None,
@@ -43,6 +44,7 @@ def test_qasm_circuit(
     Args:
         circuit_name: The random PyZX graph.
         reduce (optional): Whether to optimise/reduce the circuit before running it or not.
+        max_attempts (optional): How many times to repeat-run the circuit.
         vis_options (optional): Visualisation settings provided as a tuple.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         random_seed (optional): A specific seed to use for a particular run.
@@ -69,7 +71,7 @@ def test_qasm_circuit(
         circuit_name,
         path_to_qasm_circuit,
         reduce=reduce,
-        max_attempts=1,
+        max_attempts=max_attempts,
         vis_options=vis_options,
         debug=debug,
     )

@@ -7,7 +7,12 @@ Usage:
 
 import math
 
+import matplotlib.pyplot as plt
+import networkx as nx
+from networkx.algorithms import isomorphism
+
 from topologiq.utils.classes import SimpleDictGraph
+from topologiq.utils.simple_grapher import hex_map
 
 
 def strip_boundaries(c_g: SimpleDictGraph) -> SimpleDictGraph:
@@ -167,3 +172,184 @@ def break_single_spider_graph(simple_graph: SimpleDictGraph) -> SimpleDictGraph:
 
     # RETURN
     return new_simple_graph
+
+
+def bialgebra_reverse(nx_g: nx.Graph, patterns: list[nx.Graph]) -> nx.Graph:
+    """Perform an inverse bi-algebra transformation on a ZX graph with matching patterns.
+
+    Args:
+        nx_g: A ZX circuit as a NX graph.
+        patterns: Any number of graph patterns encoded as mini NX graphs.
+
+    Returns:
+        new_nx_g: A transformed graph where matching patterns are transformed using a reverse bi-algebra rule.
+
+    """
+
+    iso_dict = {}
+    for i, pat_nx_g in enumerate(patterns):
+        isomatcher = isomorphism.GraphMatcher(nx_g, pat_nx_g, node_match=node_matcher_reverse, edge_match=edge_matcher)
+        isomorphisms = list(isomatcher.subgraph_isomorphisms_iter())
+        print(isomorphisms)
+        iso_dict[i] = isomorphisms
+
+    for iso_group in  iso_dict.values():
+        for iso in iso_group:
+
+            plt.figure()
+            ax = plt.gca()
+
+            layout = nx.kamada_kawai_layout(nx_g)
+            colour_mapping = [hex_map[attrs["zx_type"]] for _, attrs in nx_g.nodes(data=True)]
+            nx.draw(nx_g, with_labels=True, pos=layout, node_color=colour_mapping)
+
+            for node_id, (x,y) in layout.items():
+                emphasis = True if node_id in iso.keys() else False
+                if emphasis:
+                    circle = plt.Circle((x,y), radius=0.1, alpha=0.5, facecolor="yellow", edgecolor="red")
+                    ax.add_artist(circle)
+
+            plt.show()
+
+    new_nx_g = nx_g
+    return new_nx_g
+
+
+def bialgebra(nx_g: nx.Graph, patterns: list[nx.Graph]) -> nx.Graph:
+    """Perform an inverse bi-algebra transformation on a ZX graph with matching patterns.
+
+    Args:
+        nx_g: A ZX circuit as a NX graph.
+        patterns: Any number of graph patterns encoded as mini NX graphs.
+
+    Returns:
+        new_nx_g: A transformed graph where matching patterns are transformed using a reverse bi-algebra rule.
+
+    """
+
+    iso_dict = {}
+    for i, pat_nx_g in enumerate(patterns):
+        isomatcher = isomorphism.GraphMatcher(nx_g, pat_nx_g, node_match=node_matcher, edge_match=edge_matcher)
+        isomorphisms = list(isomatcher.subgraph_isomorphisms_iter())
+        print(isomorphisms)
+        iso_dict[i] = isomorphisms
+
+    for iso_group in  iso_dict.values():
+        for iso in iso_group:
+
+            plt.figure()
+            ax = plt.gca()
+
+            layout = nx.kamada_kawai_layout(nx_g)
+            colour_mapping = [hex_map[attrs["zx_type"]] for _, attrs in nx_g.nodes(data=True)]
+            nx.draw(nx_g, with_labels=True, pos=layout, node_color=colour_mapping)
+
+            for node_id, (x,y) in layout.items():
+                emphasis = True if node_id in iso.keys() else False
+                if emphasis:
+                    circle = plt.Circle((x,y), radius=0.1, alpha=0.5, facecolor="yellow", edgecolor="red")
+                    ax.add_artist(circle)
+
+            plt.show()
+
+    new_nx_g = nx_g
+    return new_nx_g
+
+
+def node_matcher(nx_g_attrs, pat_g_attrs):
+    """Check a node matches another node in a different graph."""
+
+
+    nx_g_type, nx_g_degree = (nx_g_attrs.get("zx_type"), nx_g_attrs.get("degree"))
+    pat_g_type, _ = (pat_g_attrs.get("zx_type"), pat_g_attrs.get("degree"))
+
+    match = False
+    if nx_g_type == pat_g_type and nx_g_degree == 4:
+        match = True
+    return match
+
+def node_matcher_reverse(nx_g_attrs, pat_g_attrs):
+    """Check a node matches another node in a different graph."""
+
+    nx_g_type, nx_g_degree = (nx_g_attrs.get("zx_type"), nx_g_attrs.get("degree"))
+    pat_g_type = pat_g_attrs.get("zx_type")
+
+    match = False
+    if pat_g_type in ("O", nx_g_type) and nx_g_degree >= 2:
+        match = True
+    return match
+
+def edge_matcher(nx_g_attrs, pat_nx_g_attrs):
+    """Check an edge matches another node in a different graph."""
+
+
+    nx_g_type = nx_g_attrs.get("zx_type")
+    pat_g_type = pat_nx_g_attrs.get("zx_type")
+
+    match = False
+    if nx_g_type == pat_g_type:
+        match = True
+
+    return match
+
+
+
+def bialgebra_patterns(draw_graph = False) -> nx.Graph:
+    """Return match patterns for application of reverse bi-algebra rule."""
+
+    patterns = []
+    pat = nx.Graph()
+    pat.add_node("X", zx_type = "X")
+    pat.add_node("Z", zx_type = "Z")
+    pat.add_edge("X", "Z", zx_type="SIMPLE")
+    patterns.append(pat)
+
+    if draw_graph:
+        for pat in patterns:
+            layout = nx.kamada_kawai_layout(pat)
+            colour_mapping = [hex_map[attrs["zx_type"]] for _, attrs in pat.nodes(data=True)]
+            nx.draw(pat, with_labels=True, pos=layout, node_color=colour_mapping)
+            plt.show()
+
+    return patterns
+
+
+def bialgebra_patterns_reverse(draw_graph = False) -> nx.Graph:
+    """Return match patterns for application of reverse bi-algebra rule."""
+
+    patterns = []
+
+    pat = nx.Graph()
+    pat.add_nodes_from([1, 2], zx_type = "X")
+    pat.add_nodes_from([3, 4], zx_type = "Z")
+    pat.add_edges_from([(1, 3), (1, 4), (2, 3), (2, 4)], zx_type="SIMPLE")
+    patterns.append(pat)
+
+    if draw_graph:
+        for pat in patterns:
+            layout = nx.kamada_kawai_layout(pat)
+            colour_mapping = [hex_map[attrs["zx_type"]] for _, attrs in pat.nodes(data=True)]
+            nx.draw(pat, with_labels=True, pos=layout, node_color=colour_mapping)
+            plt.show()
+
+    return patterns
+
+
+if __name__ == "__main__":
+    from topologiq.assets.simple_graphs import steane
+
+    nx_g = nx.Graph()
+    for id, zx_type in steane["nodes"]:
+        nx_g.add_node(id, zx_type=zx_type)
+    for (src_id, tgt_id), zx_type in steane["edges"]:
+        nx_g.add_edge(src_id, tgt_id, zx_type=zx_type)
+    for node_id in nx_g.nodes():
+        nx_g.nodes[node_id]["degree"] = nx_g.degree[node_id]
+
+    layout = nx.kamada_kawai_layout(nx_g)
+    colour_mapping = [hex_map[attrs["zx_type"]] for _, attrs in nx_g.nodes(data=True)]
+    nx.draw(nx_g, with_labels=True, pos=layout, node_color=colour_mapping)
+    plt.show()
+
+    patterns = bialgebra_patterns_reverse(draw_graph=True)
+    bialgebra_reverse(nx_g, patterns)
