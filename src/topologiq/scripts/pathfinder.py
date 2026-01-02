@@ -51,10 +51,10 @@ def pathfinder(
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
     tuple[
-        list[StandardCoord],
-        list[str],
+        list[StandardCoord] | None,
+        list[str] | None,
         dict[StandardBlock, list[StandardBlock]] | None,
-        dict[StandardBlock, list[StandardBlock]],
+        dict[StandardBlock, list[StandardBlock]] | None,
     ]
     | None,
 ]:
@@ -195,14 +195,18 @@ def core_pathfinder_bfs(
     src_coords, _ = src_block_info
     src_x, src_y, src_z = src_coords
     tgt_coords = tent_coords
+    second_pass = False
+    bounding_box, _ = get_bounding_box(taken, second_pass=second_pass)
+    unbreakable_beams, negotiable_beams = (None, None)
 
     if src_coords in taken:
-        print("src_coords in taken")
         taken.remove(src_coords)
-    if tgt_coords[0] in taken:
-        print("tgt_coords in taken")
-    if len(tgt_coords) == 1 and len(tent_tgt_kinds) == 1 and tgt_coords[0] in taken:
-        taken.remove(tgt_coords[0])
+    if len(tgt_coords) == 1 and len(tent_tgt_kinds) == 1:
+        second_pass = True
+        if tgt_coords[0] in taken:
+            taken.remove(tgt_coords[0])
+        unbreakable_beams, negotiable_beams = split_critical_beams(critical_beams)
+
 
     # BFS management variables
     queue = deque([src_block_info])
@@ -212,7 +216,7 @@ def core_pathfinder_bfs(
     path = {src_block_info: [src_block_info]}
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = {}
     all_search_paths: dict[StandardBlock, list[StandardBlock]] | None = {}
-    moves_unadjusted = [
+    moves = [
         (1, 0, 0),
         (0, 1, 0),
         (0, 0, 1),
@@ -224,7 +228,7 @@ def core_pathfinder_bfs(
     # Define exit conditions in case something goes wrong
     tgts_filled = 0
     tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
-    if len(tent_coords) > 1:
+    if not second_pass:
         max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
         src_tgt_manhattan = max_manhattan
     else:
@@ -262,26 +266,10 @@ def core_pathfinder_bfs(
                 continue
 
         # Remove unnecessary moves (corresponding to non-exits)
-        # SUPER NB! This block needs further implementation.
-        # It's an emerging solution for long paths with multiple hooks.
-        moves_adjusted = []
-        remaining_moves = []
-        for move in moves_unadjusted:
-            valid_exit = check_is_exit((0, 0, 0), curr_kind, move)
-            if valid_exit:
-                moves_adjusted.append(move)
-            else:
-                remaining_moves.append(move)
-        moves_adjusted += remaining_moves
-
-        if len(tent_coords) == 1:
-            moves = moves_adjusted
-        else:
-            moves = moves_unadjusted
-        moves = moves_unadjusted
+        # TO BE IMPLEMENTED
 
         # Try moving in all directions
-        scale = 2 if "o" in curr_kind else 1  # Block is pipe iff "o" in kind
+        scale = 2 if "o" in curr_kind else 1  # Block is pipe if "o" in kind
         for dx, dy, dz in moves:
             # Set exploration parameters to next position in moves
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
@@ -291,70 +279,63 @@ def core_pathfinder_bfs(
                 full_path_coords = get_taken_coords(path[current_block])
             except Exception as _:
                 full_path_coords = None
-            # Abort if next position has been taken
-            if nxt_coords in taken:
+
+            # Skip if next position has been taken or is in current path
+            if nxt_coords in taken or nxt_coords in curr_path_coords:
                 continue
 
-            # Abort if next position clashes with a critical beam
-            continue_flag = False
-            if critical_beams:
-                nodes_with_critical_beams_id = critical_beams.keys()
-                if nodes_with_critical_beams_id:
-                    for node_id in nodes_with_critical_beams_id:
-                        broken_beams = 0
-                        min_exit_num = critical_beams[node_id][0]
-                        beams = critical_beams[node_id][1]
-                        for beam in beams:
-                            # If a coord breaks a beam, add one to broken beams because beam
-                            # of node has been broken
-                            if any([coord in beam[:6] for coord in full_path_coords]):
-                                broken_beams += 1
-                                # Additionally, add any number of beam-to-beam clashes for the node
-                                # currently under investigation because, if they exist, they likely are already
-                                # using the cushion that allows breaking some beams
-                                if node_id not in src_tgt_ids:
-                                    for n_id in nodes_with_critical_beams_id:
-                                        all_beams = critical_beams[n_id][1]
-                                        for single_beam in all_beams:
-                                            if any([coord in beam[:6] for coord in single_beam]):
-                                                broken_beams += 1
-
-                        adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
-                        if len(beams) + adjust_for_source_node - broken_beams < min_exit_num:
-                            continue_flag = True
-                            break
-                        else:
-                            continue_flag = False
-                    if continue_flag:
-                        continue
+            if second_pass and bounding_box:
+                if (
+                    (nxt_x < bounding_box["x"]["min"] or nxt_x > bounding_box["x"]["max"])
+                    or (nxt_y < bounding_box["y"]["min"] or nxt_y > bounding_box["y"]["max"])
+                    or (nxt_z < bounding_box["z"]["min"] or nxt_x > bounding_box["z"]["max"])
+                ):
+                    continue
 
             # Adjust coords and taken coords for pipes
             mid_coords = None
             if "o" in curr_kind and scale == 2:
-                mid_x = x + dx * 1
-                mid_y = y + dy * 1
-                mid_z = z + dz * 1
-                mid_coords = (mid_x, mid_y, mid_z)
+                mid_coords = (x + dx, y + dy, z + dz)
                 if mid_coords in curr_path_coords or mid_coords in taken:
                     continue
 
-                if critical_beams:
-                    nodes_with_critical_beams_id = critical_beams.keys()
-                    if nodes_with_critical_beams_id:
-                        continue_flag = False
-                        for node_id in nodes_with_critical_beams_id:
-                            broken_beams = 0
-                            min_exit_num = critical_beams[node_id][0]
-                            beams = critical_beams[node_id][1]
-                            for beam in beams:
-                                if any([coord in beam for coord in full_path_coords]):
-                                    broken_beams += 1
-                            adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
-                            if len(beams) - broken_beams < (min_exit_num - adjust_for_source_node):
+            # Skip if beam clashes arise with nodes that need all their exits
+            if unbreakable_beams and "o" not in curr_kind:
+                continue_flag = False
+                for node_id, (min_exit_num, beams) in unbreakable_beams.items():
+                    broken_beams = 0
+                    for beam in beams:
+                        if any([coord in beam for coord in full_path_coords]):
+                            if node_id in src_tgt_ids:
+                                broken_beams += 1
+                                if broken_beams > 1:
+                                    continue_flag = True
+                                    break
+                            else:
                                 continue_flag = True
                                 break
-                        if continue_flag:
-                            continue
+                if continue_flag:
+                    continue
+
+            # Skip if number of beam clashes with nodes that need only some exits > than tolerable
+            if negotiable_beams and "o" not in curr_kind:
+                continue_flag = False
+                for node_id, (min_exit_num, beams) in negotiable_beams.items():
+                    broken_beams = 0
+                    for beam in beams:
+                        if any([coord in beam for coord in full_path_coords]):
+                            broken_beams += 1
+                            # Add any pre-existing beam-to-beam clashes as broken beam might coincide allowances already used
+                            for _, all_beams in negotiable_beams.values():
+                                for single_beam in all_beams:
+                                    if any([coord in beam[:9] for coord in single_beam]):
+                                        broken_beams += 1
+                    adjust_for_source_node = 1 if node_id in src_tgt_ids else 0
+                    if len(beams) - broken_beams < (min_exit_num - adjust_for_source_node):
+                        continue_flag = True
+                        break
+                if continue_flag:
+                    continue
 
             # Rotate if current kind is a Hadamard
             # NB! The raw kinds of Hadamards correspond to unrotated colours.
@@ -397,11 +378,7 @@ def core_pathfinder_bfs(
 
                 # Undertake checks and visit if move is valid
                 # Do NOT visit otherwise so site is not taken for a different path
-                if (
-                    nxt_coords not in curr_path_coords
-                    and nxt_coords not in taken
-                    and (mid_coords is None or nxt_coords != mid_coords)
-                ):
+                if mid_coords is None or nxt_coords != mid_coords:
                     new_path_len = path_len[current_block] + 1
                     nxt_b_info: StandardBlock = (nxt_coords, nxt_type)
 
@@ -423,12 +400,6 @@ def core_pathfinder_bfs(
                                 break
                         else:
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
-
-                    if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
-                        break
-
-                if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
-                    break
 
             if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
                 break
@@ -541,3 +512,77 @@ def get_taken_coords(all_blocks: list[StandardBlock]) -> list[StandardCoord]:
     taken = list(taken_set)
 
     return taken
+
+
+def get_bounding_box(
+    taken: list[StandardCoord], second_pass: bool = False
+) -> tuple[dict[str, dict[str, int]], int]:
+    """Determine min/max coordinates for any second pass search.
+
+    Args:
+        taken: A list of all coordinates occupied by any previously-placed blocks/pipes.
+        second_pass: A boolean flag to determine if search is a primary or `second_pass` search.
+
+    Returns:
+        bounding_box: A box made of min. and max. coordinates for each axis, which make a box
+            declaring the space inside which the pathfinder is allowed to search for paths.
+        max_span: the longest edge of the bounding box, equivalent to largest axes needed for box.
+
+    """
+
+    # Get the bounds of pre-existing blocks.
+    bounds_x = [x for (x, _, _) in taken] if taken else [-1, 0, 1]
+    bounds_y = [y for (_, y, _) in taken] if taken else [-1, 0, 1]
+    bounds_z = [z for (_, _, z) in taken] if taken else [-1, 0, 1]
+
+    # Add small leeway depending on type of search
+    margin = 6 if second_pass else 12
+    min_x, max_x = (min(bounds_x) - margin, max(bounds_x) + margin)
+    min_y, max_y = (min(bounds_y) - margin, max(bounds_y) + margin)
+    min_z, max_z = (min(bounds_z) - margin, max(bounds_z) + margin)
+    bounding_box = {
+        "x": {"min": min_x, "max": max_x},
+        "y": {"min": min_y, "max": max_y},
+        "z": {"min": min_z, "max": max_z},
+    }
+
+    # Calculate maximum span across all axes
+    max_span = max(
+        [
+            abs((min_x + margin) - (max_x - margin)),
+            abs((min_y + margin) - (max_y - margin)),
+            abs((min_z + margin) - (max_z - margin)),
+        ]
+    )
+
+    return bounding_box, max_span
+
+
+def split_critical_beams(
+    critical_beams: dict[int, tuple[int, NodeBeams]],
+) -> tuple[dict[int, tuple[int, NodeBeams]], dict[int, tuple[int, NodeBeams]]]:
+    """Split critical beams into simple and verbose object containing different kinds of beams.
+
+    This function separates the `critical_beams` object into a quickly iterable object containing
+    coordinates of beams for nodes that needs absolutely all beams they have and a more verbose
+    dictionary containing the beams for nodes that can lose some beams.
+
+    Args:
+        critical_beams: Beams considered critical for future operations.
+        max_span: the longest edge of the bounding box, equivalent to largest beam needed to clear box.
+
+    Returns:
+        unbreakable_beams: The joint beam coordinates for nodes that need all beams they currently have.
+        negotiable_beams: A minified `critical_beams` object containing beams for nodes that can lose some beams.
+
+    """
+
+    unbreakable_beams = {}
+    negotiable_beams = {}
+    for node_id, (min_exit_num, beams) in critical_beams.items():
+        if min_exit_num == len(beams):
+            unbreakable_beams[node_id] = (min_exit_num, [beam for beam in beams])
+        else:
+            negotiable_beams[node_id] = (min_exit_num, [beam for beam in beams])
+
+    return unbreakable_beams, negotiable_beams

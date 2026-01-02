@@ -124,7 +124,7 @@ def graph_manager_bfs(
 
     # Key parameters - BFS management
     first_id: int | None = (
-        find_first_id(nx_g, deterministic=False) if first_cube[0] is None else first_cube[0]
+        find_first_id(nx_g, deterministic=True) if first_cube[0] is None else first_cube[0]
     )
     taken: list[StandardCoord] = []
     edge_paths: dict = {}
@@ -145,7 +145,7 @@ def graph_manager_bfs(
     tentative_kinds: list[str] | None = (
         nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
     )
-    first_kind = random.choice(tentative_kinds) if tentative_kinds else None
+    first_kind = tentative_kinds[0] if tentative_kinds else None
 
     # Update list of taken coords with node's position & beams
     taken.append((0, 0, 0))
@@ -188,7 +188,8 @@ def graph_manager_bfs(
 
                 # Try to place blocks as close to one another as as possible
                 step: int = 3
-                while step <= 9:
+                max_step: int = 15
+                while step <= max_step:
                     taken, edge_paths, edge_success = place_nxt_block(
                         src_id,
                         tgt_id,
@@ -220,7 +221,7 @@ def graph_manager_bfs(
 
                     else:
                         if (
-                            step >= 9
+                            step >= max_step
                         ):  # If edge did not complete at max distance currently available, Topologiq will fail
                             # Stop timers & calculate durations
                             t_end = datetime.now()
@@ -364,6 +365,7 @@ def graph_manager_bfs(
                                 tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = (
                                     pathfinder_vis_data
                                 )
+
                                 vis_3d(
                                     nx_g,
                                     partial_nx_g,
@@ -669,7 +671,7 @@ def place_nxt_block(
                     if nx_g.nodes[n_id]["beams"]:
                         broken = 0
                         for bm in nx_g.nodes[n_id]["beams"]:
-                            if any([(c in coords_in_path) for c in bm[:7]]):
+                            if any([(c in coords_in_path) for c in bm[:9]]):
                                 beams_broken_by_path += 1
                                 broken += 1
                         adjust_for_source_node = 1 if n_id == src_id else 0
@@ -681,6 +683,7 @@ def place_nxt_block(
                             < num_edges_still_to_complete
                         ):
                             critical_beams_broken = True
+                            break
 
                 # Watch out for critical beam clashes
                 # It is hard to manage situations where the beams of a beam clash with the beams of other beams
@@ -694,7 +697,7 @@ def place_nxt_block(
                             for b in tgt_beams:
                                 beam_clashes_for_node = sum([(c in b[:9]) for c in bm[:9]])
                                 if beam_clashes_for_node > len(tgt_beams) - nxt_neigh_neigh_n:
-                                    beam_clash_count += 1
+                                    beam_clash_count += beam_clashes_for_node
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
                         num_edges_still_to_complete = n_degree - n_edges_completed
@@ -703,6 +706,7 @@ def place_nxt_block(
                             < num_edges_still_to_complete
                         ):
                             critical_beams_clash = True
+                            break
 
                 # Append path to viable paths if path clears all checks
                 if critical_beams_broken is not True and critical_beams_clash is not True:
@@ -824,7 +828,7 @@ def place_nxt_block(
             # Explicit warning if log_stats or debug are enabled
             if log_stats_id or debug > 0:
                 print(
-                    f"{'ERROR' if init_step > 6 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter * 1000)}ms). -> Increasing search distance"
+                    f"{'ERROR' if init_step == 15 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter * 1000)}ms). -> {'Increasing search distance' if init_step < 15 else 'Shut down unavoidable.'}"
                 )
 
             # Fill edge_paths with error
@@ -889,6 +893,7 @@ def run_pathfinder(
     """
 
     # Edge path management
+    pathfinder_vis_data = [None, None, None, None]
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
@@ -904,7 +909,7 @@ def run_pathfinder(
         taken_cc.remove(tgt_coords)
 
     # Loop call the inner pathfinder in case there is a need to re-run the pathfinder
-    max_step = 2 * init_step if tgt_block_info else 9
+    max_step = init_step if tgt_block_info else 15
     while step <= max_step:
         # Generate tentative coordinates for current step or use target node
         if tgt_coords:

@@ -117,11 +117,12 @@ def gen_tent_tgt_coords(
         (sx, sy, sz - 3),
     ]
     tent_coords[3] = [t for t in tgts if t not in taken]
+    base_for_next_layer = [t for t in tgts]
 
     # MANHATTAN 6
     if max_manhattan > 3:
         tent_coords[6] = []
-        for dx, dy, dz in [c for c in tent_coords[3]]:
+        for dx, dy, dz in [c for c in base_for_next_layer]:
             tgts = [
                 (dx + 3, dy, dz),
                 (dx - 3, dy, dz),
@@ -131,11 +132,12 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz - 3),
             ]
             tent_coords[6].extend([t for t in tgts if t not in taken and t != src_c])
+            base_for_next_layer = [t for t in tgts]
 
     # MANHATTAN 9
     if max_manhattan > 6:
         tent_coords[9] = []
-        for dx, dy, dz in [c for c in tent_coords[6]]:
+        for dx, dy, dz in [c for c in base_for_next_layer]:
             tgts = [
                 (dx + 3, dy, dz),
                 (dx - 3, dy, dz),
@@ -146,7 +148,19 @@ def gen_tent_tgt_coords(
             ]
             tent_coords[9].extend([t for t in tgts if t not in taken and t != src_c])
 
-    all_coords_at_distance = tent_coords[min(max_manhattan, 9)]
+    # > MANHATTAN 9
+    if max_manhattan > 9:
+        tgts = [
+        (sx + max_manhattan, sy, sz),
+        (sx - max_manhattan, sy, sz),
+        (sx, sy + max_manhattan, sz),
+        (sx, sy - max_manhattan, sz),
+        (sx, sy, sz + max_manhattan),
+        (sx, sy, sz - max_manhattan),
+    ]
+        tent_coords[max_manhattan] = [t for t in tgts if t not in taken]
+
+    all_coords_at_distance = tent_coords[min(max_manhattan, 15)]
     return all_coords_at_distance
 
 
