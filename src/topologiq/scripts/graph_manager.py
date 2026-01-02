@@ -94,6 +94,7 @@ def graph_manager_bfs(
         **kwargs:
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+            deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
     Returns:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
@@ -103,92 +104,61 @@ def graph_manager_bfs(
 
     """
 
-    # Preliminaries
+    # 1. Key parameters
     # Stats trackers
     t_start = datetime.now()
-    t_end = None
+    duration_1st_pass, duration_2nd_pass = (0.0, 0.0)
+    run_success = False
 
-    duration_1st_pass_edges: float = 0.0
-    duration_2nd_pass_edges: float = 0.0
+    num_input_nodes, num_input_edges = (len(simple_graph["nodes"]), len(simple_graph["edges"]))
+    num_1st_pass_edges, num_2nd_pass_edges = (0, 0)
+    num_edges_processed = 0  # Usefulness not obvious, needed to save snapshots for animations
 
-    num_input_nodes: int = len(simple_graph["nodes"])
-    num_input_edges: int = len(simple_graph["edges"])
-    num_edges_processed = 0  # Visualiser counter (needed to save snapshots to file)
-    num_1st_pass_edges: int = 0
-    num_2nd_pass_edges: int = 0
-
-    # Key parameters - Graph & outputs
+    # Graph & outputs
     nx_g = prep_3d_g(simple_graph)
     lat_nodes: dict[int, StandardBlock] | None = None
     lat_edges: dict[tuple[int, int], list[str]] | None = None
 
-    # Key parameters - BFS management
-    first_id: int | None = (
-        find_first_id(nx_g, deterministic=True) if first_cube[0] is None else first_cube[0]
-    )
+    # First spider/cube
+    first_cube = get_first_cube(nx_g, first_cube=first_cube, deterministic=kwargs["deterministic"])
+    first_id, first_kind = first_cube
+
+    # BFS management
     taken: list[StandardCoord] = []
     edge_paths: dict = {}
     queue: deque[int] = deque([first_id])
     visited: set = {first_id}
 
-    # Validity checks
-    if not check_zx_types(simple_graph):
-        print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
+    # 2. Validity checks
+    if not validity_checks(simple_graph, first_cube):
         return nx_g, edge_paths, lat_nodes, lat_edges
 
-    if first_id is None:
-        print(Colors.RED + "Graph has no nodes." + Colors.RESET)
-        return nx_g, edge_paths, lat_nodes, lat_edges
-
-    # Place first spider at origin
-    # Get first spider kind from type family
-    tentative_kinds: list[str] | None = (
-        nx_g.nodes[first_id].get("type_fam") if first_cube[1] is None else [first_cube[1]]
-    )
-    first_kind = tentative_kinds[0] if tentative_kinds else None
-
-    # Update list of taken coords with node's position & beams
-    taken.append((0, 0, 0))
-    _, src_beams = check_exits(
-        (0, 0, 0),
-        first_kind,
-        taken,
-        [(0, 0, 0)],
-        nx_g,
-        kwargs["length_of_beams"],
-    )
-
-    # Write info of node
-    nx_g.nodes[first_id]["coords"] = (0, 0, 0)
-    nx_g.nodes[first_id]["kind"] = first_kind
-    nx_g.nodes[first_id]["beams"] = src_beams
-
-    # Update user
+    # 3. Place first spider/cube
+    nx_g, taken = place_first_cube(nx_g, taken, first_cube, kwargs["length_of_beams"])
     if log_stats_id or debug > 0:
         print(f"First cube ID: {first_id} ({first_kind}).")
 
-    # Graph manager BFS
+    # 4. Graph manager BFS
     while queue:
-        # Get current parent node
+        # Get first cube or current source cube
         src_id: int = queue.popleft()
 
-        # Iterate over neighbours of current parent node
+        # Iterate over neighbours of current source
         for tgt_id in cast(list[int], nx_g.neighbors(src_id)):
-            # Queue and add to visited set if BFS just arrived at node
+            # Handle cubes that need to be placed for the first time
             if tgt_id not in visited:
-                # Start iteration timer for 1st pass iteration
+                # Start iteration timer
                 t1_1st_pass_iter = datetime.now()
 
                 # Add/append ID to visited and queue
                 visited.add(tgt_id)
                 queue.append(tgt_id)
 
-                # Ensure the list of taken coords has unique entries on each run
+                # Ensure taken has unique entries on each run
                 taken = list(set(taken))
 
                 # Try to place blocks as close to one another as as possible
-                step: int = 3
-                max_step: int = 15
+                step, max_step = (3, 15)
                 while step <= max_step:
                     taken, edge_paths, edge_success = place_nxt_block(
                         src_id,
@@ -207,286 +177,67 @@ def graph_manager_bfs(
                         **kwargs,
                     )
 
-                    # Stop and log timers
+                    # Stop iteration timers
                     t_end_1st_pass_iter = datetime.now()
-                    duration_1st_pass_edges += (
-                        t_end_1st_pass_iter - t1_1st_pass_iter
-                    ).total_seconds()
+                    duration_1st_pass += (t_end_1st_pass_iter - t1_1st_pass_iter).total_seconds()
 
                     # Move to next if there is a succesful placement
                     if edge_success:
+                        run_success = True
                         num_1st_pass_edges += 1
                         num_edges_processed += 1
                         break
 
-                    else:
-                        if (
-                            step >= max_step
-                        ):  # If edge did not complete at max distance currently available, Topologiq will fail
-                            # Stop timers & calculate durations
-                            t_end = datetime.now()
-                            duration_total = (t_end - t_start).total_seconds()
-
-                            # Create animation of failed attempt
-                            if vis_options[1]:
-                                create_animation(
-                                    filename_prefix=f"FAIL_{circuit_name}",
-                                    restart_delay=5000,
-                                    duration=2500,
-                                    video=True if vis_options[1] == "MP4" else False,
-                                )
-
-                            # Log stats of failed attempt
-                            if log_stats_id is not None:
-                                run_success = False
-                                counts = {
-                                    "num_input_nodes": num_input_nodes,
-                                    "num_input_edges": num_input_edges,
-                                    "num_input_nodes_processed": num_1st_pass_edges + 1,
-                                    "num_input_edges_processed": num_1st_pass_edges
-                                    + num_2nd_pass_edges,
-                                    "num_1st_pass_edges_processed": num_1st_pass_edges,
-                                    "num_2n_pass_edges_processed": num_2nd_pass_edges,
-                                }
-                                times = {
-                                    "t_1st_pass": duration_1st_pass_edges,
-                                    "t_2nd_pass": duration_2nd_pass_edges,
-                                    "t_total": duration_total,
-                                }
-
-                                try:
-                                    prep_stats_n_log(
-                                        "graph_manager",
-                                        log_stats_id,
-                                        run_success,
-                                        counts,
-                                        times,
-                                        circuit_name=circuit_name,
-                                        edge_paths=edge_paths,
-                                        lat_nodes=lat_nodes,
-                                        lat_edges=lat_edges,
-                                        run_params={"min_succ_rate": min_succ_rate, **kwargs},
-                                    )
-                                except Exception as e:
-                                    print(f"Unable to log stats for failed iteration: {e}")
-
-                            raise ValueError(f"ERROR with edge: {src_id} -> {tgt_id}.")
+                    # Fail if max_step is reached
+                    elif step >= max_step:
+                        run_success = False
+                        break
 
                     # Increase distance between nodes if placement not possible
                     step += 3
 
+                # Exit BFS loop if a single edge fails to build
+                if run_success is False:
+                    break
+
+            # Handle connections between previously placed blocks
             elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
                 # Start iteration timer for 2st pass iteration
                 t1_2nd_pass_iter = datetime.now()
 
-                # Prune taken and beams
-                taken = list(set(taken))
-                nx_g = prune_beams(nx_g, taken)
+                # Trigger connection for previously placed cubes
+                taken, edge_paths, edge_success = connect_prev_placed_cubes(
+                    src_id,
+                    tgt_id,
+                    nx_g,
+                    taken,
+                    edge_paths,
+                    circuit_name=circuit_name,
+                    min_succ_rate=min_succ_rate,
+                    hide_ports=hide_ports,
+                    vis_options=vis_options,
+                    fig_data=fig_data,
+                    log_stats_id=log_stats_id,
+                    debug=debug,
+                )
 
-                # Get source and target data for current (src_id, tgt_id) pair
-                u_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
-                v_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
+                # Stop & log times
+                t_end_2nd_pass_iter = datetime.now()
+                duration_2nd_pass += (t_end_2nd_pass_iter - t1_2nd_pass_iter).total_seconds()
 
-                # Process edge only if both src_id and tgt_id have already been placed in the 3D space
-                # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
-                if u_coords is not None and v_coords is not None:
-                    # Format adjustments to match existing operations
-                    u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
-                    v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
-                    edge = tuple(sorted((src_id, tgt_id)))
+                if edge_success:
+                    run_success = True
+                    num_2nd_pass_edges += 1
+                    num_edges_processed += 1
 
-                    # Call pathfinder on any graph edge that does not have an entry in edge_paths
-                    if edge not in edge_paths:
-                        critical_beams: dict[int, tuple[int, NodeBeams]] = {}
-                        num_edges_still_to_complete = 0
-                        for node_id in nx_g.nodes():
-                            n_beams = nx_g.nodes[node_id]["beams"]
-                            if n_beams != [] and n_beams is not None:
-                                n_degree = get_node_degree(nx_g, node_id)
-                                n_edges_completed = nx_g.nodes[node_id]["completed"]
-                                num_edges_still_to_complete = n_degree - n_edges_completed
-                                if num_edges_still_to_complete == 0:
-                                    pass
-                                else:
-                                    critical_beams[node_id] = (
-                                        num_edges_still_to_complete,
-                                        n_beams,
-                                    )
+                else:
+                    run_success = False
+                    break
 
-                        # Check if edge is hadamard
-                        zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-                        hdm: bool = True if zx_edge_type == "HADAMARD" else False
+        if run_success is False:
+            break
 
-                        # Call pathfinder using optional parameters that flag second pass nature of operation
-                        v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
-                        if v_coords and v_kind:
-                            clean_paths, pathfinder_vis_data = run_pathfinder(
-                                (u_coords, u_kind),
-                                v_zx_type,
-                                3,
-                                taken[:],
-                                tgt_block_info=(v_coords, v_kind),
-                                hdm=hdm,
-                                min_succ_rate=min_succ_rate,
-                                critical_beams=critical_beams,
-                                log_stats_id=log_stats_id,
-                                src_tgt_ids=(src_id, tgt_id),
-                            )
-
-                            # NB! As both (src_id, tgt_id) are already in 3D space,
-                            # if successful, pathfinder will return a list with ONE single path
-                            # else it will return empty clean_paths
-
-                            # Stop & log times
-                            t_end_2nd_pass_iter = datetime.now()
-                            duration_current_2nd_pass_iter = (
-                                t_end_2nd_pass_iter - t1_2nd_pass_iter
-                            ).total_seconds()
-                            duration_2nd_pass_edges += (
-                                t_end_2nd_pass_iter - t1_2nd_pass_iter
-                            ).total_seconds()
-
-                            # For visualisation, create a new graph on each step irrespective of outcome
-                            debug = (
-                                debug
-                                if debug >= 1
-                                else 1
-                                if vis_options[0] == "detail" or vis_options[1]
-                                else 0
-                            )
-                            if debug > 0:
-                                # Create partial progress graph from current edges
-                                partial_lat_nodes, partial_lat_edges = reindex_path_dict(edge_paths)
-                                partial_nx_g, _ = lattice_to_g(
-                                    partial_lat_nodes, partial_lat_edges, nx_g
-                                )
-
-                                # Detailed interactive visualisation of progress
-                                tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = (
-                                    pathfinder_vis_data
-                                )
-
-                                vis_3d(
-                                    nx_g,
-                                    partial_nx_g,
-                                    edge_paths,
-                                    valid_paths if valid_paths else None,
-                                    clean_paths[0] if clean_paths else None,
-                                    (u_coords, u_kind),
-                                    tent_coords,
-                                    tent_tgt_kinds,
-                                    hide_ports=hide_ports,
-                                    all_search_paths=all_search_paths,
-                                    debug=debug,
-                                    vis_options=vis_options,
-                                    src_tgt_ids=(src_id, tgt_id),
-                                    fig_data=fig_data,
-                                    filename_info=(circuit_name, len(edge_paths) + 1)
-                                    if vis_options[1] or debug == 4
-                                    else None,
-                                )
-
-                            # Write to edge_paths if an edge is found
-                            if clean_paths:
-                                # Update edge counters
-                                num_2nd_pass_edges += 1
-                                num_edges_processed += 1
-
-                                # Update edge paths
-                                coords_in_path = [
-                                    p[0] for p in clean_paths[0]
-                                ]  # Take the first path
-                                edge_type = zx_edge_type
-                                edge_paths[edge] = {
-                                    "src_tgt_ids": (src_id, tgt_id),
-                                    "path_coordinates": coords_in_path,
-                                    "path_nodes": clean_paths[0],
-                                    "edge_type": edge_type,
-                                }
-
-                                # Update source info
-                                nx_g.nodes[src_id]["completed"] += 1
-
-                                # Update target node information
-                                nx_g.nodes[tgt_id]["completed"] += 1
-                                nx_g.nodes[tgt_id]["beams"] = (
-                                    []
-                                    if nx_g.nodes[tgt_id]["completed"]
-                                    >= get_node_degree(nx_g, tgt_id)
-                                    else nx_g.nodes[tgt_id]["beams"]
-                                )
-
-                                # Add path to position to list of taken coordinates
-                                all_coords_in_path = get_taken_coords(clean_paths[0])
-                                taken.extend(all_coords_in_path)
-
-                                # Prune beams before moving to next edge
-                                nx_g = prune_beams(nx_g, taken)
-
-                                # Update user if log_stats or debug mode are enabled
-                                if log_stats_id or debug > 0:
-                                    volume = len(
-                                        [block for block in clean_paths[0] if "o" not in block[1]]
-                                    )
-                                    print(
-                                        f"Path between fixed cubes found: {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter * 1000)}ms) (+{volume - 2} vol)."
-                                    )
-
-                            # Log stats and raise if 2nd pass iteration fails
-                            else:
-                                # Create animation of failed attempt
-                                if vis_options[1]:
-                                    create_animation(
-                                        filename_prefix=f"FAIL_{circuit_name}",
-                                        restart_delay=5000,
-                                        duration=2500,
-                                        video=True if vis_options[1] == "MP4" else False,
-                                    )
-
-                                # Log stats for failed attempt
-                                if log_stats_id is not None:
-                                    t_end = datetime.now()
-                                    duration_total = (t_end - t_start).total_seconds()
-                                    run_success = False
-                                    counts = {
-                                        "num_input_nodes": num_input_nodes,
-                                        "num_input_edges": num_input_edges,
-                                        "num_input_nodes_processed": num_1st_pass_edges + 1,
-                                        "num_input_edges_processed": num_1st_pass_edges
-                                        + num_2nd_pass_edges,
-                                        "num_1st_pass_edges_processed": num_1st_pass_edges,
-                                        "num_2n_pass_edges_processed": num_2nd_pass_edges,
-                                    }
-                                    times = {
-                                        "t_1st_pass": duration_1st_pass_edges,
-                                        "t_2nd_pass": duration_2nd_pass_edges,
-                                        "t_total": duration_total,
-                                    }
-
-                                    try:
-                                        prep_stats_n_log(
-                                            "graph_manager",
-                                            log_stats_id,
-                                            run_success,
-                                            counts,
-                                            times,
-                                            circuit_name=circuit_name,
-                                            edge_paths=edge_paths,
-                                            lat_nodes=lat_nodes,
-                                            lat_edges=lat_edges,
-                                            run_params={"min_succ_rate": min_succ_rate, **kwargs},
-                                        )
-                                    except Exception as e:
-                                        print(
-                                            f"Unable to log stats for failed run in second pass: {e}"
-                                        )
-
-                                # Raise
-                                raise ValueError(
-                                    f"ERROR. Path between fixed cubes {src_id} -> {tgt_id} ({int(duration_current_2nd_pass_iter * 1000)}ms)."
-                                )
-
-    # Since it is used extensively, so prune it again
+    # Taken is used extensively, so prune it again
     taken = list(set(taken))
 
     # If we make it here, all edges completed
@@ -495,44 +246,30 @@ def graph_manager_bfs(
 
     # Log stats
     if log_stats_id is not None:
-        t_end = datetime.now()
-        duration_total = (t_end - t_start).total_seconds()
-        run_success = True
-        counts = {
-            "num_input_nodes": num_input_nodes,
-            "num_input_edges": num_input_edges,
-            "num_input_nodes_processed": num_1st_pass_edges + 1,
-            "num_input_edges_processed": num_1st_pass_edges + num_2nd_pass_edges,
-            "num_1st_pass_edges_processed": num_1st_pass_edges,
-            "num_2n_pass_edges_processed": num_2nd_pass_edges,
-        }
-        times = {
-            "t_1st_pass": duration_1st_pass_edges,
-            "t_2nd_pass": duration_2nd_pass_edges,
-            "t_total": duration_total,
-        }
+        duration_total = (datetime.now() - t_start).total_seconds()
 
-        try:
-            prep_stats_n_log(
-                "graph_manager",
-                log_stats_id,
-                run_success,
-                counts,
-                times,
-                circuit_name=circuit_name,
-                edge_paths=edge_paths,
-                lat_nodes=lat_nodes,
-                lat_edges=lat_edges,
-                run_params={"min_succ_rate": min_succ_rate, **kwargs},
-            )
-        except Exception as e:
-            print(f"Unable to log stats for successful run: {e}")
+        call_logger(
+            [circuit_name, log_stats_id, run_success],
+            [edge_paths, lat_nodes, lat_edges],
+            [duration_1st_pass, duration_2nd_pass, duration_total],
+            [
+                num_input_nodes,
+                num_input_edges,
+                num_1st_pass_edges,
+                num_2nd_pass_edges,
+            ],
+            [min_succ_rate, vis_options[1], kwargs],
+        )
+
+    # Raise
+    if run_success is False:
+        raise ValueError(f"ERROR. Run aborted. Failed to complete edge: {src_id} -> {tgt_id}.")
 
     return nx_g, edge_paths, lat_nodes, lat_edges
 
 
 ##################
-# EDGE RENDERERS #
+# EDGE BUILDERS #
 ##################
 def place_nxt_block(
     src_id: int,
@@ -580,6 +317,7 @@ def place_nxt_block(
         **kwargs:
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+            deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
     Returns:
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
@@ -816,7 +554,7 @@ def place_nxt_block(
                     [block for block in winner_path.all_nodes_in_path if "o" not in block[1]]
                 )
                 print(
-                    f"New path created: {src_id} -> {tgt_id} (~{int(duration_iter * 1000)}ms) (+{volume - 1} vol)."
+                    f"New path created: {src_id} -> {tgt_id} (vol += {volume - 1}) (runtime ~ {int(duration_iter * 1000)}ms)."
                 )
 
             # Return updated list of taken coords, edge_paths, and a fail/success flag
@@ -828,7 +566,7 @@ def place_nxt_block(
             # Explicit warning if log_stats or debug are enabled
             if log_stats_id or debug > 0:
                 print(
-                    f"{'ERROR' if init_step == 15 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} ({int(duration_iter * 1000)}ms). -> {'Increasing search distance' if init_step < 15 else 'Shut down unavoidable.'}"
+                    f"{'ERROR' if init_step == 15 else 'Partial error'}. New path creation: {src_id} -> {tgt_id} (runtime ~ {int(duration_iter * 1000)}ms). -> {'Increasing search distance' if init_step < 15 else 'Shut down unavoidable.'}"
                 )
 
             # Fill edge_paths with error
@@ -846,6 +584,217 @@ def place_nxt_block(
 
     # Fail-safe return to avoid type errors
     return taken, edge_paths, False
+
+
+def connect_prev_placed_cubes(
+    src_id: int,
+    tgt_id: int,
+    nx_g: nx.Graph,
+    taken: list[StandardCoord],
+    edge_paths: dict,
+    circuit_name: str = "circuit",
+    min_succ_rate: int = 60,
+    hide_ports: bool = False,
+    vis_options: tuple[str | None, str | None] = (None, None),
+    fig_data: matplotlib.figure.Figure | None = None,
+    log_stats_id: str | None = None,
+    debug: int = 0,
+) -> tuple[list[StandardCoord], list[NodeBeams], dict, bool]:
+    """Search for a path between two cubes that have already been placed in 3D space.
+
+    This function calls the inner pathfinder algorithm to search for paths between cubes that have
+    been already-placed in the 3D space. The inner pathfinder algorithm returns a single paths, indeed
+    the shortest path respecting all restrictoins.
+
+    Args:
+        src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
+        tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
+        circuit_name: The name of the ZX circuit.
+        min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
+        hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
+        vis_options (optional): Visualisation settings provided as a tuple.
+            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
+                (None): No visualisation.
+                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
+            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
+                (None): No animation.
+                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
+        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+        log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
+        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
+        **kwargs:
+            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
+            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+            deterministic: A boolean flag to tell the function if choice is deterministic or random.
+
+    Returns:
+        clean_paths: A list containing the path between cubes or `None` if path search fails.
+        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
+
+    """
+    # Start timer
+    t1 = datetime.now()
+
+    # Prune taken and beams
+    edge_success = False
+    taken = list(set(taken))
+    nx_g = prune_beams(nx_g, taken)
+
+    # Get source and target data for current (src_id, tgt_id) pair
+    u_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
+    v_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
+
+    # Process edge only if both src_id and tgt_id have already been placed in the 3D space
+    # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
+    if u_coords is not None and v_coords is not None:
+        # Format adjustments to match existing operations
+        u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
+        v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
+        edge = tuple(sorted((src_id, tgt_id)))
+
+        # Call pathfinder on any graph edge that does not have an entry in edge_paths
+        if edge not in edge_paths:
+            critical_beams: dict[int, tuple[int, NodeBeams]] = {}
+            num_edges_still_to_complete = 0
+            for node_id in nx_g.nodes():
+                n_beams = nx_g.nodes[node_id]["beams"]
+                if n_beams != [] and n_beams is not None:
+                    n_degree = get_node_degree(nx_g, node_id)
+                    n_edges_completed = nx_g.nodes[node_id]["completed"]
+                    num_edges_still_to_complete = n_degree - n_edges_completed
+                    if num_edges_still_to_complete == 0:
+                        pass
+                    else:
+                        critical_beams[node_id] = (
+                            num_edges_still_to_complete,
+                            n_beams,
+                        )
+
+            # Check if edge is hadamard
+            zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
+            hdm: bool = True if zx_edge_type == "HADAMARD" else False
+
+            # Call pathfinder using optional parameters that flag second pass nature of operation
+            v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
+            if v_coords and v_kind:
+                clean_paths, pathfinder_vis_data = run_pathfinder(
+                    (u_coords, u_kind),
+                    v_zx_type,
+                    3,
+                    taken[:],
+                    tgt_block_info=(v_coords, v_kind),
+                    hdm=hdm,
+                    min_succ_rate=min_succ_rate,
+                    critical_beams=critical_beams,
+                    log_stats_id=log_stats_id,
+                    src_tgt_ids=(src_id, tgt_id),
+                )
+
+                # Finish timer before popping up visualisation
+                duration_iter = (datetime.now() - t1).total_seconds()
+
+                # For visualisation, create a new graph on each step irrespective of outcome
+                debug = (
+                    debug
+                    if debug >= 1
+                    else 1
+                    if vis_options[0] == "detail" or vis_options[1]
+                    else 0
+                )
+                if debug > 0:
+                    # Create partial progress graph from current edges
+                    partial_lat_nodes, partial_lat_edges = reindex_path_dict(edge_paths)
+                    partial_nx_g, _ = lattice_to_g(partial_lat_nodes, partial_lat_edges, nx_g)
+
+                    # Detailed interactive visualisation of progress
+                    tent_coords, tent_tgt_kinds, all_search_paths, valid_paths = pathfinder_vis_data
+
+                    vis_3d(
+                        nx_g,
+                        partial_nx_g,
+                        edge_paths,
+                        valid_paths if valid_paths else None,
+                        clean_paths[0] if clean_paths else None,
+                        (u_coords, u_kind),
+                        tent_coords,
+                        tent_tgt_kinds,
+                        hide_ports=hide_ports,
+                        all_search_paths=all_search_paths,
+                        debug=debug,
+                        vis_options=vis_options,
+                        src_tgt_ids=(src_id, tgt_id),
+                        fig_data=fig_data,
+                        filename_info=(circuit_name, len(edge_paths) + 1)
+                        if vis_options[1] or debug == 4
+                        else None,
+                    )
+
+                # Write to edge_paths if an edge is found
+                # NB! As both (src_id, tgt_id) were already placed, pathfinder
+                # will return a list with ONE single path if successful
+                # or an empty clean_paths otherwise
+                if clean_paths:
+                    # Log run as success
+                    edge_success = True
+
+                    # Update edge paths
+                    coords_in_path = [p[0] for p in clean_paths[0]]  # Take the first path
+                    edge_type = zx_edge_type
+                    edge_paths[edge] = {
+                        "src_tgt_ids": (src_id, tgt_id),
+                        "path_coordinates": coords_in_path,
+                        "path_nodes": clean_paths[0],
+                        "edge_type": edge_type,
+                    }
+
+                    # Update source info
+                    nx_g.nodes[src_id]["completed"] += 1
+
+                    # Update target node information
+                    nx_g.nodes[tgt_id]["completed"] += 1
+                    nx_g.nodes[tgt_id]["beams"] = (
+                        []
+                        if nx_g.nodes[tgt_id]["completed"] >= get_node_degree(nx_g, tgt_id)
+                        else nx_g.nodes[tgt_id]["beams"]
+                    )
+
+                    # Add path to position to list of taken coordinates
+                    all_coords_in_path = get_taken_coords(clean_paths[0])
+                    taken.extend(all_coords_in_path)
+
+                    # Prune beams before moving to next edge
+                    nx_g = prune_beams(nx_g, taken)
+
+                    # Update user if log_stats or debug mode are enabled
+                    if log_stats_id or debug > 0:
+                        volume = len([block for block in clean_paths[0] if "o" not in block[1]])
+                        print(
+                            f"Path between fixed cubes found: {src_id} -> {tgt_id} (vol += {volume - 2}) (runtime ~ {int(duration_iter * 1000)}ms)."
+                        )
+                else:
+                    # Fill edge_paths with error
+                    edge_success = False
+                    edge = tuple(sorted((src_id, tgt_id)))
+                    edge_paths[edge] = {
+                        "src_tgt_ids": "error",
+                        "path_coordinates": "error",
+                        "path_nodes": "error",
+                        "edge_type": "error",
+                    }
+
+                    # Return updated list of taken coords, edge_paths, and a fail/success flag
+                    nx_g = prune_beams(nx_g, taken)
+
+                    # Explicit warning if log_stats or debug are enabled
+                    if log_stats_id or debug > 0:
+                        print(
+                            f"ERROR. Path between fixed cubes: {src_id} -> {tgt_id} (runtime ~ {int(duration_iter * 1000)}ms). Shut down unavoidable."
+                        )
+
+    return taken, edge_paths, edge_success
 
 
 ##############################
@@ -1063,3 +1012,171 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
                     shuffle_c += 1
 
     return nx_g
+
+
+def validity_checks(simple_graph: SimpleDictGraph, first_cube: StandardBlock) -> bool:
+    """Check validity of key non-optional BFS parameters.
+
+    Args:
+        simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
+        first_cube: ID and kind for the very first spider/cube to place in 3D space
+
+    Returns:
+        bool: True if all parameters are valid, otherwise False.
+
+    """
+
+    if not check_zx_types(simple_graph):
+        print(Colors.RED + "Graph validity checks failed. Aborting." + Colors.RESET)
+        return False
+
+    first_id, first_kind = first_cube
+    if first_id is None:
+        print(
+            Colors.RED + "Invalid first type. Input graph might not have any nodes." + Colors.RESET
+        )
+        return False
+
+    if first_kind not in ["zxz", "zzx", "xzz", "yyy", "xzx", "xxz", "zxx", "ooo"]:
+        print(Colors.RED + "Invalid first kind. Input graph might be malformed" + Colors.RESET)
+        return False
+
+    return True
+
+
+def get_first_cube(
+    nx_g: nx.Graph,
+    first_cube: tuple[int | None, str | None] = (None, None),
+    deterministic: bool = False,
+) -> tuple[int, str]:
+    """Determine the iID and kind of the first block to place in 3D space.
+
+    Args:
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        deterministic: A boolean flag to tell the function if choice is deterministic or random.
+        first_cube (optional): Override ID and kind (used to replicate specific cases).
+
+    Returns:
+        first_id: ID of the first block to place in 3D space
+        first_kind: Kind of the first block to place in 3D space
+
+    """
+
+    first_id, first_kind = first_cube
+
+    if not first_id:
+        first_id = find_first_id(nx_g, deterministic=deterministic)
+
+    if not first_kind:
+        tentative_kinds = nx_g.nodes[first_id].get("type_fam")
+        first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
+
+    return first_id, first_kind
+
+
+def place_first_cube(
+    nx_g: nx.Graph, taken: list[StandardCoord], first_cube: StandardBlock, len_beams: int
+) -> tuple[list[StandardCoord], nx.Graph]:
+    """Place the first cube in the 3D space.
+
+    Args:
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        first_cube: ID and kind for the very first spider/cube to place in 3D space.
+        len_beams: The length of the beams for any arbitrary cube.
+
+    Returns:
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+
+    """
+
+    # Update taken
+    taken.append((0, 0, 0))
+
+    # Get beams
+    first_id, first_kind = first_cube
+    _, src_beams = check_exits(
+        (0, 0, 0),
+        first_kind,
+        taken,
+        [(0, 0, 0)],
+        nx_g,
+        len_beams,
+    )
+
+    # Write info to nx_g
+    nx_g.nodes[first_id]["coords"] = (0, 0, 0)
+    nx_g.nodes[first_id]["kind"] = first_kind
+    nx_g.nodes[first_id]["beams"] = src_beams
+
+    return nx_g, taken
+
+
+def call_logger(
+    circuit_info: list[str],
+    outputs: list[Any],
+    runtimes: list[float],
+    metrics: list[int],
+    misc_params: list[Any],
+):
+    """Call animation for iteration and log key stats.
+
+    Args:
+        circuit_info: A list containing the name of the ZX circuit and the log_stats_id to use for logging.
+        outputs: Key outputs for graph manager including edge_paths, lat_nodes, and lat_edges.
+        runtimes: Key runtime metrics for graph manager BFS.
+        metrics: Key performance metrics for graph manager BFS.
+        misc_params: Key settings needed for potential replicability.
+
+    """
+
+    # Extract key metrics
+    circuit_name, log_stats_id, run_success = circuit_info
+    edge_paths, lat_nodes, lat_edges = outputs
+    duration_1st_pass, duration_2nd_pass, duration_total = runtimes
+    num_input_nodes, num_input_edges, num_1st_pass_edges, num_2nd_pass_edges = metrics
+    min_succ_rate, animate, kwargs = misc_params
+
+    # Assemble objects for logger
+    times = {
+        "t_1st_pass": duration_1st_pass,
+        "t_2nd_pass": duration_2nd_pass,
+        "t_total": duration_total,
+    }
+
+    counts = {
+        "num_input_nodes": num_input_nodes,
+        "num_input_edges": num_input_edges,
+        "num_input_nodes_processed": num_1st_pass_edges + 1,
+        "num_input_edges_processed": num_1st_pass_edges + num_2nd_pass_edges,
+        "num_1st_pass_edges_processed": num_1st_pass_edges,
+        "num_2n_pass_edges_processed": num_2nd_pass_edges,
+    }
+
+    # Animate & log as appropriate
+    if animate:
+        create_animation(
+            filename_prefix=f"{'' if run_success else 'FAIL_'}{circuit_name}",
+            restart_delay=5000,
+            duration=2500,
+            video=True if animate == "MP4" else False,
+        )
+
+    # Log stats of failed attempt
+    if log_stats_id is not None:
+        try:
+            prep_stats_n_log(
+                "graph_manager",
+                log_stats_id,
+                run_success,
+                counts,
+                times,
+                circuit_name=circuit_name,
+                edge_paths=edge_paths,
+                lat_nodes=lat_nodes,
+                lat_edges=lat_edges,
+                run_params={"min_succ_rate": min_succ_rate, **kwargs},
+            )
+        except Exception as e:
+            print(f"Unable to log stats for failed graph manager run: {e}")

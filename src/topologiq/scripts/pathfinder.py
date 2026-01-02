@@ -25,13 +25,7 @@ from datetime import datetime
 
 from topologiq.utils.classes import NodeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import (
-    check_is_exit,
-    get_max_manhattan,
-    nxt_kinds,
-    prune_visited,
-    rot_o_kind,
-)
+from topologiq.utils.utils_pathfinder import get_max_manhattan, nxt_kinds, prune_visited, rot_o_kind
 
 
 ############################

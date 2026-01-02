@@ -52,10 +52,11 @@ def run_random(
 
     """
 
-    # Assemble kwargs
+    # Explicitly assemble kwargs to deviate from default DETERMINISTIC mode == True
     kwargs: dict[str, tuple[int, int] | int] = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "length_of_beams": LENGTH_OF_BEAMS,
+        "deterministic": False,
     }
 
     # call Topologiq on graph if graph is available
