@@ -176,7 +176,6 @@ def run_topologiq_qasm_as_input(
 
     # Call Topologiq
     simple_graph = pyzx_g_to_simple_g(pyzx_graph)
-    kwargs = {"weights": (-1, -1), "length_of_beams": 99}
     _, _, lat_nodes, lat_edges = runner(
         simple_graph,
         circuit_name,
@@ -185,7 +184,6 @@ def run_topologiq_qasm_as_input(
         log_stats=log_stats,
         debug=debug,
         fig_data=None,
-        **kwargs,
     )
 
     return lat_nodes, lat_edges

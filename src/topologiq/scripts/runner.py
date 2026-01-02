@@ -17,7 +17,7 @@ import matplotlib.figure
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
-from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
+from topologiq.run_hyperparams import DETERMINISTIC, LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.graph_manager import graph_manager_bfs
 from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
@@ -76,9 +76,12 @@ def runner(
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
-        **kwargs:
+        **kwargs: !
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
+            deterministic: A boolean flag to tell the function if choice is deterministic or random.
+            ! If no kwargs given, this function will create them based on `./src/topologiq/run_hyperparams.py`, so,
+                by extension, it only makes sense to give kwargs initially to deviate from defaults.
 
     Returns:
         simple_graph: The original `simple_graph` given to function (returned for ease of use and traceability).
@@ -101,6 +104,7 @@ def runner(
         kwargs: dict[str, tuple[int, int] | int] = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
             "length_of_beams": LENGTH_OF_BEAMS,
+            "deterministic": DETERMINISTIC,
         }
 
     # Optimise incoming graph if applicable
@@ -283,15 +287,12 @@ def run_topologiq_standard_hyperparams(
     else:
         simple_graph = zx_graph
 
-    # Force standard hyperparams
-    kwargs: dict[str, tuple[int, int] | int] = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
-    }
-
     # Run Topolgiq
     simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges = runner(
-        simple_graph, circuit_name, vis_options=vis_options, fig_data=fig_data, **kwargs
+        simple_graph,
+        circuit_name,
+        vis_options=vis_options,
+        fig_data=fig_data,
     )
 
     return simple_graph_after_use, edge_paths, lattice_nodes, lattice_edges

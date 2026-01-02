@@ -51,6 +51,7 @@ class PathBetweenNodes:
             **kwargs:
                 weights: weights for the value function to pick best of many paths.
                 length_of_beams: length of each of the beams coming out of open nodes.
+                deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
         Returns:
             (int): The weighed value of a path
