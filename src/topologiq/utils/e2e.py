@@ -30,7 +30,9 @@ def test_qasm_circuit(
     circuit_name: str,
     reduce: bool = False,
     vis_options: tuple[str | None, str | None] = (None, None),
+    num_attempts: int = 10,
     debug: int = 0,
+    log_stats: bool = False,
     random_seed: int | None = None,
     save_to_file: bool = True,
 ) -> tuple[
@@ -44,7 +46,9 @@ def test_qasm_circuit(
         circuit_name: The random PyZX graph.
         reduce (optional): Whether to optimise/reduce the circuit before running it or not.
         vis_options (optional): Visualisation settings provided as a tuple.
+        num_attempts (optional): How many times to repeat-run the circuit.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
+        log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
         save_to_file (optional): True to save the results to a `.bgraph` file, else False.
 
@@ -69,9 +73,10 @@ def test_qasm_circuit(
         circuit_name,
         path_to_qasm_circuit,
         reduce=reduce,
-        max_attempts=1,
+        max_attempts=num_attempts,
         vis_options=vis_options,
         debug=debug,
+        log_stats=log_stats,
     )
     duration = (datetime.now() - t1).total_seconds()
     success = success if (lat_nodes and lat_edges) else not success

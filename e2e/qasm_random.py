@@ -16,10 +16,11 @@ from topologiq.utils.e2e import test_qasm_circuit
 if __name__ == "__main__":
     # Adjustable parameters
     generic_circuit_name = "random"
-    random_seed = 0
     vis_options = (None, None)  # Change to none for GitHub mode. Enable for debugging locally.
     debug = 0
     save_to_file = True
+    log_stats = False
+    num_attempts = 1
 
     # Update user
     print(
@@ -27,18 +28,25 @@ if __name__ == "__main__":
         f"\n===> E2E QASM->Blockgraph Suite for {generic_circuit_name}. START.",
         Colors.RESET,
     )
-    # Run circuits on a loop, without reduction
-    circuit_names = ["qasm_random_05_05", "qasm_random_10_10"]  # Moderate runtimes.
-    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20"]  # Significant runtimes.
-    # circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_03_30", "qasm_random_10_50"]  # VERY significant runtimes.
+
+    # Select circuits
+    #circuit_names = ["qasm_random_05_05"]
+    #circuit_names = ["qasm_random_10_10"]
+    #circuit_names = ["qasm_random_10_20"]
+    #circuit_names = ["qasm_random_03_30"]
+    #circuit_names = ["qasm_random_10_50"]
+    circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20", "qasm_random_03_30", "qasm_random_10_50"]
+
+    # Run selected circuits on a loop, without reduction
     reduce_mode = False
     for circuit_name in circuit_names:
         _, _, test_stats = test_qasm_circuit(
             circuit_name,
             reduce=reduce_mode,
             vis_options=vis_options,
+            num_attempts=num_attempts,
             debug=debug,
-            random_seed=random_seed,
+            log_stats=log_stats,
             save_to_file=save_to_file,
         )
 

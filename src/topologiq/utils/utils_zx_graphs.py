@@ -69,9 +69,9 @@ def get_zx_type_fam(t: str) -> list[str | None]:
     """
 
     fams: dict[str, list[str]] = {
-        "X": ["zzx", "zxz", "xzz"],
+        "X": ["zxz", "zzx", "xzz"],
         "Y": ["yyy"],
-        "Z": ["zxx", "xxz", "xzx"],
+        "Z": ["xzx", "xxz", "zxx"],
         "O": ["ooo"],
         "SIMPLE": ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"],
         "HADAMARD": ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"],
