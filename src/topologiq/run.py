@@ -32,7 +32,7 @@ import sys
 from matplotlib.figure import Figure
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
+from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
@@ -73,7 +73,6 @@ def run():
     # Assemble kwargs
     kwargs: dict[str, tuple[int, int] | int] = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
         "deterministic": False,
     }
 

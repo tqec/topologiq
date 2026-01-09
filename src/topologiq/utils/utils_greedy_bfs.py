@@ -186,10 +186,9 @@ def prune_beams(nx_g: nx.Graph, taken: list[StandardCoord]) -> nx.Graph:
             else:
                 old_beams = nx_g.nodes[n_id]["beams"]
                 if old_beams:
-                    for beam in old_beams:
-                        if all([(c not in taken) for c in beam]):
-                            new_beams += [beam]
-
+                    for single_beam in old_beams:
+                        if not any([single_beam.contains(coord) for coord in taken]):
+                            new_beams += [single_beam]
                     nx_g.nodes[n_id]["beams"] = new_beams
     except (IndexError, ValueError, LookupError, KeyError):
         pass
@@ -285,3 +284,62 @@ def reindex_path_dict(
             i += 1
 
     return lat_nodes, lat_edges
+
+
+def get_bounding_box(
+    taken: list[StandardCoord], second_pass: bool = False
+) -> tuple[dict[str, dict[str, int]], int]:
+    """Determine min/max coordinates for any second pass search.
+
+    Args:
+        taken: A list of all coordinates occupied by any previously-placed blocks/pipes.
+        second_pass: A boolean flag to determine if search is a primary or `second_pass` search.
+
+    Returns:
+        bounding_box: A box made of min. and max. coordinates for each axis, which make a box
+            declaring the space inside which the pathfinder is allowed to search for paths.
+        max_span: the longest edge of the bounding box, equivalent to largest axes needed for box.
+
+    """
+
+    # Get the bounds of pre-existing blocks.
+    bounds_x = [x for (x, _, _) in taken] if taken else [-1, 0, 1]
+    bounds_y = [y for (_, y, _) in taken] if taken else [-1, 0, 1]
+    bounds_z = [z for (_, _, z) in taken] if taken else [-1, 0, 1]
+
+    # Add small leeway depending on type of search
+    margin = 6 if second_pass else 12
+    min_x, max_x = (min(bounds_x) - margin, max(bounds_x) + margin)
+    min_y, max_y = (min(bounds_y) - margin, max(bounds_y) + margin)
+    min_z, max_z = (min(bounds_z) - margin, max(bounds_z) + margin)
+    bounding_box = {
+        "x": {"min": min_x, "max": max_x},
+        "y": {"min": min_y, "max": max_y},
+        "z": {"min": min_z, "max": max_z},
+    }
+
+    # Calculate maximum span across all axes
+    max_span = max(
+        [
+            abs((min_x + margin) - (max_x - margin)),
+            abs((min_y + margin) - (max_y - margin)),
+            abs((min_z + margin) - (max_z - margin)),
+        ]
+    )
+
+    return bounding_box, max_span
+
+# DEPRECATED AFTER CHANGING BEAMS TO START/END SEGMENTS
+#def adjust_beam_len(node_beams: NodeBeams, taken: list[StandardCoord], second_pass: bool = False) -> NodeBeams:
+        #"""Trims the beams to an optimal length.
+        #Args:
+            #node_beams: All the beams of a single cube.
+            #taken: A list of all coordinates occupied by any previously-placed blocks/pipes.
+            #second_pass: A boolean flag to determine if search is a primary or `second_pass` search.
+        #Returns:
+            #new_node_beams: A trimmed version of the incoming beams, with length optimal for current size of 3D space.
+        #"""
+        #_, max_span = get_bounding_box(taken, second_pass=second_pass)
+        #max_span = 9 if max_span < 9 else 21 if max_span > 21 else max_span
+        #new_node_beams = [beam[:max_span] for beam in node_beams]
+        #return new_node_beams

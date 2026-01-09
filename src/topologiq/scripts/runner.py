@@ -17,7 +17,7 @@ import matplotlib.figure
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
-from topologiq.run_hyperparams import DETERMINISTIC, LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
+from topologiq.run_hyperparams import DETERMINISTIC, VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.graph_manager import graph_manager_bfs
 from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
@@ -78,7 +78,6 @@ def runner(
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
         **kwargs: !
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
             ! If no kwargs given, this function will create them based on `./src/topologiq/run_hyperparams.py`, so,
                 by extension, it only makes sense to give kwargs initially to deviate from defaults.
@@ -103,7 +102,6 @@ def runner(
     if len(kwargs) == 0:
         kwargs: dict[str, tuple[int, int] | int] = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "length_of_beams": LENGTH_OF_BEAMS,
             "deterministic": DETERMINISTIC,
         }
 
