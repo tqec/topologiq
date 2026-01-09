@@ -8,7 +8,13 @@ Usage:
 import networkx as nx
 import numpy as np
 
-from topologiq.utils.classes import NodeBeams, StandardBeam, StandardBlock, StandardCoord
+from topologiq.utils.classes import (
+    BeamAxisComponent,
+    CubeBeams,
+    SingleBeam,
+    StandardBlock,
+    StandardCoord,
+)
 
 
 ##################
@@ -29,10 +35,10 @@ def prune_visited(
     """
 
     new_visited = {}
-    for k, v in visited.items():
-        block_info = k[0]
-        new_visited[(block_info, (0, 0, 0))] = v
-        new_visited[(curr_block_info, (0, 0, 0))] = 0
+    # for k, v in visited.items():
+    # block_info = k[0]
+    # new_visited[(block_info, (0, 0, 0))] = v
+    # new_visited[(curr_block_info, (0, 0, 0))] = 0
 
     return new_visited
 
@@ -119,9 +125,7 @@ def check_unobstr(
     src_c: StandardCoord,
     tgt_c: StandardCoord,
     taken: list[StandardCoord],
-    all_beams: list[NodeBeams],
-    beams_len: int,
-) -> tuple[bool, StandardBeam]:
+) -> tuple[bool, SingleBeam]:
     """Check if a face is unobstructed.
 
     This function should typically be called after verifying a face is exit.
@@ -130,31 +134,33 @@ def check_unobstr(
         src_c: The (x, y, z) coordinates for the current block/pipe.
         tgt_c: The coordinates for the target block/pipe.
         taken: The list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-        all_beams: The list of coordinates taken by the beams of all blocks in original ZX-graph
-        beams_len: The int representing how long does each beam spans from its originating block.
 
     Returns:
         (bool): True if face is unobstructed else False.
+        single_beam: If the face is unobstructed, its corresponding beam.
 
     """
-
-    beam: StandardBeam = []
 
     diffs = [target - source for source, target in zip(src_c, tgt_c)]
     diffs = [1 if d > 0 else -1 if d < 0 else 0 for d in diffs]
 
-    for i in range(1, beams_len):
-        dx, dy, dz = (diffs[0] * i, diffs[1] * i, diffs[2] * i)
-        beam.append((src_c[0] + dx, src_c[1] + dy, src_c[2] + dz))
+    x_start, x_end, x_direction = (src_c[0], src_c[0] if diffs[0] == 0 else diffs[0] * np.inf, diffs[0])
+    y_start, y_end, y_direction = (src_c[1], src_c[1] if diffs[1] == 0 else diffs[1] * np.inf, diffs[1])
+    z_start, z_end, z_direction = (src_c[2], src_c[2] if diffs[2] == 0 else diffs[2] * np.inf, diffs[2])
+
+    single_beam = SingleBeam(
+        BeamAxisComponent(x_start, x_end, x_direction),
+        BeamAxisComponent(y_start, y_end, y_direction),
+        BeamAxisComponent(z_start, z_end, z_direction)
+    )
 
     if not taken:
-        return True, beam
+        return True, single_beam
 
-    for c in beam:
-        if c in taken or c in all_beams:
-            return False, beam
+    if any([single_beam.contains(coord) for coord in taken]):
+        return False, single_beam
 
-    return True, beam
+    return True, single_beam
 
 
 def check_exits(
@@ -163,8 +169,7 @@ def check_exits(
     taken: list[StandardCoord],
     coords_in_path: list[StandardCoord],
     nx_g: nx.Graph,
-    beams_len: int,
-) -> tuple[int, NodeBeams]:
+) -> tuple[int, CubeBeams]:
     """Find the number of unobstructed exits for an arbitrary block.
 
     This function manages calls to other functions that determine if
@@ -177,16 +182,15 @@ def check_exits(
         taken: A list of coordinates taken by any blocks placed as a result of previous operations.
         coords_in_path: The coordinates taken by the path under current evaluation.
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        beams_len: An integer representing how far each beam spans from its originating block.
 
     Returns:
         unobstr_exits_n: the number of unobstructed exist for the block.
-        beams_for_block: the beams emanating from the block.
+        cube_beams: the beams emanating from the block.
 
     """
 
     unobstr_exits_n = 0
-    n_beams: NodeBeams = []
+    cube_beams = []
 
     diffs = [
         (1, 0, 0),
@@ -205,30 +209,27 @@ def check_exits(
         )
 
         if check_is_exit(src_c, src_k, tgt_c):
-            is_unobstr, exit_beam = check_unobstr(src_c, tgt_c, taken, [], beams_len)
-            if is_unobstr and not any([coord in coords_in_path for coord in exit_beam]):
-                unobstr_exits_n += 1
-                n_beams.append(exit_beam)
-
-    # Remove any beams with beam clashes
-    delete_beams = []
-    for i, target_node_beam in enumerate(n_beams):
-        for node_id in nx_g.nodes():
-            node_beams = nx_g.nodes[node_id]["beams"]
-            if node_beams != [] and node_beams is not None:
-                for beam in node_beams:
-                    if not any([coord in coords_in_path for coord in beam[:9]]):
-                        if any([(coord in target_node_beam[:9]) for coord in beam]):
-                            delete_beams.extend([i])
-    delete_idxs = list(set(delete_beams))
-    if n_beams and delete_idxs:
-        for idx in sorted(delete_idxs, reverse=True):
-            del n_beams[idx]
+            is_unobstr, single_beam = check_unobstr(src_c, tgt_c, taken)
+            if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
+                # Check for beam clashes against other beams before adding beam
+                clashes_detected = False
+                for other_cube_id in nx_g.nodes():
+                    other_cube_beams = nx_g.nodes[other_cube_id]["beams"]
+                    if other_cube_beams:
+                        if any(
+                            [
+                                single_beam.intersects(single_beam_of_other)
+                                for single_beam_of_other in other_cube_beams
+                            ]
+                        ):
+                            clashes_detected = True
+                if not clashes_detected:
+                    unobstr_exits_n += 1
+                    cube_beams.append(single_beam)
 
     # Reset number of unobstructed exits
-    unobstr_exits_n = len(n_beams)
-
-    return unobstr_exits_n, n_beams
+    unobstr_exits_n = len(cube_beams)
+    return unobstr_exits_n, cube_beams
 
 
 def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:

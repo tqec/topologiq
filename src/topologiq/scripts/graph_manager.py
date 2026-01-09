@@ -27,7 +27,7 @@ from topologiq.scripts.pathfinder import get_taken_coords, pathfinder
 from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import (
     Colors,
-    NodeBeams,
+    CubeBeams,
     PathBetweenNodes,
     SimpleDictGraph,
     StandardBlock,
@@ -93,7 +93,6 @@ def graph_manager_bfs(
         first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
         **kwargs:
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
     Returns:
@@ -134,7 +133,7 @@ def graph_manager_bfs(
         return nx_g, edge_paths, lat_nodes, lat_edges
 
     # 3. Place first spider/cube
-    nx_g, taken = place_first_cube(nx_g, taken, first_cube, kwargs["length_of_beams"])
+    nx_g, taken = place_first_cube(nx_g, taken, first_cube)
     if log_stats_id or debug > 0:
         print(f"First cube ID: {first_id} ({first_kind}).")
 
@@ -240,9 +239,9 @@ def graph_manager_bfs(
     # Taken is used extensively, so prune it again
     taken = list(set(taken))
 
-    # If we make it here, all edges completed
-    # Assemble final lattice objects
-    lat_nodes, lat_edges = reindex_path_dict(edge_paths)
+    # Assemble final lattice if run is successfull
+    if run_success:
+        lat_nodes, lat_edges = reindex_path_dict(edge_paths)
 
     # Log stats
     if log_stats_id is not None:
@@ -262,7 +261,7 @@ def graph_manager_bfs(
         )
 
     # Raise
-    if run_success is False:
+    if not run_success:
         raise ValueError(f"ERROR. Run aborted. Failed to complete edge: {src_id} -> {tgt_id}.")
 
     return nx_g, edge_paths, lat_nodes, lat_edges
@@ -286,7 +285,7 @@ def place_nxt_block(
     log_stats_id: str | None = None,
     debug: int = 0,
     **kwargs,
-) -> tuple[list[StandardCoord], list[NodeBeams], dict, bool]:
+) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
     """Position target cube in the 3D space as part of the primary BFS flow.
 
     This function calls the inner pathfinder algorithm on any arbitrary combination of an already-placed
@@ -316,7 +315,6 @@ def place_nxt_block(
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         **kwargs:
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
     Returns:
@@ -388,7 +386,6 @@ def place_nxt_block(
                 taken_coords_c,
                 coords_in_path,
                 nx_g,
-                beams_len=kwargs["length_of_beams"],
             )
 
             # Check path doesn't obstruct an absolutely necessary exit for a pre-existing cube
@@ -398,9 +395,9 @@ def place_nxt_block(
 
             # Guarantee minimum necessary number of exits
             src_cube_beams = nx_g.nodes[src_id]["beams"]
-            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1 and any(
-                [clean_path[1][0] in beam for beam in src_cube_beams]
-            ):
+            path_exits_via_valid_beam = any([single_beam.contains(clean_path[1][0]) for single_beam in src_cube_beams])
+
+            if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1:
                 # Allow path to break some beams
                 # but ensure it does not break more beams than needed
                 beams_broken_by_path = 0
@@ -408,8 +405,8 @@ def place_nxt_block(
                     critical_beams_broken = False
                     if nx_g.nodes[n_id]["beams"]:
                         broken = 0
-                        for bm in nx_g.nodes[n_id]["beams"]:
-                            if any([(c in coords_in_path) for c in bm[:9]]):
+                        for single_beam in nx_g.nodes[n_id]["beams"]:
+                            if any([single_beam.contains(c) for c in coords_in_path]):
                                 beams_broken_by_path += 1
                                 broken += 1
                         adjust_for_source_node = 1 if n_id == src_id else 0
@@ -430,15 +427,18 @@ def place_nxt_block(
                 for n_id in nx_g.nodes():
                     critical_beams_clash = False
                     if n_id not in (src_id, tgt_id) and nx_g.nodes[n_id]["beams"]:
-                        for bm in nx_g.nodes[n_id]["beams"]:
-                            beam_clash_count = 0
-                            for b in tgt_beams:
-                                beam_clashes_for_node = sum([(c in b[:9]) for c in bm[:9]])
-                                if beam_clashes_for_node > len(tgt_beams) - nxt_neigh_neigh_n:
-                                    beam_clash_count += beam_clashes_for_node
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
+
+                        for single_beam in nx_g.nodes[n_id]["beams"]:
+                            beam_clash_count = sum(
+                                [
+                                    single_beam_of_tgt_cube.intersects(single_beam)
+                                    for single_beam_of_tgt_cube in tgt_beams
+                                ]
+                            )
                         num_edges_still_to_complete = n_degree - n_edges_completed
+
                         if (
                             len(nx_g.nodes[n_id]["beams"]) - beam_clash_count
                             < num_edges_still_to_complete
@@ -599,7 +599,7 @@ def connect_prev_placed_cubes(
     fig_data: matplotlib.figure.Figure | None = None,
     log_stats_id: str | None = None,
     debug: int = 0,
-) -> tuple[list[StandardCoord], list[NodeBeams], dict, bool]:
+) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
     """Search for a path between two cubes that have already been placed in 3D space.
 
     This function calls the inner pathfinder algorithm to search for paths between cubes that have
@@ -627,12 +627,12 @@ def connect_prev_placed_cubes(
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         **kwargs:
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            length_of_beams: The length of each of the beams coming out of cubes still needing connections at any given point in time.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
 
     Returns:
-        clean_paths: A list containing the path between cubes or `None` if path search fails.
+        taken: Updated list of all coordinates occupied by any blocks/pipes, including any placed by this function iteration.
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
+        edge_success: A boolean flag declaring whether the edge was built successfully or not.
 
     """
     # Start timer
@@ -657,11 +657,11 @@ def connect_prev_placed_cubes(
 
         # Call pathfinder on any graph edge that does not have an entry in edge_paths
         if edge not in edge_paths:
-            critical_beams: dict[int, tuple[int, NodeBeams]] = {}
+            critical_beams: dict[int, tuple[int, CubeBeams]] = {}
             num_edges_still_to_complete = 0
             for node_id in nx_g.nodes():
-                n_beams = nx_g.nodes[node_id]["beams"]
-                if n_beams != [] and n_beams is not None:
+                all_beams_for_node = nx_g.nodes[node_id]["beams"]
+                if all_beams_for_node != [] and all_beams_for_node is not None:
                     n_degree = get_node_degree(nx_g, node_id)
                     n_edges_completed = nx_g.nodes[node_id]["completed"]
                     num_edges_still_to_complete = n_degree - n_edges_completed
@@ -670,7 +670,7 @@ def connect_prev_placed_cubes(
                     else:
                         critical_beams[node_id] = (
                             num_edges_still_to_complete,
-                            n_beams,
+                            all_beams_for_node,
                         )
 
             # Check if edge is hadamard
@@ -808,7 +808,7 @@ def run_pathfinder(
     tgt_block_info: StandardCoord | None = None,
     hdm: bool = False,
     min_succ_rate: int = 60,
-    critical_beams: dict[int, tuple[int, NodeBeams]] = {},
+    critical_beams: dict[int, tuple[int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     log_stats_id: str | None = None,
 ) -> tuple[
@@ -1075,7 +1075,7 @@ def get_first_cube(
 
 
 def place_first_cube(
-    nx_g: nx.Graph, taken: list[StandardCoord], first_cube: StandardBlock, len_beams: int
+    nx_g: nx.Graph, taken: list[StandardCoord], first_cube: StandardBlock
 ) -> tuple[list[StandardCoord], nx.Graph]:
     """Place the first cube in the 3D space.
 
@@ -1083,7 +1083,6 @@ def place_first_cube(
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         first_cube: ID and kind for the very first spider/cube to place in 3D space.
-        len_beams: The length of the beams for any arbitrary cube.
 
     Returns:
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
@@ -1096,14 +1095,7 @@ def place_first_cube(
 
     # Get beams
     first_id, first_kind = first_cube
-    _, src_beams = check_exits(
-        (0, 0, 0),
-        first_kind,
-        taken,
-        [(0, 0, 0)],
-        nx_g,
-        len_beams,
-    )
+    _, src_beams = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)], nx_g)
 
     # Write info to nx_g
     nx_g.nodes[first_id]["coords"] = (0, 0, 0)

@@ -16,7 +16,6 @@ Example:
         # Assemble hyperparameters as kwargs
         kwargs: dict[str, tuple[int, int] | int] = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "length_of_beams": LENGTH_OF_BEAMS,
             "deterministic": False
         }
         # ...
@@ -47,8 +46,5 @@ Notes:
 # Weights for the main value function to choose best of several valid paths (length of path, beams broken by path)
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 
-# Length of beams
-LENGTH_OF_BEAMS = 99
-
 # Deterministic or randomised running mode
-DETERMINISTIC = True
+DETERMINISTIC = False

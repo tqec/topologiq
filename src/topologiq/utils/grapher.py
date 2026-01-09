@@ -9,12 +9,14 @@ Usage:
 """
 
 from pathlib import Path
+from typing import Annotated, Literal
 
 import matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.widgets import Button
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from PIL import Image
 
 from topologiq.utils.classes import PathBetweenNodes, StandardBlock, StandardCoord
@@ -194,9 +196,21 @@ def vis_3d(
     if tent_coords and not is_final_vis:
         _render_tent_tgts(fig, ax, tent_coords, tgt_kind, node_hex_map, src_tgt_ids)
 
+    # Set ax dimensions and get max range
+    max_range = _adjust_plot_dimensions(
+        fig,
+        ax,
+        partial_nx_g,  # Note: using the partial graph as in your original call
+        valid_paths,
+        tent_coords,
+        src_block_info,
+        is_final_vis,
+        pathfinder_success=True if winner_path else False,
+    )
+
     # Beams
     if nx_g and not is_final_vis:
-        _render_beams(fig, ax, nx_g)
+        _render_beams(fig, ax, nx_g, beam_length=int(max_range * 2))
 
     # ZX input graph overlay
     if fig_data:
@@ -230,19 +244,6 @@ def vis_3d(
         animation_interval_ms = 500
         tgt_duration_ms = 1000
         num_paths = 0
-
-    # Plot adjustments
-    # ---
-    _adjust_plot_dimensions(
-        fig,
-        ax,
-        partial_nx_g,
-        valid_paths,
-        tent_coords,
-        src_block_info,
-        is_final_vis,
-        pathfinder_success=True if winner_path else False,
-    )
 
     # Interactive buttons & elements
     # ---
@@ -689,7 +690,9 @@ def _render_tent_tgts(
             artist.set_visible(fig.show_tent_tgt_blocks)
 
 
-def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g: nx.Graph):
+def _render_beams(
+    fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g: nx.Graph, beam_length: int = 9
+):
     """Render any beams saved to the nodes of the NX graph received as parameter.
 
     This function handles the rendering of any beams present in the information of the nodes
@@ -699,6 +702,7 @@ def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g:
         fig: the Matplotlib Figure object.
         ax: Matplotlib's 3D subplot object.
         nx_g: The main NX graph the algorithm uses to guide its discovery process.
+        beam_length: Length used to materialise an otherwise infinite beam into a finite visualisation.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
@@ -706,35 +710,38 @@ def _render_beams(fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, nx_g:
 
     """
 
-    # Preliminaries
-    all_beam_x = []
-    all_beam_y = []
-    all_beam_z = []
+    segments = []
 
-    # Add loop
+    # Extraction loop
     for node_id in nx_g:
         node_beams = nx_g.nodes()[node_id].get("beams", [])
+
         if node_beams:
             for beam in node_beams:
-                for beam_coords in beam:
-                    all_beam_x.append(beam_coords[0])
-                    all_beam_y.append(beam_coords[1])
-                    all_beam_z.append(beam_coords[2])
+                # Only proceed if there is movement on at least one axis
+                if beam.x.direction != 0 or beam.y.direction != 0 or beam.z.direction != 0:
+                    # Start point (common to all axes)
+                    start_pt = (beam.x.start, beam.y.start, beam.z.start)
+
+                    # Calculate end point: start + (direction * length)
+                    # If direction is 0, end == start for that axis.
+                    end_pt = (
+                        beam.x.start + (beam.x.direction * beam_length),
+                        beam.y.start + (beam.y.direction * beam_length),
+                        beam.z.start + (beam.z.direction * beam_length),
+                    )
+
+                    segments.append([start_pt, end_pt])
 
     # Create a single artist for all beams
-    if all_beam_x:
-        beam_artist = ax.scatter(
-            all_beam_x,
-            all_beam_y,
-            all_beam_z,
-            c="yellow",
-            s=20,
-            edgecolors="black",
-            alpha=1,
-            depthshade=True,
+    if segments:
+        beam_artist = Line3DCollection(
+            segments, colors="white", linewidths=1.5, alpha=0.8, capstyle="round"
         )
 
-        # Store the single artist for toggling
+        ax.add_collection3d(beam_artist)
+
+        # Store for toggling within the UI
         fig.beam_artists.append(beam_artist)
         beam_artist.set_visible(fig.show_beams)
 
@@ -996,6 +1003,7 @@ def _adjust_plot_dimensions(
     """
 
     # Calculate positions of all contents
+    all_static_coords: Annotated[np.ndarray, Literal["N", 3]]
     if is_final_vis:
         all_static_coords = np.array(list(nx.get_node_attributes(nx_g, "coords").values()))
     else:
@@ -1012,6 +1020,7 @@ def _adjust_plot_dimensions(
                 [all_static_coords, np.array([block[0] for block in path])]
             )
 
+    max_range = 5
     if all_static_coords.size > 0:
         max_x, min_x = all_static_coords[:, 0].max(), all_static_coords[:, 0].min()
         max_y, min_y = all_static_coords[:, 1].max(), all_static_coords[:, 1].min()
@@ -1024,9 +1033,9 @@ def _adjust_plot_dimensions(
         ax.set_ylim(mid[1] - max_range - 1, mid[1] + max_range + 1)
         ax.set_zlim(mid[2] - max_range - 1, mid[2] + max_range + 1)
     else:
-        ax.set_xlim([-5, 5])
-        ax.set_ylim([-5, 5])
-        ax.set_zlim([-5, 5])
+        ax.set_xlim([-max_range, max_range])
+        ax.set_ylim([-max_range, max_range])
+        ax.set_zlim([-max_range, max_range])
 
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
@@ -1038,6 +1047,9 @@ def _adjust_plot_dimensions(
         bg_colour = "#fcbbb8"
     fig.patch.set_facecolor(bg_colour)
     ax.patch.set_facecolor(bg_colour)
+
+    # Return max range for subsequent calculation of beam length
+    return max_range
 
 
 def _prepare_search_paths_data(fig, all_search_paths, valid_paths):

@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
+from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
@@ -70,8 +70,7 @@ def run_debug():
     circuit_name: str = None
     min_success_rate = 60
     first_id, first_kind = (None, None)
-    value_fn_weights = (VALUE_FUNCTION_HYPERPARAMS,)
-    len_of_beams = LENGTH_OF_BEAMS
+    value_fn_weights = VALUE_FUNCTION_HYPERPARAMS
 
     # Get list of edge cases
     path_to_stats = DATA_DIR / "debug.csv"
@@ -87,9 +86,7 @@ def run_debug():
     # Ask user to select case to run
     else:
         print("\n==> EDGE CASES AVAILABLE FOR DIRECT RUN")
-        print(
-            "[case number] circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams."
-        )
+        print("[case number] circuit_name, first_id, first_kind, value_fn_weights.")
         for i, case in enumerate(debug_cases):
             print(f"[{i}] {str(case)[1:-1]}.")
         print(f"[{i + 1}] Exit debug mode.")
@@ -107,9 +104,7 @@ def run_debug():
                     circuit_name,
                     first_id,
                     first_kind,
-                    min_success_rate,
                     value_fn_weights,
-                    len_of_beams,
                 ) = debug_cases[case_number]
                 break
             except (ValueError, KeyError, IndexError):
@@ -118,23 +113,19 @@ def run_debug():
         if circuit_name is not None:
             # Update user
             print("\nLAUNCHING CASE")
-            print(
-                "[case number] circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, len_of_beams."
-            )
+            print("[case number] circuit_name, first_id, first_kind, value_fn_weights.")
             print(
                 f"[{case_number}]",
                 circuit_name,
                 first_id,
                 first_kind,
-                min_success_rate,
                 value_fn_weights,
-                len_of_beams,
             )
 
             # Assemble KWARGS
-            kwargs = {
-                "weights": value_fn_weights,
-                "length_of_beams": len_of_beams,
+            kwargs: dict[str, tuple[int, int] | int] = {
+                "weights": VALUE_FUNCTION_HYPERPARAMS,
+                "deterministic": False,
             }
 
             # Retrieve circuit
