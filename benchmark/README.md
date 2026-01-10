@@ -26,7 +26,6 @@ Schemas for the data files inside the data folder are as follows:
 - circuit_name: the name of the circuit,
 - num_input_nodes: the number of spiders in the input ZX graph,
 - num_input_edges: the number of spiders in the input ZX graph,
-- len_beams: the length of the beams used for the specific run,
 - num_input_nodes_processed: the number of nodes in the original/input ZX graph that were processed successfully,
 - num_input_edges_processed: the number of edges in the original/input ZX graph that were processed successfully,
 - num_1st_pass_edges_processed: the number of normal edges (edges between a "placed" block and a "new" one yet to be assigned coordinates and kind) in the original/input ZX graph that were processed successfully,

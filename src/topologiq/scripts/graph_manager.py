@@ -394,8 +394,8 @@ def place_nxt_block(
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
             # Guarantee minimum necessary number of exits
-            src_cube_beams = nx_g.nodes[src_id]["beams"]
-            path_exits_via_valid_beam = any([single_beam.contains(clean_path[1][0]) for single_beam in src_cube_beams])
+            #src_cube_beams = nx_g.nodes[src_id]["beams"]
+            #path_exits_via_valid_beam = any([single_beam.contains(clean_path[1][0]) for single_beam in src_cube_beams])
 
             if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1:
                 # Allow path to break some beams
