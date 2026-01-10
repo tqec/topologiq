@@ -23,7 +23,6 @@ HEADER_BFS_MANAGER_STATS = [
     "circuit_name",
     "num_input_nodes",
     "num_input_edges",
-    "len_beams",
     "num_input_nodes_processed",
     "num_input_edges_processed",
     "num_1st_pass_edges_processed",
@@ -189,7 +188,6 @@ def prep_stats_n_log(
             circuit_name,
             counts["num_input_nodes"],
             counts["num_input_edges"],
-            run_params["length_of_beams"],
             counts["num_input_nodes_processed"],
             counts["num_input_edges_processed"],
             counts["num_1st_pass_edges_processed"],
@@ -366,10 +364,10 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     debug_cases = []
     for case in debug_cases_full:
         circuit_name = case[2]
-        min_success_rate, weights, len_of_beams = literal_eval(case[3]).values()
+        min_success_rate, weights = literal_eval(case[3]).values()
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
         debug_cases.append(
-            (circuit_name, first_id, first_kind, min_success_rate, weights, len_of_beams)
+            (circuit_name, first_id, first_kind, min_success_rate, weights)
         )
 
     return debug_cases

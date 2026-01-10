@@ -74,7 +74,17 @@ class BeamAxisComponent:
 
     def contains(self, point: int) -> bool:
         """Check if a given point is contained in the segment."""
-        return self.start <= point < self.end
+
+        if self.direction == 0 and (self.start == point == self.end):
+            return True
+
+        if self.direction == 1 and (self.start < point < self.end):
+            return True
+
+        if self.direction == -1 and (self.start > point > self.end):
+            return True
+
+        return False
 
     def is_point(self) -> bool:
         """Check if the segment takes only a single point/coordinate."""
