@@ -216,9 +216,10 @@ def check_exits(
                 for other_cube_id in nx_g.nodes():
                     other_cube_beams = nx_g.nodes[other_cube_id]["beams"]
                     if other_cube_beams:
+                        manhattan_to_tgt = get_manhattan(src_c, tgt_c)
                         if any(
                             [
-                                single_beam.intersects(single_beam_of_other)
+                                single_beam.intersects(single_beam_of_other, manhattan_to_tgt)
                                 for single_beam_of_other in other_cube_beams
                             ]
                         ):

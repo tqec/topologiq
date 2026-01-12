@@ -43,7 +43,7 @@ from topologiq.utils.utils_greedy_bfs import (
     reindex_path_dict,
 )
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import check_exits
+from topologiq.utils.utils_pathfinder import check_exits, get_manhattan
 from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
 
 
@@ -393,10 +393,6 @@ def place_nxt_block(
             if nxt_neigh_zx_type == "O":
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
-            # Guarantee minimum necessary number of exits
-            #src_cube_beams = nx_g.nodes[src_id]["beams"]
-            #path_exits_via_valid_beam = any([single_beam.contains(clean_path[1][0]) for single_beam in src_cube_beams])
-
             if tgt_unobstr_exit_n >= nxt_neigh_neigh_n - 1:
                 # Allow path to break some beams
                 # but ensure it does not break more beams than needed
@@ -426,14 +422,15 @@ def place_nxt_block(
                 # Some clashes create a snowball effect that guarantees failures down the line.
                 for n_id in nx_g.nodes():
                     critical_beams_clash = False
-                    if n_id not in (src_id, tgt_id) and nx_g.nodes[n_id]["beams"]:
+
+                    if n_id not in (src_id, tgt_id) and nx_g.nodes[n_id]["beams"] and nx_g.nodes[n_id]["coords"]:
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
-
+                        manhattan_between = get_manhattan(tgt_coords, nx_g.nodes[n_id]["coords"])
                         for single_beam in nx_g.nodes[n_id]["beams"]:
                             beam_clash_count = sum(
                                 [
-                                    single_beam_of_tgt_cube.intersects(single_beam)
+                                    single_beam_of_tgt_cube.intersects(single_beam, manhattan_between)
                                     for single_beam_of_tgt_cube in tgt_beams
                                 ]
                             )
@@ -660,6 +657,7 @@ def connect_prev_placed_cubes(
             critical_beams: dict[int, tuple[int, CubeBeams]] = {}
             num_edges_still_to_complete = 0
             for node_id in nx_g.nodes():
+                node_coords = nx_g.nodes[node_id]["coords"]
                 all_beams_for_node = nx_g.nodes[node_id]["beams"]
                 if all_beams_for_node != [] and all_beams_for_node is not None:
                     n_degree = get_node_degree(nx_g, node_id)
@@ -669,6 +667,7 @@ def connect_prev_placed_cubes(
                         pass
                     else:
                         critical_beams[node_id] = (
+                            node_coords,
                             num_edges_still_to_complete,
                             all_beams_for_node,
                         )

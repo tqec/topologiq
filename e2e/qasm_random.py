@@ -20,7 +20,7 @@ if __name__ == "__main__":
     debug = 0
     save_to_file = True
     log_stats = False
-    num_attempts = 1
+    num_attempts = 10
 
     # Update user
     print(
@@ -35,8 +35,8 @@ if __name__ == "__main__":
     #circuit_names = ["qasm_random_10_20"]
     #circuit_names = ["qasm_random_03_30"]
     #circuit_names = ["qasm_random_10_50"]
-    circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20", "qasm_random_03_30"]
-    #circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20", "qasm_random_03_30", "qasm_random_10_50"]
+    #circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_03_30"]
+    circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20", "qasm_random_03_30", "qasm_random_10_50"]
 
     # Run selected circuits on a loop, without reduction
     reduce_mode = False
