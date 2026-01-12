@@ -26,7 +26,7 @@ from datetime import datetime
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_greedy_bfs import get_bounding_box
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import get_max_manhattan, nxt_kinds, rot_o_kind
+from topologiq.utils.utils_pathfinder import get_manhattan, get_max_manhattan, nxt_kinds, rot_o_kind
 
 
 ############################
@@ -40,7 +40,7 @@ def pathfinder(
     taken: list[StandardCoord] = [],
     hdm: bool = False,
     min_succ_rate: int = 60,
-    critical_beams: dict[int, tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     log_stats_id: str | None = None,
 ) -> tuple[
@@ -158,7 +158,7 @@ def core_pathfinder_bfs(
     min_succ_rate: int,
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[int, tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
@@ -497,35 +497,17 @@ def split_critical_beams(
 
     unbreakable_beams = {}
     negotiable_beams = {}
-    for node_id, (min_exit_num, node_beams) in critical_beams.items():
+    for node_id, (node_coords, min_exit_num, node_beams) in critical_beams.items():
         if min_exit_num == len(node_beams):
-            unbreakable_beams[node_id] = (min_exit_num, [beam for beam in node_beams])
+            unbreakable_beams[node_id] = (node_coords, min_exit_num, [beam for beam in node_beams])
         else:
-            negotiable_beams[node_id] = (min_exit_num, [beam for beam in node_beams])
+            negotiable_beams[node_id] = (node_coords, min_exit_num, [beam for beam in node_beams])
 
     return unbreakable_beams, negotiable_beams
 
 
-def check_unbreakable_for_single_beam(beams, full_path_coords, node_id, src_tgt_ids) -> bool:
-    """Check that move does not break any beams of cubes that need all their exits."""
-
-    broken_beams = 0
-    for beam in beams:
-        # Flip check to False if any beam is broken
-        if any([coord in beam for coord in full_path_coords]):
-            # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
-            if node_id in src_tgt_ids:
-                broken_beams += 1
-                if broken_beams > 1:
-                    return False
-            # Zero tolerance with any cube beyond src and tgt cubes
-            else:
-                return False
-    return True
-
-
 def check_unbreakable_beams(
-    unbreakable_beams: tuple[dict[int, tuple[int, CubeBeams]]],
+    unbreakable_beams: tuple[dict[int, tuple[StandardCoord, int, CubeBeams]]],
     full_path_coords: list[StandardCoord],
     src_tgt_ids: tuple[int, int],
 ):
@@ -541,7 +523,7 @@ def check_unbreakable_beams(
 
     """
 
-    for node_id, (_, node_beams) in unbreakable_beams.items():
+    for node_id, (_, _, node_beams) in unbreakable_beams.items():
         broken_beams = 0
         for single_beam in node_beams:
             if any([single_beam.contains(coord) for coord in full_path_coords]):
@@ -557,7 +539,7 @@ def check_unbreakable_beams(
 
 
 def check_negotiable_beams(
-    negotiable_beams: tuple[dict[int, tuple[int, CubeBeams]]],
+    negotiable_beams: tuple[dict[int, tuple[StandardCoord, int, CubeBeams]]],
     full_path_coords: list[StandardCoord],
     src_tgt_ids: tuple[int, int],
 ):
@@ -573,7 +555,7 @@ def check_negotiable_beams(
 
     """
 
-    for node_id, (min_exit_num, cube_beams) in negotiable_beams.items():
+    for node_id, (node_coords, min_exit_num, cube_beams) in negotiable_beams.items():
         # For each beam of current cube, check if path breaks the beam
         broken_beams = 0
         for single_beam in cube_beams:
@@ -581,10 +563,9 @@ def check_negotiable_beams(
                 broken_beams += 1
                 # If beam is broken, add pre-existing beam-to-beam clashes,
                 # as broken beam might eat into allowances already used
-                for _, all_beams in negotiable_beams.values():
-                    for negotiable_beam in all_beams:
-                        if single_beam.intersects(negotiable_beam):
-                            broken_beams += 1
+                for other_node_coords, _, all_beams in negotiable_beams.values():
+                    manhattan_between = get_manhattan(node_coords, other_node_coords)
+                    broken_beams += sum([single_beam.intersects(negotiable_beam, manhattan_between) for negotiable_beam in all_beams])
 
         # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
         adjust = 1 if node_id in src_tgt_ids else 0

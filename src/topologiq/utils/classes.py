@@ -6,7 +6,6 @@ Usage:
 """
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import TypedDict
 
 import numpy as np
@@ -27,15 +26,6 @@ class SimpleDictGraph(TypedDict):
 StandardCoord = tuple[int, int, int]
 StandardBlock = tuple[StandardCoord, str]
 StandardBeam = list[StandardCoord]
-
-
-class Axis(Enum):
-    """Class representing a 3D axis."""
-
-    X = (1, 0, 0)
-    Y = (0, 1, 0)
-    Z = (0, 0, 1)
-
 
 @dataclass
 class BeamAxisComponent:
@@ -68,10 +58,6 @@ class BeamAxisComponent:
         """Return a readable representation."""
         return f"[{self.start} => {self.end})"
 
-    def origin(self) -> int:
-        """Return the origin coordinates for the axis component."""
-        return int(self.start)
-
     def contains(self, point: int) -> bool:
         """Check if a given point is contained in the segment."""
 
@@ -86,9 +72,11 @@ class BeamAxisComponent:
 
         return False
 
-    def is_point(self) -> bool:
-        """Check if the segment takes only a single point/coordinate."""
-        return self.direction
+    def to_array(self, array_length: int) -> list[int] | None:
+        """Convert segment into an array of arbitrary length."""
+
+        if self.direction != 0:
+            return [self.start + i * self.direction for i in range(array_length)]
 
 
 @dataclass
@@ -123,55 +111,36 @@ class SingleBeam:
         """Return a readable representation."""
         return f"({self.x!s}, {self.y!s}, {self.z!s})"
 
-    def coords(self, c: int) -> tuple[BeamAxisComponent, BeamAxisComponent, BeamAxisComponent]:
-        """Return the coords for any given point of the beam."""
-        coords = (
-            self.x.start + (c * self.x.direction),
-            self.y.start + (c * self.y.direction),
-            self.z.start + (c * self.z.direction),
-        )
-        return coords
-
     def contains(self, coords: StandardCoord) -> bool:
         """Check if beam contains a given coordinate."""
         x, y, z = coords
         return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
 
-    def is_parallel(self, other: object) -> bool:
-        """Check if two beams run parallel to one another (ignores collinearity)."""
-        return (
-            self.x.is_point() == other.x.is_point()
-            and self.y.is_point() == other.y.is_point()
-            and self.z.is_point() == other.z.is_point()
-        )
+    def to_array(self, d: int) -> list[StandardCoord]:
+        """Convert beam into an array of 3D coordinates of arbitrary length."""
 
-    def intersects(self, other: object) -> bool:
+        if self.x.direction != 0:
+            y_start = self.y.start
+            z_start = self.z.start
+            return [(i, y_start, z_start) for i in self.x.to_array(d)]
+
+        if self.y.direction != 0:
+            x_start = self.x.start
+            z_start = self.z.start
+            return [(x_start, i, z_start) for i in self.y.to_array(d)]
+
+        if self.z.direction != 0:
+            x_start = self.x.start
+            y_start = self.y.start
+            return [(x_start, y_start, i) for i in self.z.to_array(d)]
+
+
+    def intersects(self, other: object, d: int) -> bool:
         """Check if two beams intersect one another."""
 
-        if self.is_parallel(other):
-            return False
+        other_as_array = other.to_array(d*2)
+        return any([self.contains(c) for c in other_as_array])
 
-        c = 1
-        prev_manhattan = np.sum(
-            np.abs(
-                np.array([float(c) for c in self.coords(0)])
-                - np.array([float(c) for c in other.coords(0)])
-            )
-        )
-        while True:
-            coords_self, coords_other = (self.coords(c), other.coords(c))
-            if coords_self == coords_other:
-                return True
-            curr_manhattan = np.sum(
-                np.abs(
-                    np.array([float(c) for c in coords_self])
-                    - np.array([float(c) for c in coords_other])
-                )
-            )
-            if curr_manhattan > prev_manhattan:
-                return False
-            prev_manhattan = curr_manhattan
-            c += 1
 
 
 CubeBeams = list[SingleBeam]
