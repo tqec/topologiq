@@ -74,6 +74,7 @@ def run():
     kwargs: dict[str, tuple[int, int] | int] = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "deterministic": False,
+        "seed": None,
     }
 
     # Get the circuit

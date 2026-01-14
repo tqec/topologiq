@@ -43,7 +43,7 @@ from topologiq.utils.utils_greedy_bfs import (
     reindex_path_dict,
 )
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import check_exits, get_manhattan
+from topologiq.utils.utils_pathfinder import check_exits
 from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam, kind_to_zx_type
 
 
@@ -91,9 +91,10 @@ def graph_manager_bfs(
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
-        **kwargs:
+        **kwargs: !
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
+            random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
@@ -119,7 +120,7 @@ def graph_manager_bfs(
     lat_edges: dict[tuple[int, int], list[str]] | None = None
 
     # First spider/cube
-    first_cube = get_first_cube(nx_g, first_cube=first_cube, deterministic=kwargs["deterministic"])
+    first_cube = get_first_cube(nx_g, first_cube=first_cube, deterministic=kwargs["deterministic"], random_seed=kwargs["seed"])
     first_id, first_kind = first_cube
 
     # BFS management
@@ -313,9 +314,10 @@ def place_nxt_block(
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-        **kwargs:
+        **kwargs: !
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
+            random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
@@ -426,11 +428,10 @@ def place_nxt_block(
                     if n_id not in (src_id, tgt_id) and nx_g.nodes[n_id]["beams"] and nx_g.nodes[n_id]["coords"]:
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
-                        manhattan_between = get_manhattan(tgt_coords, nx_g.nodes[n_id]["coords"])
                         for single_beam in nx_g.nodes[n_id]["beams"]:
                             beam_clash_count = sum(
                                 [
-                                    single_beam_of_tgt_cube.intersects(single_beam, manhattan_between)
+                                    single_beam_of_tgt_cube.intersects(single_beam)
                                     for single_beam_of_tgt_cube in tgt_beams
                                 ]
                             )
@@ -622,9 +623,10 @@ def connect_prev_placed_cubes(
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-        **kwargs:
+        **kwargs: !
             weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
             deterministic: A boolean flag to tell the function if choice is deterministic or random.
+            random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
         taken: Updated list of all coordinates occupied by any blocks/pipes, including any placed by this function iteration.
@@ -1047,13 +1049,15 @@ def get_first_cube(
     nx_g: nx.Graph,
     first_cube: tuple[int | None, str | None] = (None, None),
     deterministic: bool = False,
+    random_seed: int | None = None,
 ) -> tuple[int, str]:
     """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        deterministic: A boolean flag to tell the function if choice is deterministic or random.
         first_cube (optional): Override ID and kind (used to replicate specific cases).
+        deterministic: A boolean flag to tell the function if choice is deterministic or random.
+        random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
         first_id: ID of the first block to place in 3D space
@@ -1062,6 +1066,9 @@ def get_first_cube(
     """
 
     first_id, first_kind = first_cube
+
+    if (not first_id or not first_kind) and not deterministic and random_seed:
+        random.seed(random_seed)
 
     if not first_id:
         first_id = find_first_id(nx_g, deterministic=deterministic)

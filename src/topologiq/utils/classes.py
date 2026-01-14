@@ -27,6 +27,7 @@ StandardCoord = tuple[int, int, int]
 StandardBlock = tuple[StandardCoord, str]
 StandardBeam = list[StandardCoord]
 
+
 @dataclass
 class BeamAxisComponent:
     """Class representing the beam coordinates for any given axis.
@@ -44,7 +45,7 @@ class BeamAxisComponent:
 
     def __hash__(self) -> int:
         """Return start and end for hashing."""
-        return hash((self.start, self.end))
+        return hash((self.start, self.end, self.direction))
 
     def __eq__(self, other: object) -> bool:
         """Check equality against any other segments."""
@@ -60,13 +61,10 @@ class BeamAxisComponent:
 
     def contains(self, point: int) -> bool:
         """Check if a given point is contained in the segment."""
-
         if self.direction == 0 and (self.start == point == self.end):
             return True
-
         if self.direction == 1 and (self.start < point < self.end):
             return True
-
         if self.direction == -1 and (self.start > point > self.end):
             return True
 
@@ -74,7 +72,6 @@ class BeamAxisComponent:
 
     def to_array(self, array_length: int) -> list[int] | None:
         """Convert segment into an array of arbitrary length."""
-
         if self.direction != 0:
             return [self.start + i * self.direction for i in range(array_length)]
 
@@ -111,9 +108,13 @@ class SingleBeam:
         """Return a readable representation."""
         return f"({self.x!s}, {self.y!s}, {self.z!s})"
 
-    def contains(self, coords: StandardCoord) -> bool:
+    def coords(self) -> tuple[BeamAxisComponent, BeamAxisComponent, BeamAxisComponent]:
+        """Return the beam coordinates across all axes."""
+        return (self.x, self.y, self.z)
+
+    def contains(self, coords_to_check: StandardCoord) -> bool:
         """Check if beam contains a given coordinate."""
-        x, y, z = coords
+        x, y, z = coords_to_check
         return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
 
     def to_array(self, d: int) -> list[StandardCoord]:
@@ -134,13 +135,48 @@ class SingleBeam:
             y_start = self.y.start
             return [(x_start, y_start, i) for i in self.z.to_array(d)]
 
+    def check_co_planarity(self, other: object) -> tuple[bool, int | None]:
+        """Check if two beams are co-planar."""
+        co_planarity_checks = [
+            self.x.direction == other.x.direction == 0,
+            self.y.direction == other.y.direction == 0,
+            self.z.direction == other.z.direction == 0,
+        ]
 
-    def intersects(self, other: object, d: int) -> bool:
+        if sum(co_planarity_checks) == 1:
+            return True, co_planarity_checks.index(True)
+
+        return False, None
+
+    def intersects(self, other: object) -> bool:  # noqa: PLR0911, for readability
         """Check if two beams intersect one another."""
 
-        other_as_array = other.to_array(d*2)
-        return any([self.contains(c) for c in other_as_array])
+        #self_vector = np.array((self.x.direction, self.y.direction, self.z.direction))
+        #other_vector = np.array((other.x.direction, other.y.direction, other.z.direction))
+        #cos = dot(self_vector, other_vector) / norm(self_vector) / norm(other_vector)
+        #angle = abs(int(np.degrees(arccos(clip(cos, -1, 1)))))
+        #if angle != 90:
+            #return False
 
+        beams_are_co_planar, co_planarity_idx = self.check_co_planarity(other)
+        if beams_are_co_planar:
+            if co_planarity_idx == 0:
+                if self.y.direction != 0:
+                    return self.y.contains(other.y.start) and other.y.contains(self.y.start)
+                elif self.z.direction !=0:
+                    return self.z.contains(other.z.start) and other.z.contains(self.z.start)
+            elif co_planarity_idx == 1:
+                if self.x.direction != 0:
+                    return self.x.contains(other.x.start) and other.x.contains(self.x.start)
+                elif self.z.direction !=0:
+                    return self.z.contains(other.z.start) and other.z.contains(self.z.start)
+            elif co_planarity_idx == 2:
+                if self.x.direction != 0:
+                    return self.x.contains(other.x.start) and other.x.contains(self.x.start)
+                elif self.y.direction !=0:
+                    return self.y.contains(other.y.start) and other.y.contains(self.y.start)
+
+        return False
 
 
 CubeBeams = list[SingleBeam]
@@ -167,10 +203,10 @@ class PathBetweenNodes:
         which can be used for comparing many paths.
 
         Args:
-            **kwargs:
-                weights: weights for the value function to pick best of many paths.
-                length_of_beams: length of each of the beams coming out of open nodes.
+            **kwargs: !
+                weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
                 deterministic: A boolean flag to tell the function if choice is deterministic or random.
+                random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
         Returns:
             (int): The weighed value of a path
