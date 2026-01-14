@@ -26,7 +26,7 @@ from datetime import datetime
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_greedy_bfs import get_bounding_box
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import get_manhattan, get_max_manhattan, nxt_kinds, rot_o_kind
+from topologiq.utils.utils_pathfinder import get_max_manhattan, nxt_kinds, rot_o_kind
 
 
 ############################
@@ -564,8 +564,7 @@ def check_negotiable_beams(
                 # If beam is broken, add pre-existing beam-to-beam clashes,
                 # as broken beam might eat into allowances already used
                 for other_node_coords, _, all_beams in negotiable_beams.values():
-                    manhattan_between = get_manhattan(node_coords, other_node_coords)
-                    broken_beams += sum([single_beam.intersects(negotiable_beam, manhattan_between) for negotiable_beam in all_beams])
+                    broken_beams += sum([single_beam.intersects(negotiable_beam) for negotiable_beam in all_beams])
 
         # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
         adjust = 1 if node_id in src_tgt_ids else 0

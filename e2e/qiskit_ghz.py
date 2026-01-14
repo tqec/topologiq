@@ -1,8 +1,8 @@
-"""Run test using a series of originally-random circuits encoded as QASM.
+"""Run test using a couple GHZ circuits encoded as QASM.
 
-This script tests Topologiq performance using a number of circuits generated
-randomly and saved as QASM. After each run, outputs are saved to a `.bgraph`
-file in `./outputs/bgraph/`.
+This script tests Topologiq performance using a couple canonical GHZ circuits
+saved as QASM file. After each run, outputs are saved to a `.bgraph` file in
+`./outputs/bgraph/`.
 
 Usage:
     Run script as given.
@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pyzx as zx
 from pyzx.graph.base import BaseGraph
-from pyzx.graph.graph_s import GraphS
+from qiskit import qasm2
+from qiskit.circuit import QuantumCircuit
 
 from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
@@ -32,8 +33,9 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 #################
 # FLOW MANAGER #
 #################
-def manage_single_qasm_test(
+def manage_single_ghz_test(
     circuit_name: str,
+    n_qubits: int,
     reduce_input_circuit: bool = False,
     vis_options: tuple[str | None, str | None] = (None, None),
     max_attempts: int = 10,
@@ -50,6 +52,7 @@ def manage_single_qasm_test(
     Args:
         circuit_name: The name of the circuit.
         reduce_input_circuit (optional): Whether to optimise/reduce the circuit before running it or not.
+        n_qubits: The number of qubits in the GHZ circuit.
         vis_options (optional): Visualisation settings provided as a tuple.
         max_attempts (optional): How many times to repeat-run the circuit.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
@@ -72,15 +75,14 @@ def manage_single_qasm_test(
     success = True
     t1 = datetime.now()
 
-    # Path to file
-    path_to_qasm_circuit = ASSETS_DIR / f"{circuit_name}.qasm"
-
     # Retrieve QASM as PyZX graph
-    pyzx_graph = retrieve_qasm(circuit_name, path_to_qasm_circuit, reduce_input_circuit)
+    qasm_str = ghz_to_qasm(n_qubits, circuit_name)
+    pyzx_graph = qasm_to_pyzx(qasm_str)
+    if reduce_input_circuit:
+        pyzx_graph = pyzx_reduce(pyzx_graph)
 
-    # Convert to simple graph
+    # Call topologiq on circuit
     simple_graph = pyzx_g_to_simple_g(pyzx_graph)
-
     _, _, lat_nodes, lat_edges = runner(
         simple_graph,
         circuit_name,
@@ -111,63 +113,62 @@ def manage_single_qasm_test(
 
     return lat_nodes, lat_edges, test_stats
 
-
-#######
-# AUX #
-#######
-def retrieve_qasm(
-    circuit_name: str,
-    path_to_qasm_circuit: Path,
-    reduce_input_circuit: bool = False,
-) -> BaseGraph | GraphS:
-    """Retrieve a circuit from a QASM file.
+# ...
+def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
+    """Create a n-qubits GHZ and convert it to QASM.
 
     Args:
+        n_qubits: The number of qubits for the GHZ.
         circuit_name: The name of the circuit.
-        path_to_qasm_circuit: The path to the qasm file containing the circuit.
-        reduce_input_circuit (optional): Whether to optimise/reduce the circuit before running it or not.
 
-    Return:
-        str: The retrieved QASM string.
+    """
+    # Foundational circuit
+    qc: QuantumCircuit = QuantumCircuit(n_qubits, name=circuit_name)
+
+    # GHZ encoding
+    qc.h(0)
+    for i in range(n_qubits - 1):
+        qc.cx(i, i + 1)
+
+    # Convert to QASM
+    qasm_str = qasm2.dumps(qc)
+
+    return qasm_str
+
+
+def qasm_to_pyzx(qasm_str: str) -> BaseGraph:
+    """Import a circuit from QASM and convert it to a PyZX graph.
+
+    Args:
+        qasm_str: A quantum circuit encoded as a QASM string.
+
+    """
+    # QASM --> PyZX circuit --> PyZX graph
+    zx_circuit = zx.Circuit.from_qasm(qasm_str)
+    zx_graph = zx_circuit.to_graph()
+
+    return zx_graph
+
+
+def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
+    """Reduce a PyZX graph after applying states to all inputs.
+
+    Args:
+        zx_graph: The input ZX graph, given as a PyZX graph.
 
     """
 
-    # Retrieve QASM string from QASM file and convert to ZX graph
-    pyzx_circuit = zx.Circuit.load(path_to_qasm_circuit)
-    pyzx_graph = pyzx_circuit.to_graph()
+    # Work with copy
+    zx_graph_copy = zx_graph
 
-    # Draw un-reduced PyZX graph if any visualisation mode is on
-    if vis_options[0] or debug > 2:
-        zx.draw(pyzx_graph, labels=True)
+    # Apply states
+    num_apply_state = zx_graph_copy.num_inputs()
+    zx_graph_copy.apply_state("0" * num_apply_state)
 
-    # Reduce if reduce mode is on
-    if reduce_input_circuit:
-        circuits_with_reduction_strategy = ["qasm", "ghz"]
-        if any([circuit for circuit in circuits_with_reduction_strategy]):
-            # Apply states (commented out to enable comparison)
-            num_apply_state = pyzx_graph.num_inputs()
-            pyzx_graph.apply_state("0" * num_apply_state)
+    # Reduce & draw
+    zx.full_reduce(zx_graph_copy)
 
-            # Post-select
-            if circuit_name == "qasm_steane":
-                pyzx_graph.apply_effect("000///////")
-            elif "ghz" in circuit_name:
-                qubit_n = int(circuit_name.split("_")[2])
-                pyzx_graph.apply_effect("/" * qubit_n)
-
-            # Reduce
-            zx.full_reduce(pyzx_graph)
-            if circuit_name == "qasm_steane":
-                zx.to_rg(pyzx_graph)
-
-            # Draw reduced version if any visualisation mode is on
-            if vis_options[0] or debug > 2:
-                zx.draw(pyzx_graph, labels=True)
-        else:
-            print("Reduction strategy for this circuit not yet defined.")
-
-    return pyzx_graph
-
+    return zx_graph_copy
 
 def save_test_results_to_file(
     circuit_name: str,
@@ -204,17 +205,11 @@ if __name__ == "__main__":
     print(Colors.BLUE, "\n===> E2E QASM Test Suite. START.", Colors.RESET)
 
     # Circuits
-    circuit_names = [
-        "qasm_random_05_05",
-        "qasm_random_10_10",
-        "qasm_random_10_20",
-        "qasm_random_03_30",
-        "qasm_random_10_50",
-    ]
+    n_qubits = [16, 200]
 
     # Adjustable parameters
-    reduce_input_circuit = False
-    vis_options = (None, None)
+    reduce_input_circuit = True
+    vis_options = ("final", None)
     max_attempts = 10
     debug = 0
     log_stats = False
@@ -226,10 +221,11 @@ if __name__ == "__main__":
         "seed": None,
     }
 
-    # Run selected circuits on a loop, without reduction
-    for circuit_name in circuit_names:
-        _, _, test_stats = manage_single_qasm_test(
+    for n in n_qubits:
+        circuit_name = f"ghz_{n}"
+        _, _, test_stats = manage_single_ghz_test(
             circuit_name,
+            n,
             reduce_input_circuit,
             vis_options=vis_options,
             max_attempts=max_attempts,
@@ -241,7 +237,7 @@ if __name__ == "__main__":
     # Update user with results
     print(
         Colors.BLUE,
-        "\n===> E2E QASM->Blockgraph Test Suite. END.",
+        "\n===> E2E Qiskit GHZ Test Suite. END.",
         f"{Colors.GREEN + 'SUCCESS' if test_stats['success'] else Colors.RED + 'FAIL'}",
         Colors.RESET,
         f"Duration: {test_stats['duration']:.2f}.\n",
