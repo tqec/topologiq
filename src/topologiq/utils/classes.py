@@ -148,33 +148,19 @@ class SingleBeam:
 
         return False, None
 
-    def intersects(self, other: object) -> bool:  # noqa: PLR0911, for readability
+    def intersects(self, other: object) -> bool:
         """Check if two beams intersect one another."""
-
-        #self_vector = np.array((self.x.direction, self.y.direction, self.z.direction))
-        #other_vector = np.array((other.x.direction, other.y.direction, other.z.direction))
-        #cos = dot(self_vector, other_vector) / norm(self_vector) / norm(other_vector)
-        #angle = abs(int(np.degrees(arccos(clip(cos, -1, 1)))))
-        #if angle != 90:
-            #return False
 
         beams_are_co_planar, co_planarity_idx = self.check_co_planarity(other)
         if beams_are_co_planar:
             if co_planarity_idx == 0:
-                if self.y.direction != 0:
-                    return self.y.contains(other.y.start) and other.y.contains(self.y.start)
-                elif self.z.direction !=0:
-                    return self.z.contains(other.z.start) and other.z.contains(self.z.start)
+                return (self.y.contains(other.y.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.y.contains(self.y.start))
+
             elif co_planarity_idx == 1:
-                if self.x.direction != 0:
-                    return self.x.contains(other.x.start) and other.x.contains(self.x.start)
-                elif self.z.direction !=0:
-                    return self.z.contains(other.z.start) and other.z.contains(self.z.start)
+                return (self.x.contains(other.x.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.x.contains(self.x.start))
+
             elif co_planarity_idx == 2:
-                if self.x.direction != 0:
-                    return self.x.contains(other.x.start) and other.x.contains(self.x.start)
-                elif self.y.direction !=0:
-                    return self.y.contains(other.y.start) and other.y.contains(self.y.start)
+                return (self.x.contains(other.x.start) and other.y.contains(self.y.start)) or (self.y.contains(other.y.start) and other.x.contains(self.x.start))
 
         return False
 
