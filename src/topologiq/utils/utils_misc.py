@@ -364,10 +364,10 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     debug_cases = []
     for case in debug_cases_full:
         circuit_name = case[2]
-        min_success_rate, weights = literal_eval(case[3]).values()
+        min_success_rate, weights, deterministic, random_seed = literal_eval(case[3]).values()
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
         debug_cases.append(
-            (circuit_name, first_id, first_kind, min_success_rate, weights)
+            (circuit_name, first_id, first_kind, min_success_rate, weights, deterministic, random_seed)
         )
 
     return debug_cases

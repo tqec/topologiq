@@ -26,7 +26,7 @@ from datetime import datetime
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_greedy_bfs import get_bounding_box
 from topologiq.utils.utils_misc import prep_stats_n_log
-from topologiq.utils.utils_pathfinder import get_max_manhattan, nxt_kinds, rot_o_kind
+from topologiq.utils.utils_pathfinder import get_max_manhattan, nxt_kinds, prune_visited, rot_o_kind
 
 
 ############################
@@ -192,7 +192,8 @@ def core_pathfinder_bfs(
     tgt_coords = tent_coords
     second_pass = False
     bounding_box, _ = get_bounding_box(taken, second_pass=second_pass)
-    unbreakable_beams, negotiable_beams = (None, None)
+    unbreakable_beams, negotiable_beams, forbidden_paths = (None, None, [])
+    exit_flag = False
 
     if src_coords in taken:
         taken.remove(src_coords)
@@ -229,7 +230,7 @@ def core_pathfinder_bfs(
         src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
         max_manhattan = max(
             get_max_manhattan(src_coords, taken) * 2,
-            src_tgt_manhattan * 2,
+            src_tgt_manhattan * 3,
         )
     src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
 
@@ -246,17 +247,35 @@ def core_pathfinder_bfs(
             continue
         if curr_manhattan > max_manhattan:
             break
-        if curr_coords in tgt_coords:
-            if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
-                valid_paths[current_block] = path[current_block]
-                tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-                if tgts_filled >= tgts_to_fill:
-                    break
-            else:
+        if second_pass:
+            if current_block not in path:
                 continue
 
-        # Remove unnecessary moves (corresponding to non-exits)
-        # TO BE IMPLEMENTED
+        if curr_coords in tgt_coords:
+            if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
+                if not second_pass:
+                    valid_paths[current_block] = path[current_block]
+                    tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+                    if tgts_filled >= tgts_to_fill:
+                        break
+
+                #elif second_pass and path[current_block] not in forbidden_paths:
+                    #all_coords_valid_path = get_taken_coords(path[current_block])
+                    #if len(all_coords_valid_path) >= max_manhattan:
+                        #continue
+                    #if check_unbreakable_beams(unbreakable_beams, all_coords_valid_path, src_tgt_ids) and check_negotiable_beams(negotiable_beams, all_coords_valid_path, src_tgt_ids):
+                        #print("path ok")
+                        #valid_paths[current_block] = path[current_block]
+                        #break
+                    #else:
+                        #print("path not ok")
+                        #visited = prune_visited(visited, path, remove_block_info=current_block)
+                        #visited = {}
+                        #forbidden_paths.append(path[current_block])
+                        #del path[current_block]
+                        #del path_len[current_block]
+            else:
+                continue
 
         # Try moving in all directions
         scale = 2 if "o" in curr_kind else 1  # Block is pipe if "o" in kind
@@ -265,10 +284,10 @@ def core_pathfinder_bfs(
             nxt_x, nxt_y, nxt_z = x + dx * scale, y + dy * scale, z + dz * scale
             nxt_coords = (nxt_x, nxt_y, nxt_z)
             curr_path_coords = [n[0] for n in path[current_block]]
-            try:
-                full_path_coords = get_taken_coords(path[current_block])
-            except Exception as _:
-                full_path_coords = curr_path_coords
+            #try:
+                #full_path_coords = get_taken_coords(path[current_block])
+            #except Exception as _:
+                #full_path_coords = curr_path_coords
 
             # Skip if next position has been taken or is in current path
             if nxt_coords in taken or nxt_coords in curr_path_coords:
@@ -290,14 +309,14 @@ def core_pathfinder_bfs(
                     continue
 
             # Skip if beam clashes arise with nodes that need all their exits
-            if unbreakable_beams and "o" not in curr_kind:
-                if not check_unbreakable_beams(unbreakable_beams, full_path_coords, src_tgt_ids):
-                    continue
+            #if unbreakable_beams and "o" not in curr_kind:
+                #if not check_unbreakable_beams(unbreakable_beams, full_path_coords, src_tgt_ids):
+                    #continue
 
             # Skip if number of beam clashes with nodes that need only some exits > than tolerable
-            if negotiable_beams and "o" not in curr_kind:
-                if not check_negotiable_beams(negotiable_beams, full_path_coords, src_tgt_ids):
-                    continue
+            #if negotiable_beams and "o" not in curr_kind:
+                #if not check_negotiable_beams(negotiable_beams, full_path_coords, src_tgt_ids):
+                    #continue
 
             # Rotate if current kind is a Hadamard
             # NB! The raw kinds of Hadamards correspond to unrotated colours.
@@ -355,19 +374,49 @@ def core_pathfinder_bfs(
                         if nxt_coords in tgt_coords and (
                             tent_tgt_kinds == ["ooo"] or nxt_type in tent_tgt_kinds
                         ):
-                            valid_paths[nxt_b_info] = path[nxt_b_info]
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
-                            tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-                            if tgts_filled >= tgts_to_fill:
-                                break
+
+                            if not second_pass:
+                                valid_paths[nxt_b_info] = path[nxt_b_info]
+                                tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+                                if tgts_filled >= tgts_to_fill:
+                                    break
+
+                            elif second_pass and path[nxt_b_info] not in forbidden_paths:
+                                all_coords_valid_path = get_taken_coords(path[nxt_b_info])
+                                exit_flag = False
+                                unbreakable_ok, problem_coords = check_unbreakable_beams(unbreakable_beams, all_coords_valid_path, src_tgt_ids)
+                                negotiable_ok = check_negotiable_beams(negotiable_beams, all_coords_valid_path, src_tgt_ids)
+                                if unbreakable_ok and negotiable_ok:
+
+                                    valid_paths[nxt_b_info] = path[nxt_b_info]
+                                    exit_flag = True
+                                    break
+                                else:
+                                    #print("path not ok")
+                                    exit_flag = False
+                                    taken.extend(problem_coords)
+                                    visited = prune_visited(visited, path, remove_block_info=nxt_b_info, problem_coords=problem_coords)
+                                    visited = {}
+                                    #if problem_coords:
+                                        #for k, p in path.items():
+                                            #check = any([block_coords in problem_coords for block_coords, _ in p])
+                                            #if check:
+                                                #print(check)
+
+
+                                    forbidden_paths.append(path[nxt_b_info])
+                                    del path[nxt_b_info]
+                                    del path_len[nxt_b_info]
+
                         else:
                             all_search_paths[nxt_b_info] = path[nxt_b_info]
 
-            if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
+            if exit_flag:
                 break
 
-        if len(tent_coords) == 1 and tgts_filled >= tgts_to_fill:
-            break
+        if exit_flag:
+           break
 
     return valid_paths, all_search_paths, (visit_attempts, len(visited))
 
@@ -523,19 +572,22 @@ def check_unbreakable_beams(
 
     """
 
+    problem_coords = []
     for node_id, (_, _, node_beams) in unbreakable_beams.items():
         broken_beams = 0
         for single_beam in node_beams:
-            if any([single_beam.contains(coord) for coord in full_path_coords]):
+            clash_coords = [coord for coord in full_path_coords if single_beam.contains(coord)]
+            if clash_coords:
+                problem_coords.extend(clash_coords)
                 # Reject if beam is of nodes other src and tgt
                 if node_id not in src_tgt_ids:
-                    return False
+                    return False, problem_coords
                 # Reject if more than one beam of src and tgt cubes is broken
                 if broken_beams == 1:
-                    return False
+                    return False, problem_coords
                 # Add to broken beams
                 broken_beams += 1
-    return True
+    return True, problem_coords
 
 
 def check_negotiable_beams(
@@ -555,7 +607,7 @@ def check_negotiable_beams(
 
     """
 
-    for node_id, (node_coords, min_exit_num, cube_beams) in negotiable_beams.items():
+    for node_id, (_, min_exit_num, cube_beams) in negotiable_beams.items():
         # For each beam of current cube, check if path breaks the beam
         broken_beams = 0
         for single_beam in cube_beams:
@@ -563,8 +615,11 @@ def check_negotiable_beams(
                 broken_beams += 1
                 # If beam is broken, add pre-existing beam-to-beam clashes,
                 # as broken beam might eat into allowances already used
-                for other_node_coords, _, all_beams in negotiable_beams.values():
-                    broken_beams += sum([single_beam.intersects(negotiable_beam) for negotiable_beam in all_beams])
+                for _, _, all_beams in negotiable_beams.values():
+                    intersections = [single_beam.intersects(negotiable_beam) for negotiable_beam in all_beams]
+                    if intersections:
+                        broken_beams += sum(intersections)
+                        broken_beams -= 1 if node_id in src_tgt_ids else 0
 
         # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
         adjust = 1 if node_id in src_tgt_ids else 0

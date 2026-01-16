@@ -5,7 +5,6 @@ Usage:
 
 """
 
-import networkx as nx
 import numpy as np
 
 from topologiq.utils.classes import (
@@ -21,25 +20,25 @@ from topologiq.utils.classes import (
 # BFS MANAGEMENT #
 ##################
 def prune_visited(
-    visited: dict[tuple[StandardBlock, StandardCoord], int], curr_block_info: StandardBlock
+    visited: dict[tuple[StandardBlock, StandardCoord], int],
+    path: dict[StandardBlock, list[StandardBlock]],
+    remove_block_info: StandardBlock,
+    problem_coords: list[StandardCoord] = []
 ) -> dict[tuple[StandardBlock, StandardCoord], int]:
     """Prune the visited dictionary from the pathfinder.
 
     Args:
         visited: The dictionary the pathfinder algorithm uses to keep track of visited sites.
-        curr_block_info: The coordinates and kind of the current block.
+        path: The main path object from the pathfinder BFS.
+        remove_block_info: The coordinates and kind of the current block.
+        problem_coords: A list of problematic coordinates that need be removed from visited.
 
     Returns:
         new_visited: A pruned version of the incoming dictionary, which allows revisiting some sites.
 
     """
 
-    new_visited = {}
-    # for k, v in visited.items():
-    # block_info = k[0]
-    # new_visited[(block_info, (0, 0, 0))] = v
-    # new_visited[(curr_block_info, (0, 0, 0))] = 0
-
+    new_visited = {key:val for key, val in visited.items() if key[0] not in path[remove_block_info]}
     return new_visited
 
 
@@ -168,7 +167,6 @@ def check_exits(
     src_k: str | None,
     taken: list[StandardCoord],
     coords_in_path: list[StandardCoord],
-    nx_g: nx.Graph,
 ) -> tuple[int, CubeBeams]:
     """Find the number of unobstructed exits for an arbitrary block.
 
@@ -181,7 +179,6 @@ def check_exits(
         src_k: The kind of the block.
         taken: A list of coordinates taken by any blocks placed as a result of previous operations.
         coords_in_path: The coordinates taken by the path under current evaluation.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
 
     Returns:
         unobstr_exits_n: the number of unobstructed exist for the block.
@@ -211,21 +208,8 @@ def check_exits(
         if check_is_exit(src_c, src_k, tgt_c):
             is_unobstr, single_beam = check_unobstr(src_c, tgt_c, taken)
             if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
-                # Check for beam clashes against other beams before adding beam
-                clashes_detected = False
-                for other_cube_id in nx_g.nodes():
-                    other_cube_beams = nx_g.nodes[other_cube_id]["beams"]
-                    if other_cube_beams:
-                        if any(
-                            [
-                                single_beam.intersects(single_beam_of_other)
-                                for single_beam_of_other in other_cube_beams
-                            ]
-                        ):
-                            clashes_detected = True
-                if not clashes_detected:
-                    unobstr_exits_n += 1
-                    cube_beams.append(single_beam)
+                unobstr_exits_n += 1
+                cube_beams.append(single_beam)
 
     # Reset number of unobstructed exits
     unobstr_exits_n = len(cube_beams)

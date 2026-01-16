@@ -386,8 +386,7 @@ def place_nxt_block(
                 tgt_coords,
                 tgt_kind,
                 taken_coords_c,
-                coords_in_path,
-                nx_g,
+                coords_in_path
             )
 
             # Check path doesn't obstruct an absolutely necessary exit for a pre-existing cube
@@ -401,8 +400,8 @@ def place_nxt_block(
                 beams_broken_by_path = 0
                 for n_id in nx_g.nodes():
                     critical_beams_broken = False
+                    broken = 0
                     if nx_g.nodes[n_id]["beams"]:
-                        broken = 0
                         for single_beam in nx_g.nodes[n_id]["beams"]:
                             if any([single_beam.contains(c) for c in coords_in_path]):
                                 beams_broken_by_path += 1
@@ -424,25 +423,28 @@ def place_nxt_block(
                 # Some clashes create a snowball effect that guarantees failures down the line.
                 for n_id in nx_g.nodes():
                     critical_beams_clash = False
+                    beam_clash_count = 0
 
                     if n_id not in (src_id, tgt_id) and nx_g.nodes[n_id]["beams"] and nx_g.nodes[n_id]["coords"]:
                         n_degree = get_node_degree(nx_g, n_id)
                         n_edges_completed = nx_g.nodes[n_id]["completed"]
-                        for single_beam in nx_g.nodes[n_id]["beams"]:
-                            beam_clash_count = sum(
-                                [
-                                    single_beam_of_tgt_cube.intersects(single_beam)
-                                    for single_beam_of_tgt_cube in tgt_beams
-                                ]
-                            )
                         num_edges_still_to_complete = n_degree - n_edges_completed
 
-                        if (
-                            len(nx_g.nodes[n_id]["beams"]) - beam_clash_count
-                            < num_edges_still_to_complete
-                        ):
-                            critical_beams_clash = True
-                            break
+                        if tgt_beams:
+                            for single_beam in nx_g.nodes[n_id]["beams"]:
+                                beam_clash_count = sum(
+                                    [
+                                        single_beam.intersects(single_beam_of_tgt_cube)
+                                        for single_beam_of_tgt_cube in tgt_beams
+                                    ]
+                                )
+
+                                if (
+                                    len(nx_g.nodes[n_id]["beams"]) - beam_clash_count
+                                    < num_edges_still_to_complete
+                                ):
+                                    critical_beams_clash = True
+                                    break
 
                 # Append path to viable paths if path clears all checks
                 if critical_beams_broken is not True and critical_beams_clash is not True:
@@ -1101,7 +1103,7 @@ def place_first_cube(
 
     # Get beams
     first_id, first_kind = first_cube
-    _, src_beams = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)], nx_g)
+    _, src_beams = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)])
 
     # Write info to nx_g
     nx_g.nodes[first_id]["coords"] = (0, 0, 0)

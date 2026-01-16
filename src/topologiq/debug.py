@@ -86,7 +86,7 @@ def run_debug():
     # Ask user to select case to run
     else:
         print("\n==> EDGE CASES AVAILABLE FOR DIRECT RUN")
-        print("[case number] circuit_name, first_id, first_kind, value_fn_weights.")
+        print("[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, random_seed.")
         for i, case in enumerate(debug_cases):
             print(f"[{i}] {str(case)[1:-1]}.")
         print(f"[{i + 1}] Exit debug mode.")
@@ -97,15 +97,14 @@ def run_debug():
 
             try:
                 case_number = int(case_number)
+                print("==>", debug_cases[case_number])
+                print(type(case_number), case_number)
                 if case_number > i:
                     print("Exiting debug mode.\n")
                     break
-                (
-                    circuit_name,
-                    first_id,
-                    first_kind,
-                    value_fn_weights,
-                ) = debug_cases[case_number]
+
+                circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, deterministic, random_seed = debug_cases[case_number]
+
                 break
             except (ValueError, KeyError, IndexError):
                 print("You must choose a valid [case number] or type 'EXIT' to exit")
@@ -113,19 +112,23 @@ def run_debug():
         if circuit_name is not None:
             # Update user
             print("\nLAUNCHING CASE")
-            print("[case number] circuit_name, first_id, first_kind, value_fn_weights.")
+            print("[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, seed.")
             print(
                 f"[{case_number}]",
                 circuit_name,
                 first_id,
                 first_kind,
+                min_success_rate,
                 value_fn_weights,
+                deterministic,
+                random_seed,
             )
 
             # Assemble KWARGS
             kwargs: dict[str, tuple[int, int] | int] = {
                 "weights": VALUE_FUNCTION_HYPERPARAMS,
-                "deterministic": False,
+                "deterministic": deterministic,
+                "seed": random_seed,
             }
 
             # Retrieve circuit
