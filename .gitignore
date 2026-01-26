@@ -5,6 +5,15 @@
 **/stats_checks.py
 **/data/*.csv
 
+# MacOS
+.DS_Store
+
+# IntelliJ
+.idea/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
 # Outputs
 /output/
 **/output
