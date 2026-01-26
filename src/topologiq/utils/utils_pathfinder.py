@@ -38,7 +38,7 @@ def prune_visited(
 
     """
 
-    new_visited = {key:val for key, val in visited.items() if key[0] not in path[remove_block_info]}
+    new_visited = {k:p for k, p in visited.items() if k[0][0] not in problem_coords and k[0][0] not in path[remove_block_info]}
     return new_visited
 
 
@@ -153,13 +153,23 @@ def check_unobstr(
         BeamAxisComponent(z_start, z_end, z_direction)
     )
 
+    x_start, x_end, x_direction = (src_c[0], src_c[0] if diffs[0] == 0 else src_c[0] + diffs[0] * 9, diffs[0])
+    y_start, y_end, y_direction = (src_c[1], src_c[1] if diffs[1] == 0 else src_c[1] + diffs[1] * 9, diffs[1])
+    z_start, z_end, z_direction = (src_c[2], src_c[2] if diffs[2] == 0 else src_c[2] + diffs[2] * 9, diffs[2])
+
+    single_beam_short = SingleBeam(
+        BeamAxisComponent(x_start, x_end, x_direction),
+        BeamAxisComponent(y_start, y_end, y_direction),
+        BeamAxisComponent(z_start, z_end, z_direction)
+    )
+
     if not taken:
-        return True, single_beam
+        return True, single_beam, single_beam_short
 
     if any([single_beam.contains(coord) for coord in taken]):
-        return False, single_beam
+        return False, single_beam, single_beam_short
 
-    return True, single_beam
+    return True, single_beam, single_beam_short
 
 
 def check_exits(
@@ -167,7 +177,7 @@ def check_exits(
     src_k: str | None,
     taken: list[StandardCoord],
     coords_in_path: list[StandardCoord],
-) -> tuple[int, CubeBeams]:
+) -> tuple[int, CubeBeams, CubeBeams]:
     """Find the number of unobstructed exits for an arbitrary block.
 
     This function manages calls to other functions that determine if
@@ -188,6 +198,7 @@ def check_exits(
 
     unobstr_exits_n = 0
     cube_beams = []
+    cube_beams_short = []
 
     diffs = [
         (1, 0, 0),
@@ -206,14 +217,15 @@ def check_exits(
         )
 
         if check_is_exit(src_c, src_k, tgt_c):
-            is_unobstr, single_beam = check_unobstr(src_c, tgt_c, taken)
+            is_unobstr, single_beam, single_beam_short = check_unobstr(src_c, tgt_c, taken)
             if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
                 unobstr_exits_n += 1
                 cube_beams.append(single_beam)
+                cube_beams_short.append(single_beam_short)
 
     # Reset number of unobstructed exits
     unobstr_exits_n = len(cube_beams)
-    return unobstr_exits_n, cube_beams
+    return unobstr_exits_n, cube_beams, cube_beams_short
 
 
 def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
