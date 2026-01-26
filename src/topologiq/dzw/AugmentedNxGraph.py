@@ -2,8 +2,8 @@ import random
 import pyzx as zx
 import networkx as nx
 
-from GraphComponents import NodeType, EdgeType, CubeKind
-from BlockGraphSpace import Coordinates, BlockGraphSpace
+from topologiq.dzw.GraphComponents import NodeType, EdgeType, CubeKind
+from topologiq.dzw.BlockGraphSpace import Coordinates, BlockGraphSpace
 
 # TODO: figure out what the other VertexType and EdgeType represent
 # TODO: how do we deal with the last four VertexType (i.e. H_BOX, W_INPUT, W_OUTPUT, Z_BOX) ?
@@ -12,17 +12,14 @@ from BlockGraphSpace import Coordinates, BlockGraphSpace
 # TODO: benchmarking and timing various parts
 # TODO: construction of animation
 class AugmentedNxGraph(nx.Graph):
-    # Keeps track of the coordinates in 3D that are occupied by some cube
-    # TODO: crude but works. Inefficient for crowded space (Binary Space Partitioning ?)
-    occupied: set[tuple[int,int,int]] = {}
-    # Keeps track of the paths (i.e. one or more pipes) in the BlockGraph that realize the edges of the ZX-graph
-    edge_realizations: dict = {}
-    # Keeps track of the number of 1st and 2nd pass edges that have been realized
-    number_of_1st_pass_edges: int = 0
-    number_of_2nd_pass_edges: int = 0
-
     def __init__(self, pyzx_graph: zx.graph.base.BaseGraph):
         super().__init__()
+
+        # Keeps track of the coordinates in 3D that are occupied by some cube
+        # TODO: crude but works. Inefficient for crowded space (Binary Space Partitioning ?)
+        self.occupied: set[Coordinates] = set()
+        # Keeps track of the paths (i.e. one or more pipes) in the BlockGraph that realize the edges of the ZX-graph
+        self.edge_realizations: dict = {}
 
         for vertex in pyzx_graph.vertices():
             self.add_node(
@@ -30,11 +27,11 @@ class AugmentedNxGraph(nx.Graph):
                 # The vertex identifier from the ZX-graph
                 # None means this is an extra cube added to realize some edge.
                 zx = vertex,
-                # NodeType : O, Z or X
+                # NodeType : X, Y, Z or O
                 type = NodeType.convert(pyzx_graph.type(vertex)),
                 # Attributes of the cube that realizes this vertex
                 kind = None,        # CubeKind
-                coordinates = None, # 3D coordinates
+                position = None, # 3D coordinates
                 beams = None        # Orientation of the I/O ports
             )
 
@@ -88,12 +85,26 @@ class AugmentedNxGraph(nx.Graph):
         return min(candidates) if deterministic else random.choice(candidates)
 
     def get_candidate_adjacent(self, source: int) -> list[tuple[Coordinates, CubeKind]]:
+        if not self.is_vertex_placed(source):
+            raise ValueError(f"{source} is not placed and thus has no kind. Cannot determine its adjacent candidates.")
         source_position = self.nodes[source]['position']
-        source_plane = self.nodes[source]['kind'].get_plane()
+        source_type = self.nodes[source]['type']
+        source_kind = self.nodes[source]['kind']
+        source_plane = source_kind.get_plane()
         candidates_adjacent = []
-        for p in BlockGraphSpace.constellation(source_position, source_plane):
-            if p not in self.occupied:
-                candidates_adjacent.append((p.x, p.y, p.z))
+        for step in BlockGraphSpace.STEPS:
+            # A cube can only have an adjacent cube that lies in the same plane
+            if source_plane.contains(step):
+                candidate_coordinates = source_position + step.value
+                # A cube can only have an adjacent cube at a position that is not occupied by another cube
+                if candidate_coordinates not in self.occupied:
+                    # A cube can always have an adjacent cube of the same kind
+                    candidates_adjacent.append( ( candidate_coordinates, source_kind) )
+                    # A cube can always have an adjacent cube of the other color lying in a plane
+                    # that is orthogonal to its plane along the step
+                    candidate_plane = BlockGraphSpace.get_orthogonal_plane(source_plane, step)
+                    candidate_kind = CubeKind.convert(NodeType.flip(source_type), candidate_plane)
+                    candidates_adjacent.append( (candidate_coordinates, candidate_kind) )
         return candidates_adjacent
 
     # TODO: provide number of unobstructed ports, number of legs, information to check the beams
@@ -101,23 +112,23 @@ class AugmentedNxGraph(nx.Graph):
         return 0
 
     def is_vertex_placed(self, v: int) -> bool:
-        return self.nodes[v]['coordinates'] is not None
+        return self.nodes[v]['coordinates'] is not None and self.nodes[v]['kind'] is not None
 
-    def place_vertex(self, v: int, kind: CubeKind, coordinates: tuple[int,int,int]):
+    def place_vertex(self, v: int, kind: CubeKind, position: Coordinates):
         """Realize the vertex as a cube of the given kind placed at the given coordinates."""
-        if coordinates in self.occupied:
-            raise Exception(f"Requested {coordinates} is already occupied by another cube.")
+        if position in self.occupied:
+            raise Exception(f"Requested {position} is already occupied by another cube.")
 
         if kind not in CubeKind.suitable_kinds(self.nodes[v]['type']):
             raise Exception(f"Requested {kind} is not compatible with {self.nodes[v]['type']}")
 
         self.nodes[v]['kind'] = kind
-        self.nodes[v]['coordinates'] = coordinates
+        self.nodes[v]['position'] = position
 
         # TODO: compute the beams of the new cube
         # TODO: prune the beams of other cubes
 
-        self.occupied.add(coordinates)
+        self.occupied.add(position)
 
     def is_edge_realized(self, source: int, target: int) -> bool:
         return (source,target) in self.edge_realizations

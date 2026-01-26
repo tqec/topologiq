@@ -1,9 +1,8 @@
 from enum import Enum
 import pyzx as zx
 
-from topologiq.dzw.BlockGraphSpace import Coordinates, Plane, BlockGraphSpace
+from topologiq.dzw.BlockGraphSpace import Plane, BlockGraphSpace
 
-SUPPORTED_VERTEX_TYPES = [zx.VertexType.BOUNDARY, zx.VertexType.Z, zx.VertexType.X]
 class NodeType(Enum):
     O = 0 # Boundary
     X = 1 # X-Spider
@@ -21,11 +20,17 @@ class NodeType(Enum):
         else:
             raise ValueError(f"Unsupported vertex type: {vertex_type}")
 
+    def flip(self):
+        if self == NodeType.X:
+            return NodeType.Z
+        elif self == NodeType.Z:
+            return NodeType.X
+        else:
+            raise ValueError(f"Flipping color not supported for node type: {self}")
+
     def __str__(self):
         return self.name
 
-
-SUPPORTED_EDGE_TYPES = [zx.EdgeType.SIMPLE, zx.EdgeType.HADAMARD]
 class EdgeType(Enum):
     IDENTITY = 0
     HADAMARD = 1
@@ -65,25 +70,47 @@ class CubeKind(Enum):
         else:
             raise Exception(f"{node_type} has no representation as a cube of any kind.")
 
-    def compatible_adjacent(self):
-        compatibles = []
+    @staticmethod
+    def convert(node_type: NodeType, node_plane: Plane):
+        if node_type == NodeType.X:
+            if node_plane == Plane.XY:
+                return CubeKind.ZZX
+            elif node_plane == Plane.XZ:
+                return CubeKind.ZXZ
+            else:
+                return CubeKind.XZZ
+        elif node_type == NodeType.Z:
+            if node_plane == Plane.XY:
+                return CubeKind.XXZ
+            elif node_plane == Plane.XZ:
+                return CubeKind.XZX
+            else:
+                return CubeKind.ZXX
+        elif node_type == NodeType.Y:
+            return CubeKind.YYY
+        else: # node_type == NodeType.O:
+            return CubeKind.OOO
 
-        for step in BlockGraphSpace.STEPS[self.name]:
-            compatibles.append((step, self.name))
-            if self.name == CubeKind.XZZ:
-                compatibles.append( (step , CubeKind.XXZ) )
+    def get_type(self) -> NodeType:
+        if   self == CubeKind.XZZ or self == CubeKind.ZXZ or self == CubeKind.ZZX:
+            return NodeType.X
+        elif self == CubeKind.ZXX or self == CubeKind.XZX or self == CubeKind.XXZ:
+            return NodeType.Z
+        elif self == CubeKind.YYY:
+            return NodeType.Y
+        else: # self == CubeKind.OOO
+            return NodeType.O
 
-        return compatibles
 
     def get_plane(self) -> Plane:
-        if self.name == CubeKind.XZZ or self.name == CubeKind.ZXX:
+        if self == CubeKind.XZZ or self == CubeKind.ZXX:
             return Plane.YZ
-        elif self.name == CubeKind.ZXZ or self.name == CubeKind.XZX:
+        elif self == CubeKind.ZXZ or self == CubeKind.XZX:
             return Plane.XZ
-        elif self.name == CubeKind.ZZX or self.name == CubeKind.XXZ:
+        elif self == CubeKind.ZZX or self == CubeKind.XXZ:
             return Plane.XY
         else: # self.name == CubeKind.OOO or self.name == CubeKind.YYY
-            raise ValueError(f"Not applicable to cube kind {self.name}")
+            raise ValueError(f"Not applicable to cube kind {self.value}")
 
     def __str__(self):
         return self.name
