@@ -105,6 +105,7 @@ def gen_tent_tgt_coords(
 
     # EXTRACT SOURCE COORDS
     sx, sy, sz = src_c
+    base_for_next_layer = []
     tent_coords = {}
 
     # SINGLE MOVES
@@ -132,7 +133,7 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz - 3),
             ]
             tent_coords[6].extend([t for t in tgts if t not in taken and t != src_c])
-            base_for_next_layer = [t for t in tgts]
+            base_for_next_layer.extend([t for t in tgts])
 
     # MANHATTAN 9
     if max_manhattan > 6:
@@ -147,18 +148,25 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz - 3),
             ]
             tent_coords[9].extend([t for t in tgts if t not in taken and t != src_c])
+            base_for_next_layer.extend([t for t in tgts])
 
     # > MANHATTAN 9
     if max_manhattan > 9:
-        tgts = [
-        (sx + max_manhattan, sy, sz),
-        (sx - max_manhattan, sy, sz),
-        (sx, sy + max_manhattan, sz),
-        (sx, sy - max_manhattan, sz),
-        (sx, sy, sz + max_manhattan),
-        (sx, sy, sz - max_manhattan),
-    ]
-        tent_coords[max_manhattan] = [t for t in tgts if t not in taken]
+        tent_coords[max_manhattan] = []
+        num_loops = int((max_manhattan - 9) / 3)
+
+        for _ in [i+1 for i in range(num_loops)]:
+            for dx, dy, dz in [c for c in base_for_next_layer]:
+                tgts = [
+                    (dx + 3, dy, dz),
+                    (dx - 3, dy, dz),
+                    (dx, dy + 3, dz),
+                    (dx, dy - 3, dz),
+                    (dx, dy, dz + 3),
+                    (dx, dy, dz - 3),
+                ]
+                tent_coords[max_manhattan].extend([t for t in tgts if t not in taken and t != src_c])
+                base_for_next_layer.extend([t for t in tgts])
 
     all_coords_at_distance = tent_coords[min(max_manhattan, 15)]
     return all_coords_at_distance
@@ -179,17 +187,28 @@ def prune_beams(nx_g: nx.Graph, taken: list[StandardCoord]) -> nx.Graph:
     try:
         for n_id in nx_g.nodes():
             new_beams = []
+            new_beams_short = []
             if nx_g.nodes[n_id]["completed"] == []:
                 pass
             elif nx_g.nodes[n_id]["completed"] >= get_node_degree(nx_g, n_id):
                 nx_g.nodes[n_id]["beams"] = []
+                nx_g.nodes[n_id]["beams_short"] = []
             else:
                 old_beams = nx_g.nodes[n_id]["beams"]
+                old_beams_short = nx_g.nodes[n_id]["beams_short"]
+
                 if old_beams:
                     for single_beam in old_beams:
                         if not any([single_beam.contains(coord) for coord in taken]):
                             new_beams += [single_beam]
                     nx_g.nodes[n_id]["beams"] = new_beams
+
+                if old_beams_short:
+                    for single_beam_short in old_beams_short:
+                        if not any([single_beam_short.contains(coord) for coord in taken]):
+                            new_beams_short += [single_beam_short]
+                    nx_g.nodes[n_id]["beams_short"] = new_beams_short
+
     except (IndexError, ValueError, LookupError, KeyError):
         pass
 

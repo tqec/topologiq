@@ -37,6 +37,7 @@ def manage_single_qasm_test(
     reduce_input_circuit: bool = False,
     vis_options: tuple[str | None, str | None] = (None, None),
     max_attempts: int = 10,
+    stop_on_first_success: bool = True,
     debug: int = 0,
     log_stats: bool = False,
     **kwargs,
@@ -52,6 +53,7 @@ def manage_single_qasm_test(
         reduce_input_circuit (optional): Whether to optimise/reduce the circuit before running it or not.
         vis_options (optional): Visualisation settings provided as a tuple.
         max_attempts (optional): How many times to repeat-run the circuit.
+        stop_on_first_success (boolean): If True, forces exit on first successful outcome irrespective of `max_attempts`.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
@@ -85,6 +87,7 @@ def manage_single_qasm_test(
         simple_graph,
         circuit_name,
         max_attempts=max_attempts,
+        stop_on_first_success=stop_on_first_success,
         vis_options=vis_options,
         log_stats=log_stats,
         debug=debug,
@@ -209,13 +212,14 @@ if __name__ == "__main__":
         "qasm_random_10_10",
         "qasm_random_10_20",
         "qasm_random_03_30",
-        "qasm_random_10_50",
+        # "qasm_random_10_50",  # Still takes too long to enable by default
     ]
 
     # Adjustable parameters
     reduce_input_circuit = False
     vis_options = (None, None)
     max_attempts = 10
+    stop_on_first_success = True
     debug = 0
     log_stats = False
 
@@ -233,6 +237,7 @@ if __name__ == "__main__":
             reduce_input_circuit,
             vis_options=vis_options,
             max_attempts=max_attempts,
+            stop_on_first_success=stop_on_first_success,
             debug=debug,
             log_stats=log_stats,
             **kwargs,

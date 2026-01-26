@@ -16,7 +16,8 @@ Example:
         # Assemble hyperparameters as kwargs
         kwargs: dict[str, tuple[int, int] | int] = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "deterministic": False
+            "deterministic": False,
+            "seed": None,
         }
         # ...
 
@@ -48,3 +49,6 @@ VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 
 # Deterministic or randomised running mode
 DETERMINISTIC = False
+
+# Deterministic or randomised running mode
+BEAMS_SHORT_LEN = 9

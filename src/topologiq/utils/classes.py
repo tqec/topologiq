@@ -59,21 +59,33 @@ class BeamAxisComponent:
         """Return a readable representation."""
         return f"[{self.start} => {self.end})"
 
+    def is_parallel(self, other: object) -> bool:
+        """Check if two beams run parallel to one another (ignores collinearity)."""
+        return (
+            self.x.is_point() == other.x.is_point()
+            and self.y.is_point() == other.y.is_point()
+            and self.z.is_point() == other.z.is_point()
+        )
+
     def contains(self, point: int) -> bool:
         """Check if a given point is contained in the segment."""
         if self.direction == 0 and (self.start == point == self.end):
             return True
-        if self.direction == 1 and (self.start < point < self.end):
+        if self.direction == 1 and (self.start < point <= self.end):
             return True
-        if self.direction == -1 and (self.start > point > self.end):
+        if self.direction == -1 and (self.start > point >= self.end):
             return True
 
         return False
 
-    def to_array(self, array_length: int) -> list[int] | None:
+    def to_array(self, len_of_materialised_beam: int) -> list[int] | None:
         """Convert segment into an array of arbitrary length."""
         if self.direction != 0:
-            return [self.start + i * self.direction for i in range(array_length)]
+            return [self.start + i * self.direction for i in range(len_of_materialised_beam)]
+
+    def get_length(self) -> int:
+        """Get the length of the beam."""
+        return abs(self.start - self.end)
 
 
 @dataclass
@@ -117,23 +129,23 @@ class SingleBeam:
         x, y, z = coords_to_check
         return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
 
-    def to_array(self, d: int) -> list[StandardCoord]:
+    def to_array(self, len_of_materialised_beam: int) -> list[StandardCoord]:
         """Convert beam into an array of 3D coordinates of arbitrary length."""
 
         if self.x.direction != 0:
             y_start = self.y.start
             z_start = self.z.start
-            return [(i, y_start, z_start) for i in self.x.to_array(d)]
+            return [(i, y_start, z_start) for i in self.x.to_array(len_of_materialised_beam)]
 
         if self.y.direction != 0:
             x_start = self.x.start
             z_start = self.z.start
-            return [(x_start, i, z_start) for i in self.y.to_array(d)]
+            return [(x_start, i, z_start) for i in self.y.to_array(len_of_materialised_beam)]
 
         if self.z.direction != 0:
             x_start = self.x.start
             y_start = self.y.start
-            return [(x_start, y_start, i) for i in self.z.to_array(d)]
+            return [(x_start, y_start, i) for i in self.z.to_array(len_of_materialised_beam)]
 
     def check_co_planarity(self, other: object) -> tuple[bool, int | None]:
         """Check if two beams are co-planar."""
@@ -148,19 +160,28 @@ class SingleBeam:
 
         return False, None
 
-    def intersects(self, other: object) -> bool:
+    def intersects(self, other: object, len_of_materialised_beam: int) -> bool:
+        """Check if two beams intersect one another."""
+
+        other_as_array = other.to_array(len_of_materialised_beam)
+        return any([self.contains(c) for c in other_as_array])
+
+    def intersects_co_planarity(self, other: object) -> bool:
         """Check if two beams intersect one another."""
 
         beams_are_co_planar, co_planarity_idx = self.check_co_planarity(other)
         if beams_are_co_planar:
             if co_planarity_idx == 0:
-                return (self.y.contains(other.y.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.y.contains(self.y.start))
+                ok = (self.y.contains(other.y.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.y.contains(self.y.start)) or (self.y.contains(other.z.start) and other.z.contains(self.y.start)) or (self.z.contains(other.y.start) and other.y.contains(self.z.start))
+                return ok
 
             elif co_planarity_idx == 1:
-                return (self.x.contains(other.x.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.x.contains(self.x.start))
+                ok = (self.x.contains(other.x.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.x.contains(self.x.start)) or (self.x.contains(other.z.start) and other.z.contains(self.x.start)) or (self.z.contains(other.x.start) and other.x.contains(self.z.start))
+                return ok
 
             elif co_planarity_idx == 2:
-                return (self.x.contains(other.x.start) and other.y.contains(self.y.start)) or (self.y.contains(other.y.start) and other.x.contains(self.x.start))
+                ok = (self.x.contains(other.x.start) and other.y.contains(self.y.start)) or (self.y.contains(other.y.start) and other.x.contains(self.x.start)) or (self.x.contains(other.y.start) and other.y.contains(self.x.start)) or (self.y.contains(other.x.start) and other.x.contains(self.y.start))
+                return ok
 
         return False
 
@@ -176,6 +197,7 @@ class PathBetweenNodes:
     tgt_coords: StandardCoord
     tgt_kind: str
     tgt_beams: CubeBeams
+    tgt_beams_short: CubeBeams
     coords_in_path: list[StandardCoord]
     all_nodes_in_path: list[StandardBlock]
     beams_broken_by_path: int
@@ -211,4 +233,5 @@ class Colors:
     RED = "\033[31m"
     GREEN = "\033[32m"
     BLUE = "\033[34m"
+    YELLOW = "\033[33m"
     RESET = "\033[0m"
