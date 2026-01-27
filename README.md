@@ -1,17 +1,15 @@
-> NB!!! There have been 3 recent major merges (folder restructuring, dependency clean-up, and Ruff) aimed at facilitating things for potential contributors. All seems to be running in order. However, if something does not work, go back a few merges and try again if you're looking to test Topologiq or open an Issue about and suggest a fix if you're looking to contribute.
-
 # Topologiq: Algorithmic Lattice Surgery
 **Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
-Interoperable with:
-- PyZX: [click here for an example](docs/examples/pyzx_cnots.ipynb).
-- Qiskit: [click here for an example](docs/examples/qiskit_ghz.py).
+Interoperable with [PyZX](https://github.com/zxcalc/pyzx), [Qiskit](https://github.com/Qiskit), and, of course, [TQEC/tqec](https://github.com/tqec/tqec).
 
-<br>
+<br />
 
-> **Work in progress**. Check "main" for latest stable checkpoint. Venture into open branches for the latest updates.
+[![Unitary Foundation](https://img.shields.io/badge/Supported%20By-UNITARY%20FOUNDATION-FFFF00.svg?style=for-the-badge)](https://unitary.foundation)
 
 ## Summary
+> Work in progress. Latest stable checkpoint on main. Check branches for latest updates. 
+
 As visualised in the animated GIF below, **Topologiq** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram. It picks a starting point randomly based on a centrality measure. It builds incrementally from that starting point, one edge at a time.
 
 **Topologiq**'s outputs can be used as inputs for TQEC/tqec and, *theoretically*, other similar tools.
