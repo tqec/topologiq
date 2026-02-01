@@ -10,7 +10,6 @@ Usage:
 """
 
 import os
-from datetime import datetime
 from pathlib import Path
 
 import pyzx as zx
@@ -21,6 +20,7 @@ from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
 from topologiq.utils.classes import Colors, StandardBlock
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
+from topologiq.utils.utils_misc import datetime_manager
 
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent
@@ -35,11 +35,6 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 def manage_single_qasm_test(
     circuit_name: str,
     reduce_input_circuit: bool = False,
-    vis_options: tuple[str | None, str | None] = (None, None),
-    max_attempts: int = 10,
-    stop_on_first_success: bool = True,
-    debug: int = 0,
-    log_stats: bool = False,
     **kwargs,
 ) -> tuple[
     dict[int, StandardBlock] | None,
@@ -53,15 +48,12 @@ def manage_single_qasm_test(
         reduce_input_circuit (optional): Whether to optimise/reduce the circuit before running it or not.
         vis_options (optional): Visualisation settings provided as a tuple.
         max_attempts (optional): How many times to repeat-run the circuit.
-        stop_on_first_success (boolean): If True, forces exit on first successful outcome irrespective of `max_attempts`.
+        stop_on_first_success (optional): If True, forces exit on first successful outcome irrespective of `max_attempts`.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
         save_to_file (optional): True to save the results to a `.bgraph` file, else False.
-        **kwargs:
-            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            deterministic: A boolean flag to tell the function if choice is deterministic or random.
-            random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
+        **kwargs: !
 
     Return:
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
@@ -72,7 +64,7 @@ def manage_single_qasm_test(
 
     # Timer, unique ID, and seed
     success = True
-    t1 = datetime.now()
+    t_1, _ = datetime_manager()
 
     # Path to file
     path_to_qasm_circuit = ASSETS_DIR / f"{circuit_name}.qasm"
@@ -86,16 +78,11 @@ def manage_single_qasm_test(
     _, _, lat_nodes, lat_edges = runner(
         simple_graph,
         circuit_name,
-        max_attempts=max_attempts,
-        stop_on_first_success=stop_on_first_success,
-        vis_options=vis_options,
-        log_stats=log_stats,
-        debug=debug,
         **kwargs,
     )
 
     # Stop timer
-    duration = (datetime.now() - t1).total_seconds()
+    _, t_total = datetime_manager(t_1=t_1)
     success = success if (lat_nodes and lat_edges) else not success
 
     # Write data and results to files
@@ -109,7 +96,7 @@ def manage_single_qasm_test(
     test_stats = {
         "success": True if success else False,
         "volume": len(lat_nodes) if lat_nodes else 0,
-        "duration": duration,
+        "duration": t_total,
     }
 
     return lat_nodes, lat_edges, test_stats
@@ -140,7 +127,7 @@ def retrieve_qasm(
     pyzx_graph = pyzx_circuit.to_graph()
 
     # Draw un-reduced PyZX graph if any visualisation mode is on
-    if vis_options[0] or debug > 2:
+    if kwargs["vis_options"][0] or kwargs["debug"] > 2:
         zx.draw(pyzx_graph, labels=True)
 
     # Reduce if reduce mode is on
@@ -164,7 +151,7 @@ def retrieve_qasm(
                 zx.to_rg(pyzx_graph)
 
             # Draw reduced version if any visualisation mode is on
-            if vis_options[0] or debug > 2:
+            if kwargs["vis_options"][0] or kwargs["debug"] > 2:
                 zx.draw(pyzx_graph, labels=True)
         else:
             print("Reduction strategy for this circuit not yet defined.")
@@ -208,26 +195,28 @@ if __name__ == "__main__":
 
     # Circuits
     circuit_names = [
-        "qasm_random_05_05",
+        # "qasm_random_05_05",
         "qasm_random_10_10",
-        "qasm_random_10_20",
-        "qasm_random_03_30",
+        # "qasm_random_10_20",
+        # "qasm_random_03_30",
         # "qasm_random_10_50",  # Still takes too long to enable by default
     ]
 
-    # Adjustable parameters
+    # Determine if circuit should be reduced/optimised or not
     reduce_input_circuit = False
-    vis_options = (None, None)
-    max_attempts = 10
-    stop_on_first_success = True
-    debug = 0
-    log_stats = False
 
-    # KWARGS
-    kwargs: dict[str, tuple[int, int] | int] = {
+    # Adjust KWARGS
+    # Only include kwargs when you want to deviate from default. Others will be autocompleted on run.
+    # (Visualisation mode, Animation mode)
+    kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "deterministic": False,
         "seed": None,
+        "vis_options": (None, None),
+        "max_attempts": 10,
+        "stop_on_first_success": True,
+        "debug": 0,
+        "log_stats": True,
     }
 
     # Run selected circuits on a loop, without reduction
@@ -235,11 +224,6 @@ if __name__ == "__main__":
         _, _, test_stats = manage_single_qasm_test(
             circuit_name,
             reduce_input_circuit,
-            vis_options=vis_options,
-            max_attempts=max_attempts,
-            stop_on_first_success=stop_on_first_success,
-            debug=debug,
-            log_stats=log_stats,
             **kwargs,
         )
 

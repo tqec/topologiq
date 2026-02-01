@@ -10,7 +10,6 @@ Usage:
 """
 
 import os
-from datetime import datetime
 from pathlib import Path
 
 import pyzx as zx
@@ -22,6 +21,7 @@ from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
 from topologiq.utils.classes import Colors, StandardBlock
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
+from topologiq.utils.utils_misc import datetime_manager
 
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent
@@ -59,10 +59,7 @@ def manage_single_ghz_test(
         log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
         save_to_file (optional): True to save the results to a `.bgraph` file, else False.
-        **kwargs:
-            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            deterministic: A boolean flag to tell the function if choice is deterministic or random.
-            random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
+        **kwargs: !
 
     Return:
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
@@ -73,7 +70,7 @@ def manage_single_ghz_test(
 
     # Timer, unique ID, and seed
     success = True
-    t1 = datetime.now()
+    t_1,_ = datetime_manager()
 
     # Retrieve QASM as PyZX graph
     qasm_str = ghz_to_qasm(n_qubits, circuit_name)
@@ -94,7 +91,7 @@ def manage_single_ghz_test(
     )
 
     # Stop timer
-    duration = (datetime.now() - t1).total_seconds()
+    _, t_total = datetime_manager(t_1=t_1)
     success = success if (lat_nodes and lat_edges) else not success
 
     # Write data and results to files
@@ -108,7 +105,7 @@ def manage_single_ghz_test(
     test_stats = {
         "success": True if success else False,
         "volume": len(lat_nodes) if lat_nodes else 0,
-        "duration": duration,
+        "duration": t_total,
     }
 
     return lat_nodes, lat_edges, test_stats
@@ -215,7 +212,7 @@ if __name__ == "__main__":
     log_stats = False
 
     # KWARGS
-    kwargs: dict[str, tuple[int, int] | int] = {
+    kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "deterministic": False,
         "seed": None,

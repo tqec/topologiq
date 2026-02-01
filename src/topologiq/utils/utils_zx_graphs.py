@@ -165,5 +165,8 @@ def break_single_spider_graph(simple_graph: SimpleDictGraph) -> SimpleDictGraph:
     new_simple_graph["nodes"] = new_spiders if new_spiders else simple_graph["nodes"]
     new_simple_graph["edges"] = new_edges if new_edges else simple_graph["edges"]
 
+    if simple_graph != new_simple_graph:
+        print("- Note! Graph auto-optimised to reduce final volume.")
+
     # RETURN
     return new_simple_graph

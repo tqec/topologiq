@@ -25,7 +25,6 @@ import sys
 from pathlib import Path
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.scripts.runner import runner
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
@@ -68,9 +67,7 @@ def run_debug():
     # Preliminaries
     circuit_as_graph_dict: SimpleDictGraph = {"nodes": [], "edges": []}
     circuit_name: str = None
-    min_success_rate = 60
     first_id, first_kind = (None, None)
-    value_fn_weights = VALUE_FUNCTION_HYPERPARAMS
 
     # Get list of edge cases
     path_to_stats = DATA_DIR / "debug.csv"
@@ -86,7 +83,9 @@ def run_debug():
     # Ask user to select case to run
     else:
         print("\n==> EDGE CASES AVAILABLE FOR DIRECT RUN")
-        print("[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, random_seed.")
+        print(
+            "[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, random_seed."
+        )
         for i, case in enumerate(debug_cases):
             print(f"[{i}] {str(case)[1:-1]}.")
         print(f"[{i + 1}] Exit debug mode.")
@@ -98,12 +97,13 @@ def run_debug():
             try:
                 case_number = int(case_number)
                 print("==>", debug_cases[case_number])
-                print(type(case_number), case_number)
                 if case_number > i:
                     print("Exiting debug mode.\n")
                     break
 
-                circuit_name, first_id, first_kind, min_success_rate, value_fn_weights, deterministic, random_seed = debug_cases[case_number]
+                circuit_name, first_id, first_kind, log_stats_id, deterministic, random_seed = debug_cases[
+                    case_number
+                ]
 
                 break
             except (ValueError, KeyError, IndexError):
@@ -112,23 +112,25 @@ def run_debug():
         if circuit_name is not None:
             # Update user
             print("\nLAUNCHING CASE")
-            print("[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, seed.")
+            print(
+                "[case number] circuit_name, first_id, first_kind, log_stats_id, deterministic, seed."
+            )
             print(
                 f"[{case_number}]",
                 circuit_name,
                 first_id,
                 first_kind,
-                min_success_rate,
-                value_fn_weights,
+                log_stats_id,
                 deterministic,
                 random_seed,
             )
 
             # Assemble KWARGS
-            kwargs: dict[str, tuple[int, int] | int] = {
-                "weights": VALUE_FUNCTION_HYPERPARAMS,
+            kwargs = {
                 "deterministic": deterministic,
                 "seed": random_seed,
+                "vis_options": ("final", None),
+                "debug": 3,
             }
 
             # Retrieve circuit
@@ -150,14 +152,6 @@ def run_debug():
                 _, _, _, _ = runner(
                     circuit_as_graph_dict,
                     circuit_name,
-                    min_succ_rate=min_success_rate,
-                    strip_ports=False,
-                    hide_ports=False,
-                    max_attempts=1,
-                    stop_on_first_success=True,
-                    vis_options=("final", "GIF"),
-                    log_stats=False,
-                    debug=3,
                     fig_data=fig_data,
                     first_cube=(first_id, first_kind),
                     **kwargs,

@@ -8,6 +8,7 @@ Usage:
 import csv
 import os
 from ast import literal_eval
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,18 +22,16 @@ HEADER_BFS_MANAGER_STATS = [
     "unique_run_id",
     "run_success",
     "circuit_name",
-    "num_input_nodes",
-    "num_input_edges",
-    "num_input_nodes_processed",
-    "num_input_edges_processed",
-    "num_1st_pass_edges_processed",
-    "num_2n_pass_edges_processed",
+    "zx_spiders_num",
+    "zx_edges_num",
+    "std_edges_processed",
+    "cross_edges_processed",
     "num_edges_in_edge_paths",
     "num_blocks_output",
     "num_edges_output",
     "volume",
-    "duration_first_pass",
-    "duration_second_pass",
+    "t_std_edges",
+    "t_cross_edges",
     "duration_total",
 ]
 
@@ -56,11 +55,65 @@ HEADER_PATHFINDER_STATS = [
 
 HEADER_PARAMS_STATS = [
     "unique_run_id",
-    "circuit_name",
     "run_success",
-    "run_params",
+    "circuit_name",
+    "kwargs",
     "edge_paths",
 ]
+
+
+################
+# CONVENIENCES #
+################
+def init_bfs(first_cube) -> tuple[deque, set, list[StandardCoord], dict, bool]:
+    """Initialise key BFS management objects.
+
+    Args:
+        first_cube: Coordinates and kind for the first cube.
+
+    Return:
+        queue: The main BFS queue.
+        visited: The main BFS set of visited sites.
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
+        run_success: Boolean flag to determine if Whether the BFS search was successful as a whole.
+
+    """
+
+    # Exract params
+    first_id, _ = first_cube
+
+    # Init queue & visited
+    queue: deque[int] = deque([first_id])
+    visited: set = {first_id}
+
+    # Init other trackers
+    taken: list[StandardCoord] = []
+    edge_paths: dict = {}
+    run_success = False
+
+    return queue, visited, taken, edge_paths, run_success
+
+
+def datetime_manager(
+    t_1: datetime | None = None, t_2: datetime | None = None
+) -> tuple[datetime, float]:
+    """Start a timer or calculate times and durations.
+
+    Args:
+        t_1 (optional): A pre-existing start time, if available.
+        t_2 (optional): A pre-existing end time, if available.
+
+    Returns:
+        t_1: A datestamp to be used as start time.
+        duration: The duration between an incoming start and end times, or a calculated duration if no end time is provided.
+
+    """
+    t_1 = datetime.now() if not t_1 else t_1
+    t_2 = datetime.now() if not t_2 else t_2
+    duration = (t_2 - t_1).total_seconds()
+
+    return t_1, duration
 
 
 ############
@@ -121,7 +174,6 @@ def write_outputs(
 
 def prep_stats_n_log(
     stats_type: str,
-    log_stats_id: str,
     op_success: bool,
     counts: dict[str, int],
     times: dict[str, datetime | None],
@@ -133,7 +185,8 @@ def prep_stats_n_log(
     tgt_block_info: tuple[StandardCoord | None | list[StandardCoord], str | None] = (None, None),
     tgt_zx_type: str | None = None,
     visit_stats: tuple[int, int] = (0, 0),
-    run_params: dict[str, Any] = {},
+    cross_edge: bool = False,
+    **kwargs,
 ):
     """Prepare incoming parameters for logging stats to file.
 
@@ -149,7 +202,6 @@ def prep_stats_n_log(
 
     Args:
         stats_type: The desired type of logging operation.
-        log_stats_id: A unique datetime-based identifier for the purposes of logging stats for an specific run.
         op_success: Whether Topologiq succesfully built the circuit.
         counts: A dictionary containing counts for the number of spiders/cubes and edges/pipes in input and output circuits.
         times: A dictionary containing various running times for several aspects of the process.
@@ -161,7 +213,8 @@ def prep_stats_n_log(
         tgt_block_info: The information of a target cube including its position in the 3D space and its kind.
         tgt_zx_type: The ZX type of a target spider/cube
         visit_stats: Statistics about the number of visitation attempts and visits in a given pathfinder iteration.
-        run_params: A number of critical parameters needed to replicate how Topologiq approached a given circuit.
+        cross_edge: False if pathfinder ran to add a new cube, True if it found edge between existing cubes.
+        **kwargs: !
 
     Keyword arguments (kwargs):
         See "CONSTANTS" for all possibilities.
@@ -179,25 +232,23 @@ def prep_stats_n_log(
     # Fill arrays as determined by the `stats_type`
     if "graph_manager" in stats_type:
         total_cubes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
-        total_pipes_in_output = len(lat_nodes.keys()) if lat_nodes else 0
+        total_pipes_in_output = len(lat_edges.keys()) if lat_edges else 0
         volume = len([True for _, kind in lat_nodes.values() if kind != "ooo"]) if lat_nodes else 0
 
         main_stats = [
-            log_stats_id,
+            kwargs["log_stats_id"],
             op_success,
             circuit_name,
-            counts["num_input_nodes"],
-            counts["num_input_edges"],
-            counts["num_input_nodes_processed"],
-            counts["num_input_edges_processed"],
-            counts["num_1st_pass_edges_processed"],
-            counts["num_2n_pass_edges_processed"],
+            counts["zx_spiders_num"],
+            counts["zx_edges_num"],
+            counts["std_edges_processed"],
+            counts["cross_edges_processed"],
             len(edge_paths) if edge_paths else 0,
             total_cubes_in_output,
             total_pipes_in_output,
             volume,
-            round(times["t_1st_pass"], 3),
-            round(times["t_2nd_pass"], 3),
+            round(times["t_std_edges"], 3),
+            round(times["t_cross_edges"], 3),
             round(times["t_total"], 3),
         ]
 
@@ -237,24 +288,24 @@ def prep_stats_n_log(
             )
 
         aux_stats = [
-            log_stats_id,
+            kwargs["log_stats_id"],
             op_success,
             circuit_name,
-            run_params,
+            kwargs,
             edge_paths_summary,
         ]
 
         log_stats(
             aux_stats,
-            f"params{'_tests' if log_stats_id.endswith('*') else ''}",
+            f"params{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}",
             opt_header=HEADER_PARAMS_STATS,
         )
 
-        if op_success is not True or run_params["weights"] != (-1, -1):
+        if op_success is not True:
             repo_root: Path = Path(__file__).resolve().parent.parent
             stats_dir_path = repo_root / "assets/stats"
             path_to_debug_file = (
-                stats_dir_path / f"debug{'_tests' if log_stats_id.endswith('*') else ''}.csv"
+                stats_dir_path / f"debug{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}.csv"
             )
 
             if path_to_debug_file.is_file():
@@ -264,24 +315,23 @@ def prep_stats_n_log(
                         circuit_name,
                         list(aux_stats[4][0].keys())[0],
                         list(aux_stats[4][0].values())[0],
-                        *list(run_params.values()),
+                        *list(kwargs.values()),
                     ]
                 )
             if not path_to_debug_file.is_file() or (new_case_info not in debug_cases):
                 log_stats(
                     aux_stats,
-                    f"debug{'_tests' if log_stats_id.endswith('*') else ''}",
+                    f"debug{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}",
                     opt_header=HEADER_PARAMS_STATS,
                 )
 
     elif "pathfinder" in stats_type:
-        op_type = "creation" if not tgt_block_info[1] else "discovery"
         tgt_coords = tgt_block_info[0]
         tgt_kind = tgt_block_info[1]
 
         main_stats = [
-            log_stats_id,
-            op_type,
+            kwargs["log_stats_id"],
+            "standard" if not cross_edge else "cross",
             op_success,
             src_block_info[0] if src_block_info else "error",
             src_block_info[1] if src_block_info else "error",
@@ -300,7 +350,7 @@ def prep_stats_n_log(
     # Call logger
     log_stats(
         main_stats,
-        f"{stats_type}{'_tests' if log_stats_id.endswith('*') else ''}",
+        f"{stats_type}{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}",
         opt_header=(
             HEADER_BFS_MANAGER_STATS if "graph_manager" in stats_type else HEADER_PATHFINDER_STATS
         ),
@@ -364,10 +414,21 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     debug_cases = []
     for case in debug_cases_full:
         circuit_name = case[2]
-        min_success_rate, weights, deterministic, random_seed = literal_eval(case[3]).values()
+        kwargs = literal_eval(case[3])
+        print(kwargs)
+        deterministic = kwargs["deterministic"]
+        seed = kwargs["seed"]
+        log_stats_id = kwargs["log_stats_id"]
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
         debug_cases.append(
-            (circuit_name, first_id, first_kind, min_success_rate, weights, deterministic, random_seed)
+            (
+                circuit_name,
+                first_id,
+                first_kind,
+                log_stats_id,
+                deterministic,
+                seed
+            )
         )
 
     return debug_cases

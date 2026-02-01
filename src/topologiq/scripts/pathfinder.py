@@ -21,12 +21,11 @@ Notes:
 """
 
 from collections import deque
-from datetime import datetime
 
 #from topologiq.run_hyperparams import BEAMS_SHORT_LEN
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_greedy_bfs import get_bounding_box
-from topologiq.utils.utils_misc import prep_stats_n_log
+from topologiq.utils.utils_misc import datetime_manager, prep_stats_n_log
 from topologiq.utils.utils_pathfinder import get_manhattan, get_max_manhattan, nxt_kinds, rot_o_kind
 
 
@@ -40,10 +39,9 @@ def pathfinder(
     tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    min_succ_rate: int = 60,
     critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
-    log_stats_id: str | None = None,
+    **kwargs,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
     tuple[
@@ -63,10 +61,9 @@ def pathfinder(
         tgt_block_info (optional): The coords and type of a previously placed target block.
         taken (optional): A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process (updated regularly).
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
-        min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
-        log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
+        **kwargs: !
 
     Returns:
         valid_paths: All paths found in round, covering some or all tent_coords.
@@ -75,8 +72,7 @@ def pathfinder(
     """
 
     # Preliminaries
-    t_start_pathfinder = datetime.now()
-    t_end_pathfinder = None
+    t_1, _ = datetime_manager()
 
     # Unpack incoming data
     src_coords, _ = src_block_info
@@ -98,20 +94,19 @@ def pathfinder(
         src_block_info,
         tent_coords,
         tent_tgt_kinds,
-        min_succ_rate,
         taken=taken_cc,
         hdm=hdm,
         critical_beams=critical_beams,
         src_tgt_ids=src_tgt_ids,
+        **kwargs,
     )
 
     pathfinder_vis_data = [tent_coords, tent_tgt_kinds, all_search_paths, valid_paths]
 
     # Log stats if needed
-    if log_stats_id is not None:
+    if kwargs["log_stats_id"] is not None:
         # End timers
-        t_end_pathfinder = datetime.now()
-        duration_pathfinder = (t_end_pathfinder - t_start_pathfinder).total_seconds()
+        _, duration_pathfinder = datetime_manager(t_1=t_1)
         times = {"duration_pathfinder": duration_pathfinder}
         pathfinder_iter_success = True if valid_paths else False
 
@@ -136,7 +131,6 @@ def pathfinder(
         adjusted_target_info = (tent_coords, tent_tgt_kinds)
         prep_stats_n_log(
             "pathfinder",
-            log_stats_id,
             pathfinder_iter_success,
             counts,
             times,
@@ -144,6 +138,8 @@ def pathfinder(
             tgt_block_info=adjusted_target_info,
             tgt_zx_type=tgt_zx_type,
             visit_stats=visit_stats,
+            cross_edge=len(tent_coords) == 1 and len(tent_tgt_kinds) == 1,
+            **kwargs,
         )
 
     # Return valid paths and data for visualising round
@@ -157,11 +153,11 @@ def core_pathfinder_bfs(
     src_block_info: StandardBlock,
     tent_coords: list[StandardCoord],
     tent_tgt_kinds: list[str],
-    min_succ_rate: int,
     taken: list[StandardCoord] = [],
     hdm: bool = False,
     critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
+    **kwargs,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
     dict[StandardBlock, list[StandardBlock]] | None,
@@ -182,6 +178,7 @@ def core_pathfinder_bfs(
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): An object containing beams considered critical for future operations.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
+        **kwargs: !
 
     Returns:
         valid_paths: All paths found in round covering some or all tent_coords.
@@ -226,7 +223,7 @@ def core_pathfinder_bfs(
 
     # Define exit conditions in case something goes wrong
     tgts_filled = 0
-    tgts_to_fill = int(len(tent_coords) * min_succ_rate / 100) if len(tent_coords) > 1 else 1
+    tgts_to_fill = int(len(tent_coords) * kwargs["min_succ_rate"] / 100) if len(tent_coords) > 1 else 1
     if not second_pass:
         max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
         src_tgt_manhattan = max_manhattan

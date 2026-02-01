@@ -5,6 +5,8 @@ Usage:
 
 """
 
+import random
+
 import matplotlib
 import matplotlib.figure
 import pyzx as zx
@@ -137,7 +139,7 @@ def steane_pyzx(
 
 
 def random_graph(
-    qubit_n: int, depth: int, graph_type: str = "cnot", draw_graph: bool = False
+    qubit_n: int, depth: int, graph_type: str = "cnot", draw_graph: bool = False, **kwargs
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Produce a random PyZX graph.
 
@@ -148,12 +150,17 @@ def random_graph(
             "cnot": A graph composed of only CNOTs.
             "cnot_had_phase": A graph with CNOTs, Hadamards, and phases.
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
+        **kwargs: !
 
     Returns:
         pyzx_graph: The PyZX graph corresponding to the requested circuit.
         fig: The Matplotlib figure of the graph.
 
     """
+
+    # Set seed if desired
+    if kwargs.get("seed"):
+        random.seed(kwargs["seed"])
 
     # Generate inside loop to check graph integrity
     # PyZX sometimes generates graphs of disconnected subgraphs,
