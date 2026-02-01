@@ -211,10 +211,8 @@ class PathBetweenNodes:
         which can be used for comparing many paths.
 
         Args:
-            **kwargs: !
+            **kwargs: Only relevant kwargs listed below.
                 weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-                deterministic: A boolean flag to tell the function if choice is deterministic or random.
-                random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
         Returns:
             (int): The weighed value of a path

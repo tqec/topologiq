@@ -10,19 +10,37 @@ Notes:
 """
 
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 import matplotlib.figure
 
-from topologiq.run_hyperparams import DETERMINISTIC, VALUE_FUNCTION_HYPERPARAMS
+from topologiq.run_hyperparams import (
+    BEAMS_SHORT_LEN,
+    DEBUG,
+    DETERMINISTIC,
+    HIDE_PORTS,
+    LOG_STATS,
+    MAX_ATTEMPTS,
+    MIN_SUCC_RATE,
+    SEED,
+    STOP_ON_FIRST_SUCCESS,
+    STRIP_PORTS,
+    VALUE_FUNCTION_HYPERPARAMS,
+)
 from topologiq.scripts.graph_manager import graph_manager_bfs
 from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
 from topologiq.utils.grapher import vis_3d
 from topologiq.utils.grapher_common import lattice_to_g
-from topologiq.utils.utils_misc import write_outputs
+from topologiq.utils.utils_misc import datetime_manager, write_outputs
 from topologiq.utils.utils_zx_graphs import break_single_spider_graph, strip_boundaries
+
+#########
+# PATHS #
+#########
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent.parent
+OUTPUT_DIR_PATH = REPO_ROOT / "output/txt"
+TEMP_DIR_PATH = REPO_ROOT / "output/temp"
 
 
 ####################
@@ -31,14 +49,6 @@ from topologiq.utils.utils_zx_graphs import break_single_spider_graph, strip_bou
 def runner(
     simple_graph: SimpleDictGraph,
     circuit_name: str,
-    min_succ_rate: int = 60,
-    strip_ports: bool = False,
-    hide_ports: bool = False,
-    max_attempts: int = 10,
-    stop_on_first_success: bool = True,
-    vis_options: tuple[None | str, None | str] = (None, None),
-    log_stats: bool = False,
-    debug: int = 0,
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: tuple[int | None, str | None] = (None, None),
     **kwargs,
@@ -57,28 +67,12 @@ def runner(
     Args:
         simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
         circuit_name: The name of the ZX circuit.
-        min_succ_rate (optional): Minimum % of tentative coordinates that must be filled for each edge.
-        strip_ports (optional): If True, boundary spiders are removed from the `simple_graph` prior to calling Topologiq.
-        hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
-        max_attempts (optional): The maximum number of times to repeat-call the algorithm on a given circuit.
-        stop_on_first_success (boolean): If True, forces exit on first successful outcome irrespective of `max_attempts`.
-        vis_options (optional): Visualisation settings provided as a tuple.
-            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
-                (None): No visualisation.
-                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
-            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
-                (None): No animation.
-                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
-        log_stats (optional): If True, triggers automated stats logging to CSV files in `.assets/stats/`.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
         **kwargs: !
-            weights: A tuple (int, int) of weights used to pick the best of several paths when there are several valid alternatives.
-            deterministic: A boolean flag to tell the function if choice is deterministic or random.
-            random_seed: Typically none, but can be used to pass a specific seed across the entire algorithm.
-            ! If no kwargs given, this function will create them based on `./src/topologiq/run_hyperparams.py`, so,
-                by extension, it only makes sense to give kwargs initially to deviate from defaults.
+
+            ! If a given kwarg is not given explicitly, this function will create it based on `./src/topologiq/run_hyperparams.py`.
+            By extension, it only makes sense to give kwargs initially to deviate from defaults.
 
     Returns:
         simple_graph: The original `simple_graph` given to function (returned for ease of use and traceability).
@@ -89,152 +83,163 @@ def runner(
     """
 
     # Preliminaries
-    t1 = datetime.now()
-    repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
-    output_dir_path = repo_root / "output/txt"
-    temp_dir_path = repo_root / "output/temp"
-    Path(output_dir_path).mkdir(parents=True, exist_ok=True)
-    unique_run_id = None
+    t_1, _ = datetime_manager()
+    Path(OUTPUT_DIR_PATH).mkdir(parents=True, exist_ok=True)
 
     # Assemble kwargs if not detected
-    if len(kwargs) == 0:
-        kwargs: dict[str, tuple[int, int] | int] = {
-            "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "deterministic": DETERMINISTIC,
-            "seed": None,
-        }
+    kwargs = check_assemble_kwargs(**kwargs)
 
-    # Optimise incoming graph if applicable
-    # The following operations leave the simple_graph unchanged if no optimisation is available
-    # Eventually, there should be a manager that calls only applicable optimisations
+    # Optimise incoming graph if applicable (or leave unchanged if no optimisation is available)
     simple_graph_optimised = break_single_spider_graph(simple_graph)
-
-    # Update user if graph was auto-optimised
-    if simple_graph != simple_graph_optimised:
-        # Override simple graph
-        simple_graph = simple_graph_optimised
-
-        # Nullify any pre-existing fig_data as overlay would no longer correspond
-        fig_data = None
-        print("Note! Graph auto-optimised to reduce final volume.")
-        # simple_graph_vis(simple_graph, layout_method="planar")
+    simple_graph = (
+        simple_graph_optimised if simple_graph != simple_graph_optimised else simple_graph
+    )
+    fig_data = None if simple_graph != simple_graph_optimised else fig_data
 
     # Optional graph transformations
-    if strip_ports:
+    if kwargs["strip_ports"]:
         simple_graph = strip_boundaries(simple_graph)
 
     # Call algorithm on a loop up to `max_attempts` tries
-    i: int = 0
-    while i < max_attempts:
-        # Update counters
-        t1_inner = datetime.now()
+    i = 0
+    while i < kwargs["max_attempts"]:
+        # Update loop counter & start clock
         i += 1
+        t_1_inner, _ = datetime_manager()
 
-        # Verbose updates if log_stats or debug mode is on
-        if log_stats or debug in [1, 2, 3]:
-            print(f"\nAttempt {i} of {max_attempts}:")
-
-        # Create unique run ID if stats logging is on
-        if log_stats:
-            unique_run_id = t1_inner.strftime("%Y%m%d_%H%M%S_%f")
-        else:
-            print(f"\nCircuit name: {circuit_name}. Attempt #{i}.")
+        # Update user
+        print(f"\nCircuit name: {circuit_name}. Attempt #{i}.")
 
         # Call algorithm
-        edge_paths = None
-        lat_nodes = None
-        lat_edges = None
+        edge_paths, lat_nodes, lat_edges = (None, None, None)
         try:
             nx_g, edge_paths, lat_nodes, lat_edges = graph_manager_bfs(
                 simple_graph,
                 circuit_name=circuit_name,
-                min_succ_rate=min_succ_rate,
-                hide_ports=hide_ports,
-                vis_options=vis_options,
-                log_stats_id=unique_run_id,
-                debug=debug,
                 fig_data=fig_data,
                 first_cube=first_cube,
                 **kwargs,
             )
+        except ValueError as e:
+            print("ERROR. Graph manager failed", e)
+
+        _, duration_iter = datetime_manager(t_1=t_1_inner)
+        _, duration_all = datetime_manager(t_1=t_1)
+
+        # Return result if any
+        if lat_nodes and lat_edges:
             lat_volume = sum([1 for node in lat_nodes.values() if node[1] != "ooo"])
+            print(
+                Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
+                f"Volume: {lat_volume}. Duration: {duration_iter:.2f}s (attempt), {duration_all:.2f}s (total).",
+            )
 
-            # Return result if any
-            if lat_nodes is not None and lat_edges is not None:
-                # Stop timer
-                duration_iter = (datetime.now() - t1_inner).total_seconds()
-                duration_all = (datetime.now() - t1).total_seconds()
+            # Write outputs
+            write_outputs(
+                simple_graph, circuit_name, edge_paths, lat_nodes, lat_edges, OUTPUT_DIR_PATH
+            )
 
-                # Update user
-                print(
-                    Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
-                    f"Volume: {lat_volume}.",
-                    f"Duration: {duration_iter:.2f}s (attempt), {duration_all:.2f}s (total).",
+            # vis_options result
+            if kwargs["vis_options"][0] or kwargs["vis_options"][1] or kwargs["debug"] > 1:
+                final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
+                vis_3d(
+                    nx_g,
+                    final_nx_g,
+                    edge_paths,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    fig_data=fig_data,
+                    filename_info=(circuit_name, len(edge_paths) + 1)
+                    if (kwargs["vis_options"][1] or kwargs["debug"] == 4)
+                    else None,
+                    **kwargs,
                 )
 
-                if vis_options[0] is not None or vis_options[1] is not None:
-                    print("Visualisations enabled. For faster runtimes, disable visualisations.")
-
-                # Write outputs
-                write_outputs(
-                    simple_graph, circuit_name, edge_paths, lat_nodes, lat_edges, output_dir_path
-                )
-
-                # vis_options result
-                if vis_options[0] or vis_options[1] or debug > 0:
-                    final_nx_g, _ = lattice_to_g(lat_nodes, lat_edges, nx_g)
-
-                    # 3D interactive visualisation
-                    vis_3d(
-                        nx_g,
-                        final_nx_g,
-                        edge_paths,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        hide_ports=hide_ports,
-                        debug=debug,
-                        vis_options=vis_options,
-                        fig_data=fig_data,
-                        filename_info=(circuit_name, len(edge_paths) + 1)
-                        if vis_options[1] or debug == 4
-                        else None,
+                # Animation
+                if kwargs["vis_options"][1] or kwargs["debug"] == 4:
+                    create_animation(
+                        filename_prefix=circuit_name,
+                        restart_delay=5000,
+                        duration=2500,
+                        video=True if kwargs["vis_options"][1] == "MP4" else False,
                     )
 
-                    # Animation
-                    if vis_options[1] or debug == 4:
-                        create_animation(
-                            filename_prefix=circuit_name,
-                            restart_delay=5000,
-                            duration=2500,
-                            video=True if vis_options[1] == "MP4" else False,
-                        )
-
-                # End loop
-                if stop_on_first_success:
-                    break
-
-        except ValueError as e:
-            # Stop timer
-            duration_iter = (datetime.now() - t1_inner).total_seconds()
-            duration_all = (datetime.now() - t1).total_seconds()
-
-            # Update user
-            if log_stats or debug in [1, 2, 3]:
-                print(
-                    Colors.RED + f"ATTEMPT FAILED.\n{e}" + Colors.RESET,
-                    f"Duration: {duration_iter:.2f}s. (attempt), {duration_all:.2f}s (total).",
-                )
-                if vis_options[0] is not None or vis_options[1] is not None:
-                    print("Visualisations enabled. For faster runtimes, disable visualisations.")
+            # End loop
+            if kwargs["stop_on_first_success"]:
+                break
 
         # Delete temporary files
-        try:
-            if temp_dir_path.exists():
-                shutil.rmtree(temp_dir_path)
-        except (ValueError, FileNotFoundError) as e:
-            print("Unable to delete temp files or temp folder does not exist", e)
+        _rm_temp_files()
 
     return simple_graph, edge_paths, lat_nodes, lat_edges
+
+
+#######
+# AUX #
+#######
+def check_assemble_kwargs(**kwargs) -> dict[str, any]:
+    """Check if all kwargs are present and add any missing."""
+
+    if len(kwargs) == 0:
+        kwargs = {
+            "weights": VALUE_FUNCTION_HYPERPARAMS,
+            "deterministic": DETERMINISTIC,
+            "beams_len_short": BEAMS_SHORT_LEN,
+            "seed": SEED,
+            "vis_options": (None, None),
+            "max_attempts": MAX_ATTEMPTS,
+            "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
+            "min_succ_rate": MIN_SUCC_RATE,
+            "strip_ports": STRIP_PORTS,
+            "hide_ports": HIDE_PORTS,
+            "log_stats": LOG_STATS,
+            "log_stats_id": None,
+            "debug": DEBUG,
+        }
+
+
+    if "weights" not in kwargs:
+        kwargs["weights"] = VALUE_FUNCTION_HYPERPARAMS
+    if "deterministic" not in kwargs:
+        kwargs["deterministic"] = DETERMINISTIC
+    if "beams_len_short" not in kwargs:
+        kwargs["beams_len_short"] = BEAMS_SHORT_LEN
+    if "seed" not in kwargs:
+        kwargs["seed"] = SEED
+    if "vis_options" not in kwargs:
+        kwargs["vis_options"] = (None, None)
+    if "max_attempts" not in kwargs:
+        kwargs["max_attempts"] = MAX_ATTEMPTS
+    if "stop_on_first_success" not in kwargs:
+        kwargs["stop_on_first_success"] = STOP_ON_FIRST_SUCCESS
+    if "min_succ_rate" not in kwargs:
+        kwargs["min_succ_rate"] = MIN_SUCC_RATE
+    if "strip_ports" not in kwargs:
+        kwargs["strip_ports"] = STRIP_PORTS
+    if "hide_ports" not in kwargs:
+        kwargs["hide_ports"] = HIDE_PORTS
+    if "log_stats" not in kwargs:
+        kwargs["log_stats"] = LOG_STATS
+    if "log_stats_id" not in kwargs:
+        kwargs["log_stats_id"] = None
+    if "debug" not in kwargs:
+        kwargs["debug"] = DEBUG
+
+    # Create unique run ID if stats logging is on
+    if kwargs["log_stats"]:
+        timestamp, _ = datetime_manager()
+        kwargs["log_stats_id"] = timestamp.strftime("%Y%m%d_%H%M%S_%f")
+
+    return kwargs
+
+
+def _rm_temp_files():
+    """Remove any temporary files created during run."""
+    try:
+        if TEMP_DIR_PATH.exists():
+            shutil.rmtree(TEMP_DIR_PATH)
+    except (ValueError, FileNotFoundError) as e:
+        print("Unable to delete temp files or temp folder does not exist", e)

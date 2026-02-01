@@ -52,13 +52,11 @@ def vis_3d(
     src_block_info: StandardBlock | None,
     tent_coords: list[StandardCoord] | None,
     tent_tgt_kinds: list[str] | None,
-    hide_ports: bool = False,
     all_search_paths: dict[StandardBlock, list[StandardBlock]] | None = [],
-    debug: int = 1,
-    vis_options: tuple[str | None, str | None] = (None, None),
     src_tgt_ids: tuple[int, int] | None = None,
     fig_data: matplotlib.figure.Figure | None = None,
     filename_info: tuple[str, int] | None = None,
+    **kwargs,
 ):
     """Create a granular visualisation of a single iteration of the inner pathfinder algorithm.
 
@@ -76,19 +74,11 @@ def vis_3d(
         src_block_info: The information of the source cube including its position in the 3D space and its kind.
         tent_coords: A list of tentative target coordinates to find paths to.
         tent_tgt_kinds: A list of kinds matching the zx-type of target block.
-        hide_ports (optional): If True, boundary spiders are considered by Topologiq but not displayed in visualisations.
         all_search_paths (optional): A dictionary containing all paths searched by the inner pathfinder algorithm.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-        vis_options (optional): Visualisation settings provided as a tuple.
-            vis_options[0]: If enabled, triggers "final" or "detail" visualisations.
-                (None): No visualisation.
-                (str) "final" | "detail": A single visualisation of the final result or one visualisation per completed edge.
-            vis_options[1]: If enabled, triggers creation of an animated summary for the entire process.
-                (None): No animation.
-                (str) "GIF" | "MP4": A step-by-step visualisation of the process in GIF or MP4 format.
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
         fig_data (optional): The Matplotlib figure of the input graph (used as optional overlay).
         filename_info (optional): The name of circuit and a iteration number needed to name any saved files.
+        **kwargs: !
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
@@ -121,7 +111,7 @@ def vis_3d(
         src_block_info,
         tent_coords,
         tent_tgt_kinds,
-        debug,
+        kwargs["debug"],
     )
 
     # Static elements
@@ -157,7 +147,7 @@ def vis_3d(
             src_coords,
             node_hex_map,
             src_tgt_ids=src_tgt_ids,
-            hide_ports=hide_ports,
+            hide_ports=kwargs["hide_ports"],
             edge_col=edge_col,
             taken=taken,
         )
@@ -170,7 +160,7 @@ def vis_3d(
         src_coords,
         tent_coords,
         is_final_vis,
-        hide_ports,
+        kwargs["hide_ports"],
         taken=taken,
         valid_paths_block_positions=valid_paths_block_positions,
     )
@@ -187,7 +177,7 @@ def vis_3d(
             src_coords,
             tent_coords,
             is_final_vis,
-            hide_ports,
+            kwargs["hide_ports"],
             taken=taken,
             tgt_kind=tgt_kind,
         )
@@ -221,7 +211,7 @@ def vis_3d(
         """Return empty list as fallback to update function when no paths are found or debug is low."""
         return []
 
-    if all_search_paths and debug > 2:
+    if all_search_paths and kwargs["debug"] > 2:
         (animation_sequence, num_paths, num_frames, animation_interval_ms, tgt_duration_ms) = (
             _prepare_search_paths_data(fig, all_search_paths, valid_paths)
         )
@@ -253,7 +243,7 @@ def vis_3d(
     btn_pad = 0.01
 
     # Show in high-debug modes
-    if debug > 2:
+    if kwargs["debug"] > 2:
         # Replay path search
         ax_anim = fig.add_axes([btn_l, btn_b + (btn_h + btn_pad) * 5, btn_w, btn_h])
         btn_anim = Button(ax_anim, "Replay Path Search")
@@ -352,7 +342,7 @@ def vis_3d(
         plt.savefig(f"{temp_folder_path}/{circuit_name}{c:03d}.png")
 
         # Save visualisation data to TXT file if debug mode is at max (4).
-        if debug == 4:
+        if kwargs["debug"] == 4:
             temp_folder_path = repo_root / "output/txt"
             file_path = f"{temp_folder_path}/{circuit_name}-last-edge.txt"
 
@@ -396,7 +386,7 @@ def vis_3d(
                 f.close()
 
     # Show
-    if debug > 1 or vis_options[0] == "detail" or (vis_options[0] == "final" and is_final_vis):
+    if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or (kwargs["vis_options"][0] == "final" and is_final_vis):
         plt.show()
     else:
         plt.close()

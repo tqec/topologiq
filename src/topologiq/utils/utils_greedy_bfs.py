@@ -348,17 +348,6 @@ def get_bounding_box(
 
     return bounding_box, max_span
 
-# DEPRECATED AFTER CHANGING BEAMS TO START/END SEGMENTS
-#def adjust_beam_len(node_beams: NodeBeams, taken: list[StandardCoord], second_pass: bool = False) -> NodeBeams:
-        #"""Trims the beams to an optimal length.
-        #Args:
-            #node_beams: All the beams of a single cube.
-            #taken: A list of all coordinates occupied by any previously-placed blocks/pipes.
-            #second_pass: A boolean flag to determine if search is a primary or `second_pass` search.
-        #Returns:
-            #new_node_beams: A trimmed version of the incoming beams, with length optimal for current size of 3D space.
-        #"""
-        #_, max_span = get_bounding_box(taken, second_pass=second_pass)
-        #max_span = 9 if max_span < 9 else 21 if max_span > 21 else max_span
-        #new_node_beams = [beam[:max_span] for beam in node_beams]
-        #return new_node_beams
+################
+# CONVENIENCES #
+################

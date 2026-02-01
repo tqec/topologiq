@@ -108,14 +108,20 @@ def run_topologiq(
 
     """
 
-    print("\n======> Now calling Topologiq:")
+    # Add kwargs for visualisation as desired in this particular example
+    # Only add kwargs when you want to deviate from default. Others will be autocompleted on run.
+    kwargs = {"vis_options": ("final", None)}  # (Visualisation mode, Animation mode)
+
+    # Add a seed for replicability, or comment out if desired
     random.seed(11)
+
+    print("\n======> Now calling Topologiq:")
     simple_graph = pyzx_g_to_simple_g(zx_graph)  # PyZX graph --> Topologiq's native format
     _, _, lattice_nodes, lattice_edges = runner(
         simple_graph,  # The simple_graph to be processed by Topologiq
         circuit_name,  # Name of the circuit
         stop_on_first_success=True,  # Exit when any attempt is successful
-        vis_options=("final", None),  # (Visualisation mode, Animation mode)
+        **kwargs,
     )
 
     return lattice_nodes, lattice_edges

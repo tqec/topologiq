@@ -14,7 +14,7 @@ Example:
         # ...
 
         # Assemble hyperparameters as kwargs
-        kwargs: dict[str, tuple[int, int] | int] = {
+        kwargs = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
             "deterministic": False,
             "seed": None,
@@ -52,3 +52,28 @@ DETERMINISTIC = False
 
 # Deterministic or randomised running mode
 BEAMS_SHORT_LEN = 9
+
+# Single seed to use across any randomised operations
+SEED = None
+
+# Max. number of runs for any given circuit
+MAX_ATTEMPTS = 1
+
+# Stop on first successful outcome for a given circuit or force multiple runs for same circuit
+STOP_ON_FIRST_SUCCESS = True
+
+# Force pathfinder to return more paths
+MIN_SUCC_RATE = 60
+
+# Eliminate boundary spiders from ZX graph before processing
+STRIP_PORTS = False
+
+# Hide boundary spiders/ports in any 3D visualisations
+HIDE_PORTS = False
+
+# Trigger automated performance metrics logs
+LOG_STATS = False
+
+# Turn debug mode on, with increasing level of stringency: 0 -> 4
+DEBUG = 0
+
