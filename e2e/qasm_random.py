@@ -195,11 +195,11 @@ if __name__ == "__main__":
 
     # Circuits
     circuit_names = [
-        # "qasm_random_05_05",
-        "qasm_random_10_10",
-        # "qasm_random_10_20",
-        # "qasm_random_03_30",
-        # "qasm_random_10_50",  # Still takes too long to enable by default
+        #"qasm_random_05_05",
+        #"qasm_random_10_10",
+        #"qasm_random_10_20",
+        #"qasm_random_03_30",
+        "qasm_random_10_50",  # Still takes too long to enable by default
     ]
 
     # Determine if circuit should be reduced/optimised or not
@@ -210,22 +210,25 @@ if __name__ == "__main__":
     # (Visualisation mode, Animation mode)
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "deterministic": False,
+        "first_id_strategy": "centrality_random",
         "seed": None,
         "vis_options": (None, None),
-        "max_attempts": 10,
-        "stop_on_first_success": True,
+        "max_attempts": 1,
+        "stop_on_first_success": False,
         "debug": 0,
-        "log_stats": True,
+        "log_stats": False,
     }
 
-    # Run selected circuits on a loop, without reduction
-    for circuit_name in circuit_names:
-        _, _, test_stats = manage_single_qasm_test(
-            circuit_name,
-            reduce_input_circuit,
-            **kwargs,
-        )
+    for i in range(0,100):
+        kwargs["seed"] = i
+        print("\n=======>SEED:", i)
+        # Run selected circuits on a loop, without reduction
+        for circuit_name in circuit_names:
+            _, _, test_stats = manage_single_qasm_test(
+                circuit_name,
+                reduce_input_circuit,
+                **kwargs,
+            )
 
     # Update user with results
     print(

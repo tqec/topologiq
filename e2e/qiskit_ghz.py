@@ -129,7 +129,7 @@ def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
 
     # Convert to QASM
     qasm_str = qasm2.dumps(qc)
-
+    print(qasm_str)
     return qasm_str
 
 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # KWARGS
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "deterministic": False,
+        "first_id_strategy": "centrality_majority",
         "seed": None,
     }
 

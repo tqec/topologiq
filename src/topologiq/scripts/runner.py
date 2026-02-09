@@ -17,7 +17,7 @@ import matplotlib.figure
 from topologiq.run_hyperparams import (
     BEAMS_SHORT_LEN,
     DEBUG,
-    DETERMINISTIC,
+    FIRST_ID_STRATEGY,
     HIDE_PORTS,
     LOG_STATS,
     MAX_ATTEMPTS,
@@ -186,7 +186,7 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
     if len(kwargs) == 0:
         kwargs = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "deterministic": DETERMINISTIC,
+            "first_id_strategy": FIRST_ID_STRATEGY,
             "beams_len_short": BEAMS_SHORT_LEN,
             "seed": SEED,
             "vis_options": (None, None),
@@ -203,8 +203,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
 
     if "weights" not in kwargs:
         kwargs["weights"] = VALUE_FUNCTION_HYPERPARAMS
-    if "deterministic" not in kwargs:
-        kwargs["deterministic"] = DETERMINISTIC
+    if "first_id_strategy" not in kwargs:
+        kwargs["first_id_strategy"] = FIRST_ID_STRATEGY
     if "beams_len_short" not in kwargs:
         kwargs["beams_len_short"] = BEAMS_SHORT_LEN
     if "seed" not in kwargs:

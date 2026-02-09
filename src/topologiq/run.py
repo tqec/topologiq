@@ -79,7 +79,7 @@ def run():
     # Only included those that can be adjusted from terminal and a couple other that are commonly adjusted.
     # Topologiq has an internal function to assemble full kwargs.
     kwargs = {
-        "deterministic": False,  # (bool) Change to use a deterministic strategy to select first node
+        "first_id_strategy": "centrality_random",  # (bool) Change between several strategies for selecting the ID of the first spider
         "seed": None,  # (None | int) Change to use a specific random seed across the entire algorithm
         "max_attempts": 1,  # (int) Change to limit the max number of runs for any given circuit
         "stop_on_first_success": True,  # (bool) Change to force multiple runs for same circuit
@@ -139,6 +139,9 @@ def run():
         if arg.startswith("--debug"):
             kwargs["debug"] = int(arg.replace("--debug:", ""))
 
+        # Look for debug mode
+        if arg.startswith("--first_id"):
+            kwargs["first_id_strategy"] = arg.replace("--first_id:", "")
 
     # Call Topologiq on `simple_graph` of circuit
     if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:

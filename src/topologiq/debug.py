@@ -84,7 +84,7 @@ def run_debug():
     else:
         print("\n==> EDGE CASES AVAILABLE FOR DIRECT RUN")
         print(
-            "[case number] circuit_name, first_id, first_kind, value_fn_weights, deterministic, random_seed."
+            "[case number] circuit_name, first_id, first_kind, value_fn_weights, first_id_strategy, random_seed."
         )
         for i, case in enumerate(debug_cases):
             print(f"[{i}] {str(case)[1:-1]}.")
@@ -101,7 +101,7 @@ def run_debug():
                     print("Exiting debug mode.\n")
                     break
 
-                circuit_name, first_id, first_kind, log_stats_id, deterministic, random_seed = debug_cases[
+                circuit_name, first_id, first_kind, log_stats_id, first_id_strategy, random_seed = debug_cases[
                     case_number
                 ]
 
@@ -113,7 +113,7 @@ def run_debug():
             # Update user
             print("\nLAUNCHING CASE")
             print(
-                "[case number] circuit_name, first_id, first_kind, log_stats_id, deterministic, seed."
+                "[case number] circuit_name, first_id, first_kind, log_stats_id, first_id_strategy, seed."
             )
             print(
                 f"[{case_number}]",
@@ -121,16 +121,16 @@ def run_debug():
                 first_id,
                 first_kind,
                 log_stats_id,
-                deterministic,
+                first_id_strategy,
                 random_seed,
             )
 
             # Assemble KWARGS
             kwargs = {
-                "deterministic": deterministic,
+                "first_id_strategy": first_id_strategy,
                 "seed": random_seed,
                 "vis_options": ("final", None),
-                "debug": 3,
+                "debug": 1,
             }
 
             # Retrieve circuit

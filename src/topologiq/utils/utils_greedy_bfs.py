@@ -15,12 +15,12 @@ from topologiq.utils.classes import StandardBlock, StandardCoord
 #######################
 # NX GRAPH OPERATIONS #
 #######################
-def find_first_id(nx_g: nx.Graph, deterministic: bool = False) -> int:
+def find_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        deterministic (optional): Boolean flag to change between deterministic and probabilistic mode.
+        first_id_strategy (optional): Enables switch between available strategies for choosing first node.
 
     Returns:
         first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
@@ -31,15 +31,51 @@ def find_first_id(nx_g: nx.Graph, deterministic: bool = False) -> int:
     if not nx_g.nodes:
         raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
 
-    # If deterministic mode is ON, first ID is ID of first non-boundary node.
-    if deterministic:
+    # ID of first non-boundary node
+    if first_id_strategy == "first_spider":
+
+        # Sort all IDS in graph excluding boundaries
         all_node_ids = sorted(
             [node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"]
         )
+
+        # Pick first
         first_id = all_node_ids[0]
 
-    # Otherwise, first ID chosen randomly from high-centrality nodes.
-    else:
+    # Majority vote from applicable centrality measures
+    elif first_id_strategy == "centrality_majority":
+
+        # Append ID determined as central by several centrality measures to a single array
+        central_nodes = []
+
+        degree_centrality = nx.degree_centrality(nx_g)
+        central_nodes.append(sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0])
+
+        closeness_centrality = nx.closeness_centrality(nx_g)
+        central_nodes.append(sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0])
+
+        info_centrality = nx.current_flow_closeness_centrality(nx_g, weight=None, solver='lu')
+        central_nodes.append(sorted(info_centrality, key=info_centrality.get, reverse=True)[0])
+
+        betweenness_centrality = nx.betweenness_centrality(nx_g, normalized=True, endpoints=True)
+        central_nodes.append(sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0])
+
+        harmonic_centrality = nx.harmonic_centrality(nx_g, nbunch=None, distance=None, sources=None)
+        central_nodes.append(sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0])
+
+        laplacian = nx.laplacian_centrality(nx_g, normalized=True, nodelist=None, weight='weight', walk_type=None, alpha=0.95)
+        central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
+
+        eigen_centrality = nx.eigenvector_centrality_numpy(nx_g)
+        central_nodes.append(sorted(eigen_centrality, key=eigen_centrality.get, reverse=True)[0])
+
+        # Choose most common
+        first_id = max(set(central_nodes), key=central_nodes.count)
+
+    # Random choice from central spiders
+    elif first_id_strategy == "centrality_random":
+
+        # Loose build a list of central spiders
         max_degree = -1
         central_nodes: list[int] = []
         node_degrees = nx_g.degree
@@ -54,8 +90,11 @@ def find_first_id(nx_g: nx.Graph, deterministic: bool = False) -> int:
             elif degree == max_degree:
                 central_nodes.append(node)
 
-        # PICK A HIGHEST DEGREE NODE
+        # Randomly pick a spider from list of central spiders
         first_id: int = random.choice(central_nodes)
+
+    else:
+        raise ValueError("ERROR @ find_first_id. Invalid selection strategy.")
 
     return first_id
 
@@ -322,19 +361,19 @@ def get_bounding_box(
     """
 
     # Get the bounds of pre-existing blocks.
-    bounds_x = [x for (x, _, _) in taken] if taken else [-1, 0, 1]
-    bounds_y = [y for (_, y, _) in taken] if taken else [-1, 0, 1]
-    bounds_z = [z for (_, _, z) in taken] if taken else [-1, 0, 1]
+    bounds_x = [x for (x, _, _) in taken] if taken else [0, 0, 0]
+    bounds_y = [y for (_, y, _) in taken] if taken else [0, 0, 0]
+    bounds_z = [z for (_, _, z) in taken] if taken else [0, 0, 0]
 
     # Add small leeway depending on type of search
-    margin = 6 if second_pass else 12
+    margin = 30 if second_pass else 21
     min_x, max_x = (min(bounds_x) - margin, max(bounds_x) + margin)
     min_y, max_y = (min(bounds_y) - margin, max(bounds_y) + margin)
     min_z, max_z = (min(bounds_z) - margin, max(bounds_z) + margin)
     bounding_box = {
-        "x": {"min": min_x, "max": max_x},
-        "y": {"min": min_y, "max": max_y},
-        "z": {"min": min_z, "max": max_z},
+        "x": {"min": min_x - margin, "max": max_x + margin},
+        "y": {"min": min_y - margin, "max": max_y + margin},
+        "z": {"min": min_z - margin, "max": max_z + margin},
     }
 
     # Calculate maximum span across all axes

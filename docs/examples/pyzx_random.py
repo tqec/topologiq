@@ -69,19 +69,19 @@ if __name__ == "__main__":
     # Topologiq generation parameters
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "deterministic": False,
+        "first_id_strategy": "centrality_random",
         "seed": None,
-        "vis_options": (None, None),
+        "vis_options": ("final", None),
         "max_attempts": 10,
         "stop_on_first_success": True,
-        "debug": 0,
+        "debug": 1,
         "log_stats": True,
     }
 
     # General description of circuit
     qubit_n = 5
-    depth = 15
-    circuit_name = f"random_{kwargs('seed') if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
+    depth = 150
+    circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph
     graph_type = "cnot"  # Tells PyZX to generate a circuit based on CNOTS

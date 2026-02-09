@@ -22,7 +22,9 @@ Notes:
 
 from collections import deque
 
-#from topologiq.run_hyperparams import BEAMS_SHORT_LEN
+import numpy as np
+
+# from topologiq.run_hyperparams import BEAMS_SHORT_LEN
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 from topologiq.utils.utils_greedy_bfs import get_bounding_box
 from topologiq.utils.utils_misc import datetime_manager, prep_stats_n_log
@@ -73,7 +75,6 @@ def pathfinder(
 
     # Preliminaries
     t_1, _ = datetime_manager()
-
     # Unpack incoming data
     src_coords, _ = src_block_info
     _, tgt_kind = tgt_block_info
@@ -88,7 +89,6 @@ def pathfinder(
         tgt_zx_type,
         tgt_kind=(tgt_kind if tgt_kind else None),
     )
-
     # Call pathfinder
     valid_paths, all_search_paths, visit_stats = core_pathfinder_bfs(
         src_block_info,
@@ -190,8 +190,7 @@ def core_pathfinder_bfs(
     src_x, src_y, src_z = src_coords
     tgt_coords = tent_coords
     second_pass = False
-    bounding_box, _ = get_bounding_box(taken, second_pass=second_pass)
-    src_tgt_critical_beams, other_critical_beams = ({}, {})
+    # src_tgt_critical_beams, other_critical_beams = ({}, {})
     exit_flag = False
 
     if src_coords in taken:
@@ -200,9 +199,10 @@ def core_pathfinder_bfs(
         second_pass = True
         if tgt_coords[0] in taken:
             taken.remove(tgt_coords[0])
-        src_tgt_critical_beams, other_critical_beams = critical_beams_to_set(
-            critical_beams, src_tgt_ids, 9
-        )
+        # src_tgt_critical_beams, other_critical_beams = critical_beams_to_set(
+        # critical_beams, src_tgt_ids, 9
+        # )
+    bounding_box, max_span = get_bounding_box(taken, second_pass=second_pass)
 
     # BFS management variables
     queue = deque([src_block_info])
@@ -223,7 +223,9 @@ def core_pathfinder_bfs(
 
     # Define exit conditions in case something goes wrong
     tgts_filled = 0
-    tgts_to_fill = int(len(tent_coords) * kwargs["min_succ_rate"] / 100) if len(tent_coords) > 1 else 1
+    tgts_to_fill = (
+        int(len(tent_coords) * kwargs["min_succ_rate"] / 100) if len(tent_coords) > 1 else 1
+    )
     if not second_pass:
         max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
         src_tgt_manhattan = max_manhattan
@@ -231,7 +233,7 @@ def core_pathfinder_bfs(
         src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
         max_manhattan = max(
             get_max_manhattan(src_coords, taken) * 2,
-            src_tgt_manhattan * 3,
+            max_span,
         )
     src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
 
@@ -244,10 +246,13 @@ def core_pathfinder_bfs(
 
         # Check exit conditions in case something's gone wrong
         curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
-        #if curr_manhattan > src_tgt_manhattan + 6:
-            #continue
+        if curr_manhattan > src_tgt_manhattan + 6:
+            # pass
+            continue
         if curr_manhattan > max_manhattan:
-            break
+            # continue
+            # break
+            pass
         if curr_coords in tgt_coords:
             if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
                 valid_paths[current_block] = path[current_block]
@@ -275,11 +280,17 @@ def core_pathfinder_bfs(
 
             if second_pass and bounding_box:
                 if (
-                    (nxt_x < bounding_box["x"]["min"] or nxt_x > bounding_box["x"]["max"])
-                    or (nxt_y < bounding_box["y"]["min"] or nxt_y > bounding_box["y"]["max"])
-                    or (nxt_z < bounding_box["z"]["min"] or nxt_x > bounding_box["z"]["max"])
+                    nxt_x < bounding_box["x"]["min"]
+                    or nxt_x > bounding_box["x"]["max"]
+                    or nxt_y < bounding_box["y"]["min"]
+                    or nxt_y > bounding_box["y"]["max"]
+                    or nxt_z < bounding_box["z"]["min"]
+                    or nxt_x > bounding_box["z"]["max"]
                 ):
+                    #if second_pass:
+                        #print("continue due to bounding box")
                     continue
+                    #pass
 
             # Adjust coords and taken coords for pipes
             mid_coords = None
@@ -289,22 +300,22 @@ def core_pathfinder_bfs(
                     continue
 
             if critical_beams and "o" not in curr_kind:
-                #if not check_critical_beams(
-                    #critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
-                #):
-                    #continue
+                if not check_critical_beams(
+                    critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
+                ):
+                    continue
 
-                if src_tgt_critical_beams:
-                    if not check_negotiable_beams(
-                        src_tgt_critical_beams, full_path_coords, src_tgt_ids
-                    ):
-                        continue
-                if other_critical_beams:
-                    unbreakable_ok, _ = check_unbreakable_beams(
-                        other_critical_beams, full_path_coords, src_tgt_ids
-                    )
-                    if not unbreakable_ok:
-                        continue
+                # if src_tgt_critical_beams:
+                # if not check_negotiable_beams(
+                # src_tgt_critical_beams, full_path_coords, src_tgt_ids
+                # ):
+                # continue
+                # if other_critical_beams:
+                # unbreakable_ok, _ = check_unbreakable_beams(
+                # other_critical_beams, full_path_coords, src_tgt_ids
+                # )
+                # if not unbreakable_ok:
+                # continue
 
             # Rotate if current kind is a Hadamard
             # NB! The raw kinds of Hadamards correspond to unrotated colours.
@@ -508,11 +519,26 @@ def split_critical_beams(
 
     unbreakable_beams = {}
     negotiable_beams = {}
-    for node_id, (node_coords, min_exit_num, node_beams, node_beams_short) in critical_beams.items():
+    for node_id, (
+        node_coords,
+        min_exit_num,
+        node_beams,
+        node_beams_short,
+    ) in critical_beams.items():
         if min_exit_num == len(node_beams):
-            unbreakable_beams[node_id] = (node_coords, min_exit_num, [beam for beam in node_beams], [beam for beam in node_beams_short])
+            unbreakable_beams[node_id] = (
+                node_coords,
+                min_exit_num,
+                [beam for beam in node_beams],
+                [beam for beam in node_beams_short],
+            )
         else:
-            negotiable_beams[node_id] = (node_coords, min_exit_num, [beam for beam in node_beams], [beam for beam in node_beams_short])
+            negotiable_beams[node_id] = (
+                node_coords,
+                min_exit_num,
+                [beam for beam in node_beams],
+                [beam for beam in node_beams_short],
+            )
 
     return unbreakable_beams, negotiable_beams
 
@@ -554,7 +580,7 @@ def critical_beams_to_set(
                 node_coords,
                 min_exit_num,
                 [beam for beam in node_beams],
-                [beam for beam in node_beams_short]
+                [beam for beam in node_beams_short],
             )
         else:
             if min_exit_num == len(node_beams):
@@ -567,7 +593,7 @@ def critical_beams_to_set(
                     node_coords,
                     min_exit_num,
                     [beam for beam in node_beams],
-                    [beam for beam in node_beams_short]
+                    [beam for beam in node_beams_short],
                 )
 
     # other_critical_beams_set = set(other_critical_beams)
@@ -628,10 +654,15 @@ def check_negotiable_beams(
 
     """
 
-    for node_id, (node_coords, min_exit_num, cube_beams, _) in negotiable_beams.items():
+    for node_id, (
+        node_coords,
+        min_exit_num,
+        cube_beams,
+        cube_beams_short,
+    ) in negotiable_beams.items():
         # For each beam of current cube, check if path breaks the beam
         out_broken_beams = 0
-        for single_beam in cube_beams:
+        for single_beam in cube_beams_short:
             if any([single_beam.contains(coord) for coord in full_path_coords]):
                 out_broken_beams += 1
 
@@ -640,20 +671,21 @@ def check_negotiable_beams(
                 other_node_coords,
                 other_min_exit_num,
                 other_cube_beams,
-                _
+                other_cube_beams_short,
             ) in negotiable_beams.items():
                 adjust = 1 if other_node_id in src_tgt_ids else 0
                 manhattan_between = get_manhattan(node_coords, other_node_coords)
                 intersections = [
                     single_beam.intersects(negotiable_beam, manhattan_between)
-                    for negotiable_beam in other_cube_beams
+                    for negotiable_beam in other_cube_beams_short
                 ]
                 if intersections:
                     in_broken_beams = sum(intersections) - adjust
-                    out_broken_beams + in_broken_beams
+                    out_broken_beams += in_broken_beams
 
                 # Flip check to false if number of broken beams exceeds tolerance
                 if len(other_cube_beams) - in_broken_beams < (other_min_exit_num - adjust):
+                    # if len(other_cube_beams) - in_broken_beams < 1:
                     return False
 
         # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
@@ -661,6 +693,7 @@ def check_negotiable_beams(
 
         # Flip check to false if number of broken beams exceeds tolerance
         if len(cube_beams) - out_broken_beams < (min_exit_num - adjust):
+            # if len(cube_beams) - out_broken_beams < 1:
             return False
 
     return True
@@ -690,7 +723,7 @@ def check_critical_beams(
     # Check each cube against all other cubes
     for out_id, (_, out_min_exit_num, _, out_beams_short) in critical_beams.items():
         # Track outer beams in a way that remembers which beam is which
-        #out_clash_tracker = np.array([False for _ in out_beams_short])
+        out_clash_tracker = np.array([False for _ in out_beams_short])
 
         # Look for clashes against path
         broken_beams = [
@@ -698,21 +731,30 @@ def check_critical_beams(
             for out_beam in out_beams_short
         ]
 
-        #out_clash_tracker = out_clash_tracker + np.array(broken_beams)
+        out_clash_tracker = out_clash_tracker + np.array(broken_beams)
 
         # Look for clashes against the beams of other cubes
-        #if any(broken_beams) and nxt_coords == tgt_coords and out_id not in src_tgt_ids:
-            #for _, _, _, in_beams_short in critical_beams.values():
-                #for in_beam in in_beams_short:
-                    #intersections = [
-                        #out_beam.intersects(in_beam, BEAMS_SHORT_LEN)
-                        #for out_beam in out_beams_short
-                    #]
+        if any(broken_beams) and nxt_coords == tgt_coords and out_id not in src_tgt_ids:
+            for in_id, (_, in_min_exit_num, _, in_beams_short) in critical_beams.items():
+                in_clash_tracker = 0
+                for in_beam in in_beams_short:
+                    intersections = [
+                        out_beam.intersects(in_beam, 9) for out_beam in out_beams_short
+                    ]
                     #out_clash_tracker = out_clash_tracker + np.array(intersections)
+                    in_clash_tracker += any(intersections)
+
+                src_tgt_adjust = 1 if in_id in src_tgt_ids else 0
+                in_pending = 1 if in_id not in src_tgt_ids else in_min_exit_num
+                if len(in_beams_short) + src_tgt_adjust - in_clash_tracker < in_pending:
+                    #print( "in", in_id, "|", len(in_beams_short), "+", src_tgt_adjust, "-", in_clash_tracker, "<", in_pending)
+                    return False
 
         # Determine if clashes are within tolerance
         src_tgt_adjust = 1 if out_id in src_tgt_ids else 0
-        if len(out_beams_short) + src_tgt_adjust - sum(broken_beams) < 1:
+        out_pending = 1 if out_id not in src_tgt_ids else out_min_exit_num
+        if len(out_beams_short) + src_tgt_adjust - sum(out_clash_tracker) < out_pending:
+            #print("out", out_id, "|", len(out_beams_short), "+", src_tgt_adjust, "-", sum(out_clash_tracker), "<", out_pending)
             return False
 
     return True

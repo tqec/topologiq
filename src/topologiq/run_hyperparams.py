@@ -34,7 +34,6 @@ Example:
                 vis_options=(vis_0, vis_1),
                 log_stats=log_stats,
                 debug=debug,
-                fig_data=fig_data,
                 **kwargs,
             )
 
@@ -47,11 +46,14 @@ Notes:
 # Weights for the main value function to choose best of several valid paths (length of path, beams broken by path)
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 
-# Deterministic or randomised running mode
-DETERMINISTIC = False
+# Strategy for selecting the ID of the first spider processed by the algorithm
+# centrality_majority: Use a majority vote from several centrality measures
+# centrality_random: Pick randomly from a list of central spiders
+# first_spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
+FIRST_ID_STRATEGY = "centrality_random"
 
 # Deterministic or randomised running mode
-BEAMS_SHORT_LEN = 9
+BEAMS_SHORT_LEN = 7
 
 # Single seed to use across any randomised operations
 SEED = None
