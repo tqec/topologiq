@@ -133,5 +133,5 @@ if __name__ == "__main__":
     n_qubits = 16
     qasm_str = ghz_to_qasm(n_qubits, circuit_name)
     zx_graph_init = qasm_to_pyzx(qasm_str)
-    zx_graph_reduced = pyzx_reduce(zx_graph_init)
+    zx_graph_reduced = zx_graph_init  ## pyzx_reduce(zx_graph_init)
     lattice_nodes, lattice_edges = run_topologiq(zx_graph_reduced, circuit_name)

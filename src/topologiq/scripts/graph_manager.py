@@ -96,7 +96,7 @@ def graph_manager_bfs(
     first_cube = get_first_cube(
         nx_g,
         first_cube=first_cube,
-        deterministic=kwargs["deterministic"],
+        first_id_strategy=kwargs["first_id_strategy"],
         random_seed=kwargs["seed"],
     )
 
@@ -157,7 +157,7 @@ def graph_manager_bfs(
             )
 
         if not run_success:
-                raise ValueError("ERROR. Graph manager ran but reported an successful outcome.")
+            raise ValueError("ERROR. Graph manager ran but reported an successful outcome.")
 
     except Exception as e:
         raise ValueError("ERROR. The graph_manager BFS crashed.", e)
@@ -204,101 +204,22 @@ def do_bfs(
 
     # Start the queue
     twins = {}
+    hold_for_edge_removal = []
+
     run_success = False
     while queue:
-        _, _, priority_ids = check_path_to_beam_clashes(nx_g, 0, 0, taken, priority_ids=[])
-        priority_ids = check_multi_beam_clashes(nx_g, priority_ids=priority_ids)
-        priority_ids = list(set(priority_ids))
+        repeat_current_src = False
+        if hold_for_edge_removal:
+            nx_g.remove_edges_from(hold_for_edge_removal)
+            nx_g = prune_beams(nx_g, taken)
 
-        if priority_ids:
-            if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-                print(Colors.BLUE, "==> Adding twin nodes for IDs:" + Colors.RESET, priority_ids)
-
-            for priority_id in priority_ids:
-                twin_id = max(nx_g.nodes) + 1
-                twins[priority_id] = twin_id
-
-                nx_g.add_node(
-                    twin_id,
-                    type=nx_g.nodes[priority_id]["type"],
-                    type_fam=nx_g.nodes[priority_id]["type_fam"],
-                    kind=None,
-                    coords=None,
-                    beams=None,
-                    beams_short=None,
-                    completed=0,
-                )
-
-                twin_pending_neighs = [
-                    n
-                    for n in nx_g.neighbors(priority_id)
-                    if tuple(sorted((n, priority_id))) not in list(edge_paths.keys())
-                ]
-
-                nx_g.add_edge(priority_id, twin_id, type="SIMPLE")
-                for twin_neigh_id in twin_pending_neighs:
-                    edge_type = nx_g.get_edge_data(priority_id, twin_neigh_id)
-                    nx_g.remove_edge(priority_id, twin_neigh_id)
-                    nx_g.add_edge(twin_id, twin_neigh_id, type=edge_type)
-
-                # Try to place twin slightly away from current blockgraph
-                taken = list(set(taken))
-                step, max_step = (6, 15)
-                while step <= max_step:
-                    nx_g, taken, edge_paths, edge_success = place_nxt_block(
-                        priority_id,
-                        twin_id,
-                        nx_g,
-                        taken,
-                        edge_paths,
-                        circuit_name=circuit_name,
-                        init_step=step,
-                        fig_data=fig_data,
-                        **kwargs,
-                    )
-
-                    # Move to next if there is a succesful placement
-                    if edge_success:
-                        nx_g = prune_beams(nx_g, taken)
-                        break
-
-                    if step >= max_step:
-                        print(
-                            Colors.RED,
-                            "==> Failed to add twin nodes:" + Colors.RESET,
-                            priority_ids,
-                        )
-
-                    # Increase distance between nodes if placement not possible
-                    step += 3
-
-            # Re-write queue to exchange priority IDs with new twin IDs
-            new_queue = []
-            while queue:
-                next_in_queue = queue.popleft()
-                if next_in_queue in priority_ids:
-                    new_queue.append(twins[next_in_queue])
-                    visited.add(twins[next_in_queue])
-                else:
-                    new_queue.append(next_in_queue)
-            queue.extend(new_queue)
-            priority_ids = []
+            hold_for_edge_removal = []
 
         # Get first cube from queue
         src_id: int = queue.popleft()
 
         # Iterate over neighbours of current source
-        fixed_list_of_neighs = cast(list[int], nx_g.neighbors(src_id))
-        for unsanitised_tgt_id in fixed_list_of_neighs:
-            if unsanitised_tgt_id in twins:
-                tgt_id = (
-                    unsanitised_tgt_id
-                    if src_id == twins[unsanitised_tgt_id]
-                    else twins[unsanitised_tgt_id]
-                )
-            else:
-                tgt_id = unsanitised_tgt_id
-
+        for tgt_id in cast(list[int], nx_g.neighbors(src_id)):
             # Handle cubes that need to be placed for the first time
             if tgt_id not in visited:
                 # Start iteration timer
@@ -335,6 +256,48 @@ def do_bfs(
                         run_success = True
                         std_edges_processed += 1
                         num_edges_processed += 1
+
+                        # Check move didn't cause problems elsewhere
+                        _, _, priority_ids = check_need_twins_path(
+                            nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
+                        )
+                        priority_ids = check_need_twins_beams(
+                            nx_g, (src_id, tgt_id), priority_ids=priority_ids, strict=True
+                        )
+                        priority_ids = list(set(priority_ids))
+                        if priority_ids:
+                            if kwargs["log_stats_id"] or kwargs["debug"] > 0:
+                                print(
+                                    Colors.BLUE,
+                                    "==> Adding twin nodes for IDs:" + Colors.RESET,
+                                    priority_ids,
+                                )
+                            # Careful with this function and its implications
+                            # It will add nodes to nx_g, which need to be called instead of the original,
+                            # but it cannot rewrite the neighbours of original node.
+                            (
+                                nx_g,
+                                queue,
+                                visited,
+                                twins,
+                                taken,
+                                priority_ids,
+                                hold_for_edge_removal,
+                            ) = create_twin(
+                                circuit_name,
+                                nx_g,
+                                queue,
+                                visited,
+                                edge_paths,
+                                taken,
+                                fig_data,
+                                twins,
+                                priority_ids,
+                                src_id,
+                                **kwargs,
+                            )
+                            repeat_current_src = True
+
                         break
 
                     # Fail if max_step is reached
@@ -350,7 +313,7 @@ def do_bfs(
                     break
 
             elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
-
+                # print("cross edge iter", src_id, "=>", tgt_id)
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
@@ -375,9 +338,47 @@ def do_bfs(
                     cross_edges_processed += 1
                     num_edges_processed += 1
 
+                    # Check move didn't cause problems elsewhere
+                    _, _, priority_ids = check_need_twins_path(
+                        nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
+                    )
+                    priority_ids = check_need_twins_beams(
+                        nx_g, (src_id, tgt_id), priority_ids=priority_ids, strict=False
+                    )
+                    priority_ids = list(set(priority_ids))
+                    if priority_ids:
+                        if kwargs["log_stats_id"] or kwargs["debug"] > 0:
+                            print(
+                                Colors.BLUE,
+                                "==> Adding twin nodes for IDs:" + Colors.RESET,
+                                priority_ids,
+                            )
+                        # Careful with this function and its implications
+                        # It will add nodes to nx_g, which need to be called instead of the original,
+                        # but it cannot rewrite the neighbours of original node.
+                        nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal = (
+                            create_twin(
+                                circuit_name,
+                                nx_g,
+                                queue,
+                                visited,
+                                edge_paths,
+                                taken,
+                                fig_data,
+                                twins,
+                                priority_ids,
+                                src_id,
+                                **kwargs,
+                            )
+                        )
+                        repeat_current_src = True
+
                 else:
                     run_success = False
                     break
+
+            if repeat_current_src:
+                break
 
         if run_success is False:
             break
@@ -401,6 +402,8 @@ def place_nxt_block(
     circuit_name: str = "circuit",
     init_step: int = 3,
     fig_data: matplotlib.figure.Figure | None = None,
+    twin_mode: bool = False,
+    ids_to_twin: list[int] | None = None,
     **kwargs,
 ) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
     """Position target cube in the 3D space as part of the primary BFS flow.
@@ -419,6 +422,8 @@ def place_nxt_block(
         circuit_name: The name of the ZX circuit.
         init_step: The ideal/intended (Manhattan) distance between source and target blocks.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+        twin_mode (optional): True when this function is used to create a twin of a given cube.
+        ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
         **kwargs: !
 
     Returns:
@@ -427,7 +432,7 @@ def place_nxt_block(
         (bool): A boolean flag to signal success (True if placement was succesful).
 
     """
-
+    # print("next block running", src_id, "=>", tgt_id)
     # Start timer
     t_1, _ = datetime_manager()
 
@@ -446,7 +451,10 @@ def place_nxt_block(
 
     # Process targets that have yet to be placed in the 3D space
     edge_success = False
+
+
     if nxt_neigh_coords is None:
+
         # Geat target information
         nxt_neigh_node_data = nx_g.nodes[tgt_id]
         nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
@@ -476,8 +484,8 @@ def place_nxt_block(
         # Note. A smart subset of clean paths
         viable_paths = []
         tgt_degree = int(get_node_degree(nx_g, tgt_id))
-
         for clean_path in clean_paths:
+
             # Extract key path information
             tgt_coords, tgt_kind = clean_path[-1]
             coords_in_path = get_taken_coords(clean_path)
@@ -495,7 +503,12 @@ def place_nxt_block(
             if tgt_unobstr_exit_n >= tgt_degree - 1:
                 # Check if path breaks more beams than tolerable
                 path_to_beam_clashes, beams_broken_by_path, _ = check_path_to_beam_clashes(
-                    nx_g, src_id, tgt_id, coords_in_path, strict=False
+                    nx_g,
+                    src_id,
+                    tgt_id,
+                    coords_in_path,
+                    twin_mode=twin_mode,
+                    ids_to_twin=ids_to_twin,
                 )
 
                 # Check if there are more beam-to-beam clashes than tolerable
@@ -511,7 +524,13 @@ def place_nxt_block(
                 )
 
                 # Append path to viable paths if path clears all checks
-                if path_to_beam_clashes is not True and tgt_beam_clashes is not True:
+                # if src_id == 35 and tgt_id == 69:
+                # print(path_to_beam_clashes, tgt_beam_clashes, not path_to_beam_clashes and not tgt_beam_clashes)
+                #if src_id == 47:
+                    #print("ADD CUBE CHECK RESULTS", path_to_beam_clashes, tgt_beam_clashes)
+                if not path_to_beam_clashes and not tgt_beam_clashes:
+                    # if src_id == 35 and tgt_id == 69:
+                    # print("WHAT a SAVE!", clean_path)
                     all_nodes_in_path = [p for p in clean_path]
 
                     # Re-write type of boundary nodes for consistency
@@ -544,8 +563,9 @@ def place_nxt_block(
         _, t_total_iter = datetime_manager(t_1=t_1)
 
         # For visualisation, create a new graph on each step
-        if kwargs["debug"] > 0 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
-
+        #if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1] or src_id == 47:
+        if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
+            #kwargs["debug"] = 3
             # Call visualisation
             call_debug_vis(
                 circuit_name,
@@ -582,6 +602,7 @@ def place_nxt_block(
                 f"Runtime: ~{int(t_total_iter * 1000)}ms.",
             )
 
+    nx_g = prune_beams(nx_g, taken)
     return nx_g, taken, edge_paths, edge_success
 
 
@@ -646,6 +667,7 @@ def connect_prev_placed_cubes(
 
             # Call pathfinder using optional parameters that flag second pass nature of operation
             v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
+
             if v_coords and v_kind:
                 clean_paths, pathfinder_vis_data = run_pathfinder(
                     (u_coords, u_kind),
@@ -658,7 +680,7 @@ def connect_prev_placed_cubes(
                     src_tgt_ids=(src_id, tgt_id),
                     **kwargs,
                 )
-                clean_paths = []  # xyz
+
                 # Finish timer before popping up visualisation
                 _, t_total_iter = datetime_manager(t_1=t_1)
 
@@ -667,7 +689,9 @@ def connect_prev_placed_cubes(
                     kwargs["debug"] > 1
                     or kwargs["vis_options"][0] == "detail"
                     or kwargs["vis_options"][1]
+                    # or (src_id == 75 and (tgt_id in [14, 15]))
                 ):
+                    # kwargs["debug"] = 3
                     # Call visualisation
                     call_debug_vis(
                         circuit_name,
@@ -764,11 +788,13 @@ def run_pathfinder(
     step = init_step
     src_coords, _ = src_block_info
     tgt_coords, tgt_type = tgt_block_info if tgt_block_info else (None, None)
-
+    # print("tgt_coords:", tgt_coords)
+    # print("taken_cc:", taken)
     # Copy taken to avoid accidental overwrites
     taken_cc = taken[:]
     if src_coords in taken_cc:
         taken_cc.remove(src_coords)
+    # if tgt_coords and tgt_coords in taken_cc:
     if tgt_coords:
         taken_cc.remove(tgt_coords)
 
@@ -786,6 +812,8 @@ def run_pathfinder(
             )
 
         # Try finding paths to each tentative coordinates
+        #if src_tgt_ids[0] == 47:
+            #print("pathfinder calling B", tent_coords)
         if tent_coords:
             valid_paths, pathfinder_vis_data = pathfinder(
                 src_block_info,
@@ -801,6 +829,8 @@ def run_pathfinder(
         else:
             raise ValueError(f"tent_coords: {tent_coords}")
 
+        #if src_tgt_ids[0] == 47:
+            #print("pathfinder calling valid paths", valid_paths)
         # Append usable paths to clean paths
         if valid_paths:
             for path in valid_paths.values():
@@ -972,7 +1002,7 @@ def validity_checks(simple_graph: SimpleDictGraph, first_cube: StandardBlock) ->
 def get_first_cube(
     nx_g: nx.Graph,
     first_cube: tuple[int | None, str | None] = (None, None),
-    deterministic: bool = False,
+    first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
 ) -> tuple[int, str]:
     """Determine the iID and kind of the first block to place in 3D space.
@@ -980,7 +1010,10 @@ def get_first_cube(
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         first_cube (optional): Override ID and kind (used to replicate specific cases).
-        deterministic: A boolean flag to tell the function if choice is deterministic or random.
+        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+            centrality_majority: Use a majority vote from several centrality measures (deterministic).
+            centrality_random: Pick randomly from a list of central spiders (probabilistic).
+            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
         random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
@@ -991,13 +1024,14 @@ def get_first_cube(
 
     first_id, first_kind = first_cube
 
-    if (not first_id or not first_kind) and not deterministic and random_seed:
+    if (not first_id or not first_kind) and random_seed:
         random.seed(random_seed)
 
     if not first_id:
-        first_id = find_first_id(nx_g, deterministic=deterministic)
+        first_id = find_first_id(nx_g, first_id_strategy=first_id_strategy)
 
     if not first_kind:
+        deterministic = False if first_id_strategy == "centrality_random" else True
         tentative_kinds = nx_g.nodes[first_id].get("type_fam")
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
 
@@ -1180,6 +1214,8 @@ def check_path_to_beam_clashes(
     beams_broken_by_path: int | None = None,
     priority_ids: list[int | None] | None = None,
     strict: bool = True,
+    twin_mode: bool = False,
+    ids_to_twin: tuple[int] | None = None,
 ) -> tuple[bool, int, list[int | None] | None]:
     """Determine if placement triggers critical multi-beam clashes.
 
@@ -1190,15 +1226,14 @@ def check_path_to_beam_clashes(
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        src_id: The ID of the current source cube.*
-            To use this function to test all of `taken`, feed any int and repeat the same int in tgt_id.
-        tgt_id: The ID of the potential target cube.*
-            To use this function to test all of `taken`, feed src_id again.
-        coords_in_path: All coords in the current path.*
-            To use this function to test all of `taken`, feed `taken` as `coords_in_path`.
+        src_id: The ID of the current source cube.
+        tgt_id: The ID of the potential target cube.
+        coords_in_path: All coords in the current path.
         beams_broken_by_path (optional): A pre-existent count of broken beams.
         priority_ids (optional): A list of spider IDs with one or another kind of conflict.
         strict (optional): Whether to perform a strict or loose check.
+        twin_mode (optional): Skip calculation for the src cube, when used to create a twin of a given cube.
+        ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
 
     Returns:
         clash: False if no critical beam clashed found, else True.
@@ -1207,25 +1242,43 @@ def check_path_to_beam_clashes(
 
     """
 
-    #####
-
     # Initialise beams broken by path if it hasn't been initialised
     beams_broken_by_path = 0 if beams_broken_by_path is None else beams_broken_by_path
 
-    # Default to False in case no cubes with beams exist
+    # Defaults
     clash = False
     priority_ids = priority_ids if priority_ids else []
 
     # Loop over all cubes in 3D space
     for cube_id in nx_g.nodes():
+        if ids_to_twin and cube_id in ids_to_twin:
+            if ids_to_twin and src_id in ids_to_twin:
+                if ids_to_twin.index(src_id) < ids_to_twin.index(cube_id):
+                    continue
+
+        # Use infinite beams if `strict`
         if nx_g.nodes[cube_id]["beams"] if strict else nx_g.nodes[cube_id]["beams_short"]:
-            # Use infinite or short beams according to `strict`
             beams_to_check = (
                 nx_g.nodes[cube_id]["beams"] if strict else nx_g.nodes[cube_id]["beams_short"]
             )
+
             cube_broken_count = 0
-            cube_degree = get_node_degree(nx_g, cube_id)
+            if twin_mode and ids_to_twin and nx_g.neighbors(cube_id):
+                cube_neighs = []
+                for i in list(nx_g.neighbors(cube_id)):
+                    if i not in ids_to_twin:
+                        cube_neighs.append(i)
+                    elif ids_to_twin.index(src_id) < ids_to_twin.index(i):
+                        cube_neighs.append(i)
+                cube_degree = len(cube_neighs)
+            else:
+                cube_degree = get_node_degree(nx_g, cube_id)
             cube_pending_edges = cube_degree - nx_g.nodes[cube_id]["completed"]
+
+            if twin_mode and ids_to_twin and cube_id in ids_to_twin:
+                if ids_to_twin.index(src_id) > ids_to_twin.index(cube_id):
+                    cube_pending_edges = 0
+
             for beam in beams_to_check:
                 if any([beam.contains(coord) for coord in coords_in_path]):
                     beams_broken_by_path += 1
@@ -1234,78 +1287,13 @@ def check_path_to_beam_clashes(
             # Append to priority IDs for all cubes with problems
             # Flip check if even ONE cube has problems
             src_tgt_adjust = 1 if (cube_id in [src_id, tgt_id] and src_id != tgt_id) else 0
-            if len(beams_to_check) - cube_broken_count + src_tgt_adjust < cube_pending_edges:
+            if len(beams_to_check) - cube_broken_count + src_tgt_adjust < min(
+                cube_pending_edges, 1
+            ):
+                #if src_id == 47:
+                    #print("A", cube_id)
                 priority_ids.append(cube_id)
                 clash = True
-
-    return clash, beams_broken_by_path, priority_ids
-
-
-def check_path_to_beam_clashes_old(
-    nx_g: nx.Graph,
-    src_id: int,
-    coords_in_path: list[StandardCoord],
-    beams_broken_by_path: int | None = None,
-    strict: bool = True,
-) -> bool:
-    """Determine if placement triggers critical multi-beam clashes.
-
-    This function checks if a given placement blocks more beams that tolerable.
-    A single beam being broken is not necessarily a problem, as some cubes can lose
-    some beams. However, if a new placement breaks more beams than what any one cube
-    can lose, it will become impossible to make all connections for the said cube.
-
-    Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        src_id: The ID of the current source cube.
-        coords_in_path: All coords in the current path.
-        beams_broken_by_path (optional): A pre-existent count of broken beams.
-        strict (optional): Whether to perform a strict or loose check.
-
-    Returns:
-        clash: False if no critical beam clashed found, else True.
-        beams_broken_by_path: Accumulated total number of beams for which path creates some kind of problem.
-        priority_ids: Cube IDs flagged as potentially problematic.
-
-    """
-
-    # Initialise beams broken by path if it hasn't been initialised
-    beams_broken_by_path = 0 if beams_broken_by_path is None else beams_broken_by_path
-
-    # Check for clashes
-    clash = False
-    priority_ids = []
-    for n_id in nx_g.nodes():
-        broken = 0  # Tracks current cube
-
-        # Only check if beams exist
-        if nx_g.nodes[n_id]["beams"]:
-            # Establish minimum needs
-            num_beams = len(nx_g.nodes[n_id]["beams"])
-            n_degree = get_node_degree(nx_g, n_id)
-            n_edges_completed = nx_g.nodes[n_id]["completed"]
-            num_edges_still_to_complete = n_degree - n_edges_completed
-
-            # Count clashes
-            if strict:
-                for single_beam in nx_g.nodes[n_id]["beams"]:
-                    if any([single_beam.contains(c) for c in coords_in_path]):
-                        beams_broken_by_path += 1
-                        broken += 1
-            else:
-                for single_beam in nx_g.nodes[n_id]["beams_short"]:
-                    if any([single_beam.contains(c) for c in coords_in_path]):
-                        beams_broken_by_path += 1
-                        broken += 1
-
-            # Evaluate tolerances
-            adjust_for_source_node = 1 if n_id == src_id else 0
-
-            if strict:
-                if num_beams - broken + adjust_for_source_node < num_edges_still_to_complete:
-                    clash = True
-                    if strict:
-                        priority_ids.append(n_id)
 
     return clash, beams_broken_by_path, priority_ids
 
@@ -1381,22 +1369,23 @@ def check_tgt_beam_clashes(
                     clash = True
 
         if len(tgt_beams) - sum(tgt_clash_tracker) < tgt_degree - 1:
+            #if src_id == 47:
+                    #print("B", cube_id)
             beams_broken_by_path += 1
             clash = True
 
     return clash, beams_broken_by_path
 
 
-def check_tgt_beam_clashes_old(
+def check_need_twins_path(
     nx_g: nx.Graph,
     src_id: int,
     tgt_id: int,
-    tgt_coords: StandardCoord,
-    tgt_beams: CubeBeams,
-    tgt_degree: int,
-    beams_broken_by_path: int = 0,
+    taken: list[StandardCoord],
+    beams_broken_by_path: int | None = None,
+    priority_ids: list[int | None] | None = None,
     strict: bool = True,
-) -> bool:
+) -> tuple[bool, int, list[int | None] | None]:
     """Determine if placement triggers critical multi-beam clashes.
 
     This function checks if a given placement blocks more beams that tolerable.
@@ -1406,51 +1395,60 @@ def check_tgt_beam_clashes_old(
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        src_id: The ID of the current source cube.
-        tgt_id: The ID of the potential target cube.
-        tgt_coords: The coords of the potential target cube.
-        tgt_beams: The beams of the potential target cube.
-        tgt_degree: The number of neighbours of the potential target cube.
+        src_id: The ID of the current source cube.*
+        tgt_id: The ID of the potential target cube.*
+        taken: All coords taken by all paths.
         beams_broken_by_path (optional): A pre-existent count of broken beams.
+        priority_ids (optional): A list of spider IDs with one or another kind of conflict.
         strict (optional): Whether to perform a strict or loose check.
+        ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
 
     Returns:
         clash: False if no critical beam clashed found, else True.
         beams_broken_by_path: Accumulated total number of beams for which path creates some kind of problem.
+        priority_ids: Cube IDs flagged as potentially problematic.
 
     """
 
-    # Assume no clashes
+    # Initialise beams broken by path if it hasn't been initialised
+    beams_broken_by_path = 0 if beams_broken_by_path is None else beams_broken_by_path
+
+    # Default to False in case no cubes with beams exist
     clash = False
+    priority_ids = priority_ids if priority_ids else []
 
-    # Check beams of all cubes against target beams
-    tgt_num_beams = len(tgt_beams)
-    beam_tracker = np.array([False for _ in tgt_beams])  # Tracks target
-    for n_id in nx_g.nodes():
-        if (
-            n_id not in (src_id, tgt_id)
-            and (nx_g.nodes[n_id]["beams"] if strict else nx_g.nodes[n_id]["beams_short"])
-            and nx_g.nodes[n_id]["coords"]
-        ):
-            cube_beams = nx_g.nodes[n_id]["beams"] if strict else nx_g.nodes[n_id]["beams_short"]
-            manhattan_between = get_manhattan(tgt_coords, nx_g.nodes[n_id]["coords"])
-            if tgt_beams:
-                for beam in cube_beams:
-                    broken_beams = [
-                        beam.intersects(single_tgt_beam, manhattan_between)
-                        for single_tgt_beam in tgt_beams
-                    ]
-                    beam_tracker = beam_tracker + np.array(broken_beams)
-                    beams_broken_by_path += sum(broken_beams)
+    # Loop over all cubes in 3D space
+    for cube_id in nx_g.nodes():
 
-    if tgt_num_beams - sum(beam_tracker) < tgt_degree - 1:
-        clash = True
+        if nx_g.nodes[cube_id]["beams"] if strict else nx_g.nodes[cube_id]["beams_short"]:
+            # Use infinite or short beams according to `strict`
+            beams_to_check = (
+                nx_g.nodes[cube_id]["beams"] if strict else nx_g.nodes[cube_id]["beams_short"]
+            )
 
-    return clash, beams_broken_by_path
+            cube_broken_count = 0
+            cube_degree = get_node_degree(nx_g, cube_id)
+            cube_pending_edges = cube_degree - nx_g.nodes[cube_id]["completed"]
+
+            for beam in beams_to_check:
+                if any([beam.contains(coord) for coord in taken]):
+                    beams_broken_by_path += 1
+                    cube_broken_count += 1
+
+            # Append to priority IDs for all cubes with problems
+            # Flip check if even ONE cube has problems
+            src_tgt_adjust = 1 if (cube_id in [src_id, tgt_id] and src_id != tgt_id) else 0
+
+            if len(beams_to_check) - cube_broken_count + src_tgt_adjust < cube_pending_edges:
+                priority_ids.append(cube_id)
+                clash = True
+
+    return clash, beams_broken_by_path, priority_ids
 
 
-def check_multi_beam_clashes(
+def check_need_twins_beams(
     nx_g: nx.Graph,
+    last_src_tgt_ids: tuple[int, int],
     priority_ids: list[int | None] | None = None,
     strict: bool = True,
 ) -> bool:
@@ -1458,8 +1456,10 @@ def check_multi_beam_clashes(
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        last_src_tgt_ids: The current or last (src_id, tgt_id) pair processed.
         priority_ids (optional): A list of spider IDs with one or another kind of conflict.
         strict (optional): Whether to perform a strict or loose check.
+        twin_mode (optional): Skip calculation for the src cube, when used to create a twin of a given cube.
 
     Returns:
         priority_ids: Cube IDs flagged as potentially problematic.
@@ -1480,30 +1480,41 @@ def check_multi_beam_clashes(
 
             out_tracker = np.array([False for beam in out_beams])
             for in_id in nx_g.nodes():
-                inner_count = 0  # Tracks each "in" cube
-                if (
-                    nx_g.nodes[out_id]["beams"] if strict else nx_g.nodes[in_id]["beams_short"]
-                ) and nx_g.nodes[in_id]["coords"]:
-                    in_coords = nx_g.nodes[in_id]["coords"]
-                    in_beams = (
-                        nx_g.nodes[in_id]["beams"] if strict else nx_g.nodes[in_id]["beams_short"]
-                    )
-                    in_beams_num = len(in_beams)
-                    in_degree = get_node_degree(nx_g, in_id)
-                    in_pending = in_degree - nx_g.nodes[in_id]["completed"]
-                    manhattan_between = get_manhattan(out_coords, in_coords)
+                if in_id != out_id:
+                    inner_count = 0  # Tracks each "in" cube
+                    if (
+                        nx_g.nodes[out_id]["beams"] if strict else nx_g.nodes[in_id]["beams_short"]
+                    ) and nx_g.nodes[in_id]["coords"]:
+                        in_coords = nx_g.nodes[in_id]["coords"]
+                        in_beams = (
+                            nx_g.nodes[in_id]["beams"]
+                            if strict
+                            else nx_g.nodes[in_id]["beams_short"]
+                        )
+                        in_beams_num = len(in_beams)
+                        in_degree = get_node_degree(nx_g, in_id)
+                        in_pending = in_degree - nx_g.nodes[in_id]["completed"]
+                        manhattan_between = get_manhattan(out_coords, in_coords)
 
-                    for beam in in_beams:
-                        broken_beams = [
-                            beam.intersects(out_beam, manhattan_between) for out_beam in out_beams
-                        ]
-                        out_tracker = out_tracker + np.array(broken_beams)
+                        for beam in in_beams:
+                            broken_beams = [
+                                beam.intersects(out_beam, manhattan_between)
+                                for out_beam in out_beams
+                            ]
+                            out_tracker = out_tracker + np.array(broken_beams)
 
-                        inner_count += sum(broken_beams)
-                        if in_beams_num - inner_count < in_pending:
-                            priority_ids.append(in_id)
+                            inner_count += sum(broken_beams)
+                            in_pending = (
+                                0 if in_id in priority_ids + list(last_src_tgt_ids) else in_pending
+                            )
+                            if in_beams_num - inner_count < in_pending:
+                                # print("in problem:", in_id)
+                                priority_ids.append(in_id)
 
+            out_pending = 0 if out_id in priority_ids + list(last_src_tgt_ids) else out_pending
             if out_beams_num - sum(out_tracker) < out_pending:
+                # print("out problem:", out_id, "\n", out_tracker)
+                # print(out_beams_num, "-", sum(out_tracker), "<", out_pending)
                 priority_ids.append(out_id)
 
     return priority_ids
@@ -1667,3 +1678,113 @@ def update_edge_paths(
     # Prune beams before moving to next edge
     nx_g = prune_beams(nx_g, taken)
     return nx_g, taken, edge_paths, edge_success
+
+
+def create_twin(
+    circuit_name,
+    nx_g,
+    queue,
+    visited,
+    edge_paths,
+    taken,
+    fig_data,
+    twins,
+    priority_ids,
+    src_id,
+    **kwargs,
+):
+    """Create a twin spider for any given number of priority spiders."""
+
+    hold_for_edge_removal = []
+
+    for priority_id in priority_ids:
+        # Define new ID
+        twin_id = max(nx_g.nodes) + 1
+        twins[priority_id] = twin_id
+
+        # Add the twin
+        nx_g.add_node(
+            twin_id,
+            type=nx_g.nodes[priority_id]["type"],
+            type_fam=nx_g.nodes[priority_id]["type_fam"],
+            kind=None,
+            coords=None,
+            beams=None,
+            beams_short=None,
+            completed=0,
+        )
+
+        # Get neighbours pending for original and transfer to twin
+        twin_pending_neighs = [
+            n
+            for n in nx_g.neighbors(priority_id)
+            if tuple(sorted((n, priority_id))) not in list(edge_paths.keys())
+        ]
+        twin_pending_neighs = [n if n not in twins else twins[n] for n in twin_pending_neighs]
+        # print("twin_pending_neighs:", twin_pending_neighs)
+
+        nx_g.add_edge(priority_id, twin_id, type="SIMPLE")
+        for twin_neigh_id in twin_pending_neighs:
+            edge_type = nx_g.get_edge_data(priority_id, twin_neigh_id)
+            # nx_g.remove_edge(priority_id, twin_neigh_id)
+            hold_for_edge_removal.append((priority_id, twin_neigh_id))
+            nx_g.add_edge(twin_id, twin_neigh_id, type=edge_type)
+        # print(priority_id, "=>", twin_id, "hold_for_removal", hold_for_edge_removal)
+        # Nullify original by setting completed to num of neighbours
+        # nx_g.nodes[priority_id]["completed"] = list(nx_g.neighbors(twin_id))
+
+        # Try to place twin slightly away from current blockgraph
+        taken = list(set(taken))
+
+        step, max_step = (6, 15)
+        while step <= max_step:
+            nx_g, taken, edge_paths, edge_success = place_nxt_block(
+                priority_id,
+                twin_id,
+                nx_g,
+                taken,
+                edge_paths,
+                circuit_name=circuit_name,
+                init_step=step,
+                fig_data=fig_data,
+                twin_mode=True,
+                ids_to_twin=priority_ids,
+                **kwargs,
+            )
+
+            # Move to next if there is a succesful placement
+            if edge_success:
+                visited.add(twin_id)
+                nx_g = prune_beams(nx_g, taken)
+                break
+
+            if step >= max_step:
+                print(
+                    Colors.RED,
+                    "==> Failed to add twin nodes:" + Colors.RESET,
+                    priority_ids,
+                )
+
+            # Increase distance between nodes if placement not possible
+            step += 3
+
+    # Re-write queue to exchange priority IDs with new twin IDs
+    new_queue: deque[int] = deque([src_id])
+    # print(priority_ids, src_id)
+    # print(queue)
+    # print(visited)
+    while queue:
+        next_in_queue = queue.popleft()
+        if next_in_queue in priority_ids:
+            new_queue.append(twins[next_in_queue])
+            visited.add(twins[next_in_queue])
+        else:
+            new_queue.append(next_in_queue)
+    queue.extend(new_queue)
+    # print("become")
+    # print(queue)
+    # print(visited)
+
+    priority_ids = []
+
+    return nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal

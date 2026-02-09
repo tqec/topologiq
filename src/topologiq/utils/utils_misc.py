@@ -415,8 +415,7 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     for case in debug_cases_full:
         circuit_name = case[2]
         kwargs = literal_eval(case[3])
-        print(kwargs)
-        deterministic = kwargs["deterministic"]
+        first_id_strategy = kwargs["first_id_strategy"]
         seed = kwargs["seed"]
         log_stats_id = kwargs["log_stats_id"]
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
@@ -426,7 +425,7 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
                 first_id,
                 first_kind,
                 log_stats_id,
-                deterministic,
+                first_id_strategy,
                 seed
             )
         )
