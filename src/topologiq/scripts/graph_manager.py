@@ -313,7 +313,6 @@ def do_bfs(
                     break
 
             elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
-                # print("cross edge iter", src_id, "=>", tgt_id)
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
@@ -432,7 +431,7 @@ def place_nxt_block(
         (bool): A boolean flag to signal success (True if placement was succesful).
 
     """
-    # print("next block running", src_id, "=>", tgt_id)
+
     # Start timer
     t_1, _ = datetime_manager()
 
@@ -524,13 +523,7 @@ def place_nxt_block(
                 )
 
                 # Append path to viable paths if path clears all checks
-                # if src_id == 35 and tgt_id == 69:
-                # print(path_to_beam_clashes, tgt_beam_clashes, not path_to_beam_clashes and not tgt_beam_clashes)
-                #if src_id == 47:
-                    #print("ADD CUBE CHECK RESULTS", path_to_beam_clashes, tgt_beam_clashes)
                 if not path_to_beam_clashes and not tgt_beam_clashes:
-                    # if src_id == 35 and tgt_id == 69:
-                    # print("WHAT a SAVE!", clean_path)
                     all_nodes_in_path = [p for p in clean_path]
 
                     # Re-write type of boundary nodes for consistency
@@ -562,11 +555,8 @@ def place_nxt_block(
         # Finish timer before popping up visualisation
         _, t_total_iter = datetime_manager(t_1=t_1)
 
-        # For visualisation, create a new graph on each step
-        #if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1] or src_id == 47:
+        # Call visualisation if applicable
         if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
-            #kwargs["debug"] = 3
-            # Call visualisation
             call_debug_vis(
                 circuit_name,
                 nx_g,
@@ -788,8 +778,7 @@ def run_pathfinder(
     step = init_step
     src_coords, _ = src_block_info
     tgt_coords, tgt_type = tgt_block_info if tgt_block_info else (None, None)
-    # print("tgt_coords:", tgt_coords)
-    # print("taken_cc:", taken)
+
     # Copy taken to avoid accidental overwrites
     taken_cc = taken[:]
     if src_coords in taken_cc:
@@ -812,8 +801,6 @@ def run_pathfinder(
             )
 
         # Try finding paths to each tentative coordinates
-        #if src_tgt_ids[0] == 47:
-            #print("pathfinder calling B", tent_coords)
         if tent_coords:
             valid_paths, pathfinder_vis_data = pathfinder(
                 src_block_info,
@@ -829,8 +816,6 @@ def run_pathfinder(
         else:
             raise ValueError(f"tent_coords: {tent_coords}")
 
-        #if src_tgt_ids[0] == 47:
-            #print("pathfinder calling valid paths", valid_paths)
         # Append usable paths to clean paths
         if valid_paths:
             for path in valid_paths.values():
@@ -1290,8 +1275,6 @@ def check_path_to_beam_clashes(
             if len(beams_to_check) - cube_broken_count + src_tgt_adjust < min(
                 cube_pending_edges, 1
             ):
-                #if src_id == 47:
-                    #print("A", cube_id)
                 priority_ids.append(cube_id)
                 clash = True
 
@@ -1369,8 +1352,7 @@ def check_tgt_beam_clashes(
                     clash = True
 
         if len(tgt_beams) - sum(tgt_clash_tracker) < tgt_degree - 1:
-            #if src_id == 47:
-                    #print("B", cube_id)
+
             beams_broken_by_path += 1
             clash = True
 
@@ -1508,13 +1490,10 @@ def check_need_twins_beams(
                                 0 if in_id in priority_ids + list(last_src_tgt_ids) else in_pending
                             )
                             if in_beams_num - inner_count < in_pending:
-                                # print("in problem:", in_id)
                                 priority_ids.append(in_id)
 
             out_pending = 0 if out_id in priority_ids + list(last_src_tgt_ids) else out_pending
             if out_beams_num - sum(out_tracker) < out_pending:
-                # print("out problem:", out_id, "\n", out_tracker)
-                # print(out_beams_num, "-", sum(out_tracker), "<", out_pending)
                 priority_ids.append(out_id)
 
     return priority_ids
@@ -1721,17 +1700,12 @@ def create_twin(
             if tuple(sorted((n, priority_id))) not in list(edge_paths.keys())
         ]
         twin_pending_neighs = [n if n not in twins else twins[n] for n in twin_pending_neighs]
-        # print("twin_pending_neighs:", twin_pending_neighs)
 
         nx_g.add_edge(priority_id, twin_id, type="SIMPLE")
         for twin_neigh_id in twin_pending_neighs:
             edge_type = nx_g.get_edge_data(priority_id, twin_neigh_id)
-            # nx_g.remove_edge(priority_id, twin_neigh_id)
             hold_for_edge_removal.append((priority_id, twin_neigh_id))
             nx_g.add_edge(twin_id, twin_neigh_id, type=edge_type)
-        # print(priority_id, "=>", twin_id, "hold_for_removal", hold_for_edge_removal)
-        # Nullify original by setting completed to num of neighbours
-        # nx_g.nodes[priority_id]["completed"] = list(nx_g.neighbors(twin_id))
 
         # Try to place twin slightly away from current blockgraph
         taken = list(set(taken))
@@ -1770,9 +1744,6 @@ def create_twin(
 
     # Re-write queue to exchange priority IDs with new twin IDs
     new_queue: deque[int] = deque([src_id])
-    # print(priority_ids, src_id)
-    # print(queue)
-    # print(visited)
     while queue:
         next_in_queue = queue.popleft()
         if next_in_queue in priority_ids:
@@ -1781,9 +1752,6 @@ def create_twin(
         else:
             new_queue.append(next_in_queue)
     queue.extend(new_queue)
-    # print("become")
-    # print(queue)
-    # print(visited)
 
     priority_ids = []
 

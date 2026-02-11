@@ -190,7 +190,6 @@ def core_pathfinder_bfs(
     src_x, src_y, src_z = src_coords
     tgt_coords = tent_coords
     second_pass = False
-    # src_tgt_critical_beams, other_critical_beams = ({}, {})
     exit_flag = False
 
     if src_coords in taken:
@@ -199,9 +198,6 @@ def core_pathfinder_bfs(
         second_pass = True
         if tgt_coords[0] in taken:
             taken.remove(tgt_coords[0])
-        # src_tgt_critical_beams, other_critical_beams = critical_beams_to_set(
-        # critical_beams, src_tgt_ids, 9
-        # )
     bounding_box, max_span = get_bounding_box(taken, second_pass=second_pass)
 
     # BFS management variables
@@ -247,11 +243,8 @@ def core_pathfinder_bfs(
         # Check exit conditions in case something's gone wrong
         curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
         if curr_manhattan > src_tgt_manhattan + 6:
-            # pass
             continue
         if curr_manhattan > max_manhattan:
-            # continue
-            # break
             pass
         if curr_coords in tgt_coords:
             if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
@@ -287,10 +280,7 @@ def core_pathfinder_bfs(
                     or nxt_z < bounding_box["z"]["min"]
                     or nxt_x > bounding_box["z"]["max"]
                 ):
-                    #if second_pass:
-                        #print("continue due to bounding box")
                     continue
-                    #pass
 
             # Adjust coords and taken coords for pipes
             mid_coords = None
@@ -304,18 +294,6 @@ def core_pathfinder_bfs(
                     critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
                 ):
                     continue
-
-                # if src_tgt_critical_beams:
-                # if not check_negotiable_beams(
-                # src_tgt_critical_beams, full_path_coords, src_tgt_ids
-                # ):
-                # continue
-                # if other_critical_beams:
-                # unbreakable_ok, _ = check_unbreakable_beams(
-                # other_critical_beams, full_path_coords, src_tgt_ids
-                # )
-                # if not unbreakable_ok:
-                # continue
 
             # Rotate if current kind is a Hadamard
             # NB! The raw kinds of Hadamards correspond to unrotated colours.
@@ -584,10 +562,6 @@ def critical_beams_to_set(
             )
         else:
             if min_exit_num == len(node_beams):
-                # joint_beam_coords = [
-                # coord for beam in node_beams for coord in beam.to_array(len_of_materialised_beam)
-                # ]
-                # other_critical_beams.extend(joint_beam_coords)
 
                 other_critical_beams[node_id] = (
                     node_coords,
@@ -596,7 +570,6 @@ def critical_beams_to_set(
                     [beam for beam in node_beams_short],
                 )
 
-    # other_critical_beams_set = set(other_critical_beams)
     return src_tgt_critical_beams, other_critical_beams
 
 
@@ -685,7 +658,6 @@ def check_negotiable_beams(
 
                 # Flip check to false if number of broken beams exceeds tolerance
                 if len(other_cube_beams) - in_broken_beams < (other_min_exit_num - adjust):
-                    # if len(other_cube_beams) - in_broken_beams < 1:
                     return False
 
         # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
@@ -693,7 +665,6 @@ def check_negotiable_beams(
 
         # Flip check to false if number of broken beams exceeds tolerance
         if len(cube_beams) - out_broken_beams < (min_exit_num - adjust):
-            # if len(cube_beams) - out_broken_beams < 1:
             return False
 
     return True
@@ -747,14 +718,12 @@ def check_critical_beams(
                 src_tgt_adjust = 1 if in_id in src_tgt_ids else 0
                 in_pending = 1 if in_id not in src_tgt_ids else in_min_exit_num
                 if len(in_beams_short) + src_tgt_adjust - in_clash_tracker < in_pending:
-                    #print( "in", in_id, "|", len(in_beams_short), "+", src_tgt_adjust, "-", in_clash_tracker, "<", in_pending)
                     return False
 
         # Determine if clashes are within tolerance
         src_tgt_adjust = 1 if out_id in src_tgt_ids else 0
         out_pending = 1 if out_id not in src_tgt_ids else out_min_exit_num
         if len(out_beams_short) + src_tgt_adjust - sum(out_clash_tracker) < out_pending:
-            #print("out", out_id, "|", len(out_beams_short), "+", src_tgt_adjust, "-", sum(out_clash_tracker), "<", out_pending)
             return False
 
     return True

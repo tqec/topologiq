@@ -1,8 +1,9 @@
-"""Run test using a series of originally-random circuits encoded as QASM.
+"""Run test using a small collection of QASM circuits.
 
 This script tests Topologiq performance using a number of circuits generated
-randomly and saved as QASM. After each run, outputs are saved to a `.bgraph`
-file in `./outputs/bgraph/`.
+randomly in PyZX and saved as QASM. A novelty of this file is that outputs are
+saved to a `.bgraph` file in `./outputs/bgraph/`. Eventually, the hope is to develop
+a standard that allows easy interoperability between lattice surgery tools.
 
 Usage:
     Run script as given.
@@ -23,7 +24,7 @@ from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.utils_misc import datetime_manager
 
 CURRENT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = CURRENT_DIR.parent
+ROOT_DIR = CURRENT_DIR.parent.parent
 ASSETS_DIR = ROOT_DIR / "assets"
 DATA_DIR = ROOT_DIR / "benchmark/data"
 OUTPUT_DIR = ROOT_DIR / "output/bgraph"
@@ -191,50 +192,45 @@ def save_test_results_to_file(
 # ...
 if __name__ == "__main__":
     # Update user
-    print(Colors.BLUE, "\n===> E2E QASM Test Suite. START.", Colors.RESET)
+    print(Colors.BLUE, "\n===> START. QASM Test Panel.", Colors.RESET)
 
     # Circuits
-    circuit_names = [
-        #"qasm_random_05_05",
-        #"qasm_random_10_10",
-        #"qasm_random_10_20",
-        #"qasm_random_03_30",
-        "qasm_random_10_50",  # Still takes too long to enable by default
-    ]
+    circuit_names = ["qasm_random_05_05", "qasm_random_10_10", "qasm_random_10_20"]
 
     # Determine if circuit should be reduced/optimised or not
     reduce_input_circuit = False
 
-    # Adjust KWARGS
-    # Only include kwargs when you want to deviate from default. Others will be autocompleted on run.
-    # (Visualisation mode, Animation mode)
+    # Adjust KWARGs
+    # KWARGs no included here is autocompleted on run.
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "first_id_strategy": "centrality_random",
         "seed": None,
         "vis_options": (None, None),
-        "max_attempts": 1,
-        "stop_on_first_success": False,
+        "max_attempts": 1,  # Run 10 tests for each circuit
+        "stop_on_first_success": False,  # Do NOT stop after success (if True, this setting overrides max_attempts)
         "debug": 0,
         "log_stats": False,
     }
 
-    for i in range(0,100):
-        kwargs["seed"] = i
-        print("\n=======>SEED:", i)
-        # Run selected circuits on a loop, without reduction
-        for circuit_name in circuit_names:
-            _, _, test_stats = manage_single_qasm_test(
-                circuit_name,
-                reduce_input_circuit,
-                **kwargs,
-            )
+    # Run selected circuits on a loop, without reduction
+    joint_success = True
+    circuit_count = 0
+    for circuit_name in circuit_names:
+        _, _, test_stats = manage_single_qasm_test(
+            circuit_name,
+            reduce_input_circuit,
+            **kwargs,
+        )
+        circuit_count += 1
+        if not test_stats["success"]:
+            joint_success = False
 
     # Update user with results
     print(
         Colors.BLUE,
-        "\n===> E2E QASM->Blockgraph Test Suite. END.",
-        f"{Colors.GREEN + 'SUCCESS' if test_stats['success'] else Colors.RED + 'FAIL'}",
+        "\n===> END. QASM Test Panel.",
+        f"{Colors.GREEN + 'SUCCESS' if joint_success else Colors.RED + 'FAIL'}",
         Colors.RESET,
         f"Duration: {test_stats['duration']:.2f}.\n",
     )

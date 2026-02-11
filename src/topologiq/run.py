@@ -18,6 +18,10 @@ Options:
     --hide_boundaries       Keep boundary nodes in graph but do not show corresponding cubes in visualisations.
     --log_stats             Log key performance metrics for the run.
     --debug                 Run in debug mode (enables verbose logging and more detailed visualisations).
+    --first_id:             Select strategy to use when defining the ID and kind of the first cube placed in 3D space.
+                                first_spider: lowest ID of non-boundary spiders.
+                                centrality_majority: majority vote from applicable centrality measures.
+                                centrality_random (default): random pick from a list of central nodes.
 
 Notes:
     If command uses '--graph', example circuit must exist in `./assets/graphs/simple_graphs.py`.
