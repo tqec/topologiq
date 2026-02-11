@@ -69,7 +69,7 @@ if __name__ == "__main__":
     # Topologiq generation parameters
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "first_id_strategy": "centrality_random",
+        "first_id_strategy": "first_spider",
         "seed": None,
         "vis_options": ("final", None),
         "max_attempts": 10,
@@ -79,8 +79,8 @@ if __name__ == "__main__":
     }
 
     # General description of circuit
-    qubit_n = 5
-    depth = 150
+    qubit_n = 10
+    depth = 20
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph

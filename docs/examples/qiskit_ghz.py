@@ -52,19 +52,26 @@ def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
     return qasm_str
 
 
-def qasm_to_pyzx(qasm_str: str) -> BaseGraph:
+def qasm_to_pyzx(qasm_str: str, reduce: bool = True, draw: bool = True) -> BaseGraph:
     """Import a circuit from QASM and convert it to a PyZX graph.
 
     Args:
         qasm_str: A quantum circuit encoded as a QASM string.
+        reduce (optional): Whether to reduce circuit on import or not.
+        draw (optional): Whether to draw graph or not.
 
     """
     # QASM --> PyZX circuit --> PyZX graph
     zx_circuit = zx.Circuit.from_qasm(qasm_str)
     zx_graph = zx_circuit.to_graph()
 
-    # Draw
-    zx.draw(zx_graph, labels=True)
+    # Reduce if applicable
+    if reduce:
+        zx_graph = pyzx_reduce(zx_graph)
+
+    # Draw if applicable
+    if draw:
+        zx.draw(zx_graph, labels=True)
 
     return zx_graph
 
@@ -129,9 +136,14 @@ def run_topologiq(
 
 # ...
 if __name__ == "__main__":
+
+    # General GHZ characteristics
     circuit_name = "ghz16"
-    n_qubits = 16
+    n_qubits = 16  # This can be changed to any number of qubits
+
+    # Get QASM and convert to PyZX graph
     qasm_str = ghz_to_qasm(n_qubits, circuit_name)
-    zx_graph_init = qasm_to_pyzx(qasm_str)
-    zx_graph_reduced = zx_graph_init  ## pyzx_reduce(zx_graph_init)
-    lattice_nodes, lattice_edges = run_topologiq(zx_graph_reduced, circuit_name)
+    zx_graph = qasm_to_pyzx(qasm_str, reduce=True, draw=True)
+
+    # Run Topologiq
+    lattice_nodes, lattice_edges = run_topologiq(zx_graph, circuit_name)
