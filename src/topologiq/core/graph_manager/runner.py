@@ -14,7 +14,9 @@ from pathlib import Path
 
 import matplotlib.figure
 
-from topologiq.run_hyperparams import (
+from topologiq.core.graph_manager.graph_manager import graph_manager_bfs
+from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
+from topologiq.kwargs import (
     BEAMS_SHORT_LEN,
     DEBUG,
     FIRST_ID_STRATEGY,
@@ -27,13 +29,11 @@ from topologiq.run_hyperparams import (
     STRIP_PORTS,
     VALUE_FUNCTION_HYPERPARAMS,
 )
-from topologiq.scripts.graph_manager import graph_manager_bfs
-from topologiq.utils.animation import create_animation
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock
-from topologiq.utils.grapher import vis_3d
-from topologiq.utils.grapher_common import lattice_to_g
 from topologiq.utils.utils_misc import datetime_manager, write_outputs
-from topologiq.utils.utils_zx_graphs import break_single_spider_graph, strip_boundaries
+from topologiq.vis.animation import create_animation
+from topologiq.vis.grapher import vis_3d
+from topologiq.vis.grapher_common import lattice_to_g
 
 #########
 # PATHS #

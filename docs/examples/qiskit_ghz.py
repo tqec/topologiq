@@ -23,9 +23,9 @@ from pyzx.graph.base import BaseGraph
 from qiskit import qasm2
 from qiskit.circuit import QuantumCircuit
 
-from topologiq.scripts.runner import runner
+from topologiq.core.graph_manager.runner import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import StandardBlock
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 
 
 def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
@@ -85,6 +85,7 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
     """
 
     # Work with copy
+    zx.draw(zx_graph, labels=True)
     zx_graph_copy = zx_graph
 
     # Apply states

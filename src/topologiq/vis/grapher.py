@@ -19,8 +19,9 @@ from matplotlib.widgets import Button
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from PIL import Image
 
+from topologiq.input.simple_graphs import kind_to_zx_type
 from topologiq.utils.classes import PathBetweenNodes, StandardBlock, StandardCoord
-from topologiq.utils.grapher_common import (
+from topologiq.vis.grapher_common import (
     edge_paths_to_nx_graph,
     figure_to_png,
     hide_overlay_handler,
@@ -37,7 +38,6 @@ from topologiq.utils.grapher_common import (
     toggle_valid_paths_handler,
     toggle_winner_path_handler,
 )
-from topologiq.utils.utils_zx_graphs import kind_to_zx_type
 
 
 ###############################

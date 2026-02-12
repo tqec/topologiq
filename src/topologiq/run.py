@@ -36,10 +36,10 @@ import sys
 from matplotlib.figure import Figure
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.scripts.runner import runner
+from topologiq.core.graph_manager.runner import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
-from topologiq.utils.simple_grapher import simple_graph_vis
+from topologiq.vis.simple_grapher import simple_graph_vis
 
 
 ####################

@@ -25,11 +25,11 @@ import sys
 from pathlib import Path
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.scripts.runner import runner
+from topologiq.core.graph_manager.runner import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
-from topologiq.utils.simple_grapher import simple_graph_vis
 from topologiq.utils.utils_misc import get_debug_cases
+from topologiq.vis.simple_grapher import simple_graph_vis
 
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent.parent

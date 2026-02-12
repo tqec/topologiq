@@ -23,8 +23,13 @@ import matplotlib.figure
 import networkx as nx
 import numpy as np
 
-from topologiq.scripts.pathfinder import get_taken_coords, pathfinder
-from topologiq.utils.animation import create_animation
+from topologiq.core.graph_manager.create import gen_tent_tgt_coords
+from topologiq.core.graph_manager.query import get_first_id, get_node_degree
+from topologiq.core.graph_manager.transform import prune_beams, reindex_path_dict
+from topologiq.core.pathfinder.pathfinder import get_taken_coords, pathfinder
+from topologiq.core.pathfinder.spatial import get_manhattan
+from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
     CubeBeams,
@@ -33,18 +38,10 @@ from topologiq.utils.classes import (
     StandardBlock,
     StandardCoord,
 )
-from topologiq.utils.grapher import vis_3d
-from topologiq.utils.grapher_common import lattice_to_g
-from topologiq.utils.utils_greedy_bfs import (
-    find_first_id,
-    gen_tent_tgt_coords,
-    get_node_degree,
-    prune_beams,
-    reindex_path_dict,
-)
 from topologiq.utils.utils_misc import datetime_manager, init_bfs, prep_stats_n_log
-from topologiq.utils.utils_pathfinder import check_exits, get_manhattan
-from topologiq.utils.utils_zx_graphs import check_zx_types, get_zx_type_fam
+from topologiq.vis.animation import create_animation
+from topologiq.vis.grapher import vis_3d
+from topologiq.vis.grapher_common import lattice_to_g
 
 
 ###############################
@@ -1013,7 +1010,7 @@ def get_first_cube(
         random.seed(random_seed)
 
     if not first_id:
-        first_id = find_first_id(nx_g, first_id_strategy=first_id_strategy)
+        first_id = get_first_id(nx_g, first_id_strategy=first_id_strategy)
 
     if not first_kind:
         deterministic = False if first_id_strategy == "centrality_random" else True
