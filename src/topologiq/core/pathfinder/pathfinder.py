@@ -1,4 +1,4 @@
-"""Manage the inner pathfinder BFS algorithm.
+"""Core script for the inner pathfinder algorithm (BFS).
 
 This file contains functions that altogether create topologically-correct 3D edge paths
 between a given source cube with pre-determined position and kind and one or more target cubes.
@@ -24,11 +24,10 @@ from collections import deque
 
 import numpy as np
 
-# from topologiq.run_hyperparams import BEAMS_SHORT_LEN
+from topologiq.core.pathfinder.spatial import gen_bounding_box, get_manhattan, get_max_manhattan
+from topologiq.core.pathfinder.symbolic import nxt_kinds, rotate_pipe
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
-from topologiq.utils.utils_greedy_bfs import get_bounding_box
 from topologiq.utils.utils_misc import datetime_manager, prep_stats_n_log
-from topologiq.utils.utils_pathfinder import get_manhattan, get_max_manhattan, nxt_kinds, rot_o_kind
 
 
 ############################
@@ -198,7 +197,7 @@ def core_pathfinder_bfs(
         second_pass = True
         if tgt_coords[0] in taken:
             taken.remove(tgt_coords[0])
-    bounding_box, max_span = get_bounding_box(taken, second_pass=second_pass)
+    bounding_box, max_span = gen_bounding_box(taken, second_pass=second_pass)
 
     # BFS management variables
     queue = deque([src_block_info])
@@ -307,7 +306,7 @@ def core_pathfinder_bfs(
                 if direction < 0:
                     pass
                 else:
-                    alt_curr_kind = rot_o_kind(curr_kind)
+                    alt_curr_kind = rotate_pipe(curr_kind)
 
             # Create a list of kinds that are valid for the next block
             possible_nxt_types = nxt_kinds(
@@ -327,7 +326,7 @@ def core_pathfinder_bfs(
                         ]
                     )
                     if direction < 0:
-                        nxt_type = rot_o_kind(nxt_type)
+                        nxt_type = rotate_pipe(nxt_type)
 
                 # Log to visited and update path lengths if all conditions met
                 # Note. If conditions not met, move would break topology

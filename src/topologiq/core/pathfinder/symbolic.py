@@ -1,4 +1,4 @@
-"""Util facilities to assist in 3D pathfinding operations.
+"""Symbolic operations that provide heuristics used for pathfinding.
 
 Usage:
     Call any function/class from a separate script.
@@ -7,169 +7,40 @@ Usage:
 
 import numpy as np
 
-from topologiq.utils.classes import (
-    BeamAxisComponent,
-    CubeBeams,
-    SingleBeam,
-    StandardBlock,
-    StandardCoord,
-)
+from topologiq.utils.classes import BeamAxisComponent, CubeBeams, SingleBeam, StandardCoord
 
 
-##################
-# BFS MANAGEMENT #
-##################
-def prune_visited(
-    visited: dict[tuple[StandardBlock, StandardCoord], int],
-    path: dict[StandardBlock, list[StandardBlock]],
-    remove_block_info: StandardBlock,
-    problem_coords: list[StandardCoord] = []
-) -> dict[tuple[StandardBlock, StandardCoord], int]:
-    """Prune the visited dictionary from the pathfinder.
+####################
+# COMPOSITE CHECKS #
+####################
+def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str) -> bool:
+    """Check if two cubes match.
+
+    This function checks if two cubes match by comparing the symbols of their colours.
+    To handle hadamards as `tgt_k`, strip the "h" from the block kind and run as a regular pipe,
+    adding the "h" after match is determined. To handle hadamards in `src_k`, rotate it,
+    then run as regular pipe.
 
     Args:
-        visited: The dictionary the pathfinder algorithm uses to keep track of visited sites.
-        path: The main path object from the pathfinder BFS.
-        remove_block_info: The coordinates and kind of the current block.
-        problem_coords: A list of problematic coordinates that need be removed from visited.
+        src_c: (x, y, z) coordinates for the current node.
+        src_k: current node's kind.
+        tgt_pos: (x, y, z) coordinates for the next node.
+        tgt_k: target node's kind.
 
     Returns:
-        new_visited: A pruned version of the incoming dictionary, which allows revisiting some sites.
+        (bool): True if cubes match else False.
 
     """
 
-    new_visited = {k:p for k, p in visited.items() if k[0][0] not in problem_coords and k[0][0] not in path[remove_block_info]}
-    return new_visited
-
-
-##########################
-# STANDARD 3D OPERATIONS #
-##########################
-def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
-    """Calculate the Manhattan distance between any two (x, y, z) coordinates.
-
-    Args:
-        src_coords: The (x, y, z) coordinates for the source block.
-        tgt_coords: The (x, y, z) coordinates for the target block.
-
-    Returns:
-        int: The Manhattan distance between the given coordinates.
-
-    """
-
-    return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
-
-
-def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
-    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
-
-    Args:
-        src_coord: The (x, y, z) coordinates for the source block.
-        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
-
-    Returns:
-        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
-
-    """
-
-    if all_coords:
-        return max([get_manhattan(src_coord, c) for c in all_coords])
-
-    return 0
-
-
-#######################
-# SYMBOLIC OPERATIONS #
-#######################
-def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord) -> bool:
-    """Check if a face is an exit.
-
-    This function works by matching exit markers in a block's kind against a displacement
-    array symbolising the direction of the target block/pipe.
-
-    Args:
-        src_c: (x, y, z) coordinates for the current block/pipe.
-        src_k: current block's/pipe's kind.
-        tgt_c: coordinates for the target block/pipe.
-
-    Returns:
-        (bool): True if face is an exit else False.
-
-    """
-
-    src_k = src_k.lower()[:3] if isinstance(src_k, str) else ""
-    kind_3d = [src_k[0], src_k[1], src_k[2]]
-
-    if "o" in kind_3d:
-        marker = "o"
-    else:
-        marker = [i for i in set(kind_3d) if kind_3d.count(i) >= 2][0]
-
-    exit_idxs = [i for i, char in enumerate(kind_3d) if char == marker]
-    diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]
-
-    diff_idx = -1
-    for i, diff in enumerate(diffs):
-        if diff != 0:
-            diff_idx = i
-            break
-
-    if diff_idx != -1 and diff_idx in exit_idxs:
-        return True
-    else:
+    # CHECK SOURCE TO TARGET
+    if not check_is_exit(src_c, src_k.lower(), tgt_pos):
         return False
 
+    # CHECK TARGET TO SOURCE
+    if not check_is_exit(tgt_pos, tgt_k.lower(), src_c):
+        return False
 
-def check_unobstr(
-    src_c: StandardCoord,
-    tgt_c: StandardCoord,
-    taken: list[StandardCoord],
-) -> tuple[bool, SingleBeam]:
-    """Check if a face is unobstructed.
-
-    This function should typically be called after verifying a face is exit.
-
-    Args:
-        src_c: The (x, y, z) coordinates for the current block/pipe.
-        tgt_c: The coordinates for the target block/pipe.
-        taken: The list of coordinates taken by any blocks/pipes placed as a result of previous operations.
-
-    Returns:
-        (bool): True if face is unobstructed else False.
-        single_beam: If the face is unobstructed, its corresponding beam.
-
-    """
-
-    diffs = [target - source for source, target in zip(src_c, tgt_c)]
-    diffs = [1 if d > 0 else -1 if d < 0 else 0 for d in diffs]
-
-    x_start, x_end, x_direction = (src_c[0], src_c[0] if diffs[0] == 0 else diffs[0] * np.inf, diffs[0])
-    y_start, y_end, y_direction = (src_c[1], src_c[1] if diffs[1] == 0 else diffs[1] * np.inf, diffs[1])
-    z_start, z_end, z_direction = (src_c[2], src_c[2] if diffs[2] == 0 else diffs[2] * np.inf, diffs[2])
-
-    single_beam = SingleBeam(
-        BeamAxisComponent(x_start, x_end, x_direction),
-        BeamAxisComponent(y_start, y_end, y_direction),
-        BeamAxisComponent(z_start, z_end, z_direction)
-    )
-
-    x_start, x_end, x_direction = (src_c[0], src_c[0] if diffs[0] == 0 else src_c[0] + diffs[0] * 9, diffs[0])
-    y_start, y_end, y_direction = (src_c[1], src_c[1] if diffs[1] == 0 else src_c[1] + diffs[1] * 9, diffs[1])
-    z_start, z_end, z_direction = (src_c[2], src_c[2] if diffs[2] == 0 else src_c[2] + diffs[2] * 9, diffs[2])
-
-    single_beam_short = SingleBeam(
-        BeamAxisComponent(x_start, x_end, x_direction),
-        BeamAxisComponent(y_start, y_end, y_direction),
-        BeamAxisComponent(z_start, z_end, z_direction)
-    )
-
-    if not taken:
-        return True, single_beam, single_beam_short
-
-    if any([single_beam.contains(coord) for coord in taken]):
-        return False, single_beam, single_beam_short
-
-    return True, single_beam, single_beam_short
+    return True
 
 
 def check_exits(
@@ -217,7 +88,7 @@ def check_exits(
         )
 
         if check_is_exit(src_c, src_k, tgt_c):
-            is_unobstr, single_beam, single_beam_short = check_unobstr(src_c, tgt_c, taken)
+            is_unobstr, single_beam, single_beam_short = check_unobstructed(src_c, tgt_c, taken)
             if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
                 unobstr_exits_n += 1
                 cube_beams.append(single_beam)
@@ -248,6 +119,124 @@ def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
     nx, ny, nz = tgt_c
     manhattan = abs(nx - sx) + abs(ny - sy) + abs(nz - sz)
     return manhattan % 3 == 0
+
+
+#################
+# SIMPLE CHECKS #
+#################
+def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord) -> bool:
+    """Check if a face is an exit.
+
+    This function works by matching exit markers in a block's kind against a displacement
+    array symbolising the direction of the target block/pipe.
+
+    Args:
+        src_c: (x, y, z) coordinates for the current block/pipe.
+        src_k: current block's/pipe's kind.
+        tgt_c: coordinates for the target block/pipe.
+
+    Returns:
+        (bool): True if face is an exit else False.
+
+    """
+
+    src_k = src_k.lower()[:3] if isinstance(src_k, str) else ""
+    kind_3d = [src_k[0], src_k[1], src_k[2]]
+
+    if "o" in kind_3d:
+        marker = "o"
+    else:
+        marker = [i for i in set(kind_3d) if kind_3d.count(i) >= 2][0]
+
+    exit_idxs = [i for i, char in enumerate(kind_3d) if char == marker]
+    diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]
+
+    diff_idx = -1
+    for i, diff in enumerate(diffs):
+        if diff != 0:
+            diff_idx = i
+            break
+
+    if diff_idx != -1 and diff_idx in exit_idxs:
+        return True
+    else:
+        return False
+
+
+def check_unobstructed(
+    src_c: StandardCoord,
+    tgt_c: StandardCoord,
+    taken: list[StandardCoord],
+) -> tuple[bool, SingleBeam]:
+    """Check if a face is unobstructed.
+
+    This function should typically be called after verifying a face is exit.
+
+    Args:
+        src_c: The (x, y, z) coordinates for the current block/pipe.
+        tgt_c: The coordinates for the target block/pipe.
+        taken: The list of coordinates taken by any blocks/pipes placed as a result of previous operations.
+
+    Returns:
+        (bool): True if face is unobstructed else False.
+        single_beam: If the face is unobstructed, its corresponding beam.
+
+    """
+
+    diffs = [target - source for source, target in zip(src_c, tgt_c)]
+    diffs = [1 if d > 0 else -1 if d < 0 else 0 for d in diffs]
+
+    x_start, x_end, x_direction = (
+        src_c[0],
+        src_c[0] if diffs[0] == 0 else diffs[0] * np.inf,
+        diffs[0],
+    )
+    y_start, y_end, y_direction = (
+        src_c[1],
+        src_c[1] if diffs[1] == 0 else diffs[1] * np.inf,
+        diffs[1],
+    )
+    z_start, z_end, z_direction = (
+        src_c[2],
+        src_c[2] if diffs[2] == 0 else diffs[2] * np.inf,
+        diffs[2],
+    )
+
+    single_beam = SingleBeam(
+        BeamAxisComponent(x_start, x_end, x_direction),
+        BeamAxisComponent(y_start, y_end, y_direction),
+        BeamAxisComponent(z_start, z_end, z_direction),
+    )
+
+    x_start, x_end, x_direction = (
+        src_c[0],
+        src_c[0] if diffs[0] == 0 else src_c[0] + diffs[0] * 9,
+        diffs[0],
+    )
+    y_start, y_end, y_direction = (
+        src_c[1],
+        src_c[1] if diffs[1] == 0 else src_c[1] + diffs[1] * 9,
+        diffs[1],
+    )
+    z_start, z_end, z_direction = (
+        src_c[2],
+        src_c[2] if diffs[2] == 0 else src_c[2] + diffs[2] * 9,
+        diffs[2],
+    )
+
+    single_beam_short = SingleBeam(
+        BeamAxisComponent(x_start, x_end, x_direction),
+        BeamAxisComponent(y_start, y_end, y_direction),
+        BeamAxisComponent(z_start, z_end, z_direction),
+    )
+
+    if not taken:
+        return True, single_beam, single_beam_short
+
+    if any([single_beam.contains(coord) for coord in taken]):
+        return False, single_beam, single_beam_short
+
+    return True, single_beam, single_beam_short
 
 
 def face_match(src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: str) -> bool:
@@ -290,36 +279,6 @@ def face_match(src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: st
     return True
 
 
-def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str) -> bool:
-    """Check if two cubes match.
-
-    This function checks if two cubes match by comparing the symbols of their colours.
-    To handle hadamards as `tgt_k`, strip the "h" from the block kind and run as a regular pipe,
-    adding the "h" after match is determined. To handle hadamards in `src_k`, rotate it,
-    then run as regular pipe.
-
-    Args:
-        src_c: (x, y, z) coordinates for the current node.
-        src_k: current node's kind.
-        tgt_pos: (x, y, z) coordinates for the next node.
-        tgt_k: target node's kind.
-
-    Returns:
-        (bool): True if cubes match else False.
-
-    """
-
-    # CHECK SOURCE TO TARGET
-    if not check_is_exit(src_c, src_k.lower(), tgt_pos):
-        return False
-
-    # CHECK TARGET TO SOURCE
-    if not check_is_exit(tgt_pos, tgt_k.lower(), src_c):
-        return False
-
-    return True
-
-
 def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[str]:
     """Reduce the number of possible kinds for next block.
 
@@ -356,7 +315,10 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[
     return ok_min
 
 
-def rot_o_kind(k: str) -> str:
+###################
+# TRANSFORMATIONS #
+###################
+def rotate_pipe(k: str) -> str:
     """Rotate a pipe around its length.
 
     This function enables pipe rotation by using the exit marker in their kind
@@ -402,7 +364,7 @@ def rot_o_kind(k: str) -> str:
     return rot_k
 
 
-def flip_hdm(k: str) -> str:
+def flip_hadamard(k: str) -> str:
     """Flip a Hadamard for the opposite Hadamard with length on the same axis.
 
     Args:

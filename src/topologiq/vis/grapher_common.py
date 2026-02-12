@@ -25,8 +25,9 @@ from matplotlib import animation
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
+from topologiq.core.pathfinder.spatial import get_manhattan
+from topologiq.core.pathfinder.symbolic import check_is_exit, rotate_pipe
 from topologiq.utils.classes import StandardBlock, StandardCoord
-from topologiq.utils.utils_pathfinder import check_is_exit, get_manhattan, rot_o_kind
 
 #############
 # CONSTANTS #
@@ -732,7 +733,7 @@ def render_pipe(
                 # Note. Keeping track of the correct rotations proved tricky
                 # Keep this bit spread out across lines for comprehensibility
                 face_cols_2 = ["gray"] * 6
-                rotated_kind = rot_o_kind(block_kind[:3]) + "h"
+                rotated_kind = rotate_pipe(block_kind[:3]) + "h"
                 col = node_hex_map.get(rotated_kind, ["gray"] * 3)
                 face_cols_2[4] = col[0]  # right (+x)
                 face_cols_2[5] = col[0]  # left (-x)

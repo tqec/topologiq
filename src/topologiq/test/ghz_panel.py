@@ -17,15 +17,15 @@ from pyzx.graph.base import BaseGraph
 from qiskit import qasm2
 from qiskit.circuit import QuantumCircuit
 
-from topologiq.run_hyperparams import VALUE_FUNCTION_HYPERPARAMS
-from topologiq.scripts.runner import runner
+from topologiq.core.graph_manager.runner import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
+from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.utils.classes import Colors, StandardBlock
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
 from topologiq.utils.utils_misc import datetime_manager
 
 CURRENT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = CURRENT_DIR.parent
-ASSETS_DIR = ROOT_DIR / "assets"
+ASSETS_DIR = CURRENT_DIR.parent / "assets"
+ROOT_DIR = CURRENT_DIR.parent.parent.parent
 DATA_DIR = ROOT_DIR / "benchmark/data"
 OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 
