@@ -17,11 +17,11 @@ import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
-from topologiq.core.graph_manager.runner import runner
+from topologiq.core.graph_manager.bfs import runner
 from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.utils.classes import Colors, StandardBlock
-from topologiq.utils.utils_misc import datetime_manager
+from topologiq.utils.core import datetime_manager
 
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent.parent

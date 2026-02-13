@@ -20,7 +20,7 @@ from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
 from topologiq.assets.pyzx_graphs import random_graph
-from topologiq.core.graph_manager.runner import runner
+from topologiq.core.graph_manager.bfs import runner
 from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     # General description of circuit
     qubit_n = 5
-    depth = 20
+    depth = 10
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph
