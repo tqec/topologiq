@@ -22,7 +22,7 @@ from typing import cast
 import matplotlib.figure
 import networkx as nx
 
-from topologiq.core.graph_manager.beams import check_need_for_twins, validity_checks
+from topologiq.core.graph_manager.beams import check_need_for_twins
 from topologiq.core.graph_manager.callers import call_logger
 from topologiq.core.graph_manager.edge_handlers import add_twin, handle_cross_edge, handle_std_edge
 from topologiq.core.graph_manager.first_cube import get_first_cube, place_first_cube
@@ -33,6 +33,7 @@ from topologiq.core.graph_manager.utils import (
     prune_beams,
     reindex_path_dict,
     rm_temp_files,
+    validity_checks,
 )
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
