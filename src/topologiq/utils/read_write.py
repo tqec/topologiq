@@ -8,7 +8,6 @@ Usage:
 import csv
 import os
 from ast import literal_eval
-from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -62,62 +61,8 @@ HEADER_PARAMS_STATS = [
 ]
 
 
-################
-# CONVENIENCES #
-################
-def init_bfs(first_cube) -> tuple[deque, set, list[StandardCoord], dict, bool]:
-    """Initialise key BFS management objects.
-
-    Args:
-        first_cube: Coordinates and kind for the first cube.
-
-    Return:
-        queue: The main BFS queue.
-        visited: The main BFS set of visited sites.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
-        run_success: Boolean flag to determine if Whether the BFS search was successful as a whole.
-
-    """
-
-    # Exract params
-    first_id, _ = first_cube
-
-    # Init queue & visited
-    queue: deque[int] = deque([first_id])
-    visited: set = {first_id}
-
-    # Init other trackers
-    taken: list[StandardCoord] = []
-    edge_paths: dict = {}
-    run_success = False
-
-    return queue, visited, taken, edge_paths, run_success
-
-
-def datetime_manager(
-    t_1: datetime | None = None, t_2: datetime | None = None
-) -> tuple[datetime, float]:
-    """Start a timer or calculate times and durations.
-
-    Args:
-        t_1 (optional): A pre-existing start time, if available.
-        t_2 (optional): A pre-existing end time, if available.
-
-    Returns:
-        t_1: A datestamp to be used as start time.
-        duration: The duration between an incoming start and end times, or a calculated duration if no end time is provided.
-
-    """
-    t_1 = datetime.now() if not t_1 else t_1
-    t_2 = datetime.now() if not t_2 else t_2
-    duration = (t_2 - t_1).total_seconds()
-
-    return t_1, duration
-
-
 ############
-# LOGGERS  #
+# WRITE  #
 ############
 def write_outputs(
     simple_graph: SimpleDictGraph,
@@ -381,9 +326,9 @@ def log_stats(stats_line: list[Any], stats_type: str, opt_header: list[str] = []
         f.close()
 
 
-#################
-# STATS READERS #
-#################
+###########
+# READ #
+###########
 def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
     """Get key replicability information for any failed case from output stats.
 

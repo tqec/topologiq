@@ -21,7 +21,7 @@ from PIL import Image
 
 from topologiq.input.simple_graphs import kind_to_zx_type
 from topologiq.utils.classes import PathBetweenNodes, StandardBlock, StandardCoord
-from topologiq.vis.grapher_common import (
+from topologiq.vis.common import (
     edge_paths_to_nx_graph,
     figure_to_png,
     hide_overlay_handler,

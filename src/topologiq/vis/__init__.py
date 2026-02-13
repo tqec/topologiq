@@ -1,1 +1,1 @@
-"""Scripts and uils to assist visualisation."""
+"""Scripts and uils to realise visualisations."""

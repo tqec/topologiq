@@ -1,4 +1,4 @@
-"""Util facilities to assist the main 3D grapher utility.
+"""Shared visualisation utils.
 
 This file contains auxiliary objects that are used to create different kinds of
 visualisations. Do NOT call anything in this file directly.

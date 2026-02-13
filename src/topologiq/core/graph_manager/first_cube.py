@@ -1,4 +1,4 @@
-"""Critical query and creation utilities to assist the primary graph managemer BFS.
+"""Query and creation utilities used to define and place the first cube.
 
 Usage:
     Call any function/class from a separate script.
@@ -8,6 +8,9 @@ Usage:
 import random
 
 import networkx as nx
+
+from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.utils.classes import StandardBlock, StandardCoord
 
 
 def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -> int:
@@ -94,24 +97,81 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
     return first_id
 
 
-def get_node_degree(g: nx.Graph, node: int) -> int:
-    """Get the degree (# of edges) of a given node.
+def get_first_cube(
+    nx_g: nx.Graph,
+    first_cube: tuple[int | None, str | None] = (None, None),
+    first_id_strategy: str = "centrality_random",
+    random_seed: int | None = None,
+) -> tuple[int, str]:
+    """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
-        g: an nx Graph.
-        node: the node of interest.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        first_cube (optional): Override ID and kind (used to replicate specific cases).
+        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+            centrality_majority: Use a majority vote from several centrality measures (deterministic).
+            centrality_random: Pick randomly from a list of central spiders (probabilistic).
+            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
+        random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
-        int: the degree for the node of interest, or 0 if graph has no edges.
+        first_id: ID of the first block to place in 3D space
+        first_kind: Kind of the first block to place in 3D space
 
     """
 
-    # GET DEGREES FOR THE ENTIRE GRAPH
-    degrees = g.degree
+    first_id, first_kind = first_cube
 
-    # GET DEGREE FOR NODE OF INTEREST
-    if not isinstance(degrees, int) and hasattr(degrees, "__getitem__"):
-        return degrees[node]
+    if (not first_id or not first_kind) and random_seed:
+        random.seed(random_seed)
 
-    # IF DEGREES NOT A LIST, RETURN 0 (SINGLE NODE WON'T HAVE EDGES)
-    return 0
+    if not first_id:
+        first_id = get_first_id(nx_g, first_id_strategy=first_id_strategy)
+
+    if not first_kind:
+        deterministic = False if first_id_strategy == "centrality_random" else True
+        tentative_kinds = nx_g.nodes[first_id].get("type_fam")
+        first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
+
+    return first_id, first_kind
+
+
+def place_first_cube(
+    nx_g: nx.Graph,
+    taken: list[StandardCoord],
+    first_cube: StandardBlock,
+    log_stats_id: int | None = None,
+    debug: int = 0,
+) -> tuple[list[StandardCoord], nx.Graph]:
+    """Place the first cube in the 3D space.
+
+    Args:
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        first_cube: ID and kind for the very first spider/cube to place in 3D space.
+        log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
+        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
+
+    Returns:
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+
+    """
+
+    # Update taken
+    taken.append((0, 0, 0))
+
+    # Get beams
+    first_id, first_kind = first_cube
+    _, src_beams, src_beams_short = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)])
+
+    # Write info to nx_g
+    nx_g.nodes[first_id]["coords"] = (0, 0, 0)
+    nx_g.nodes[first_id]["kind"] = first_kind
+    nx_g.nodes[first_id]["beams"] = src_beams
+    nx_g.nodes[first_id]["beams_short"] = src_beams_short
+
+    if log_stats_id or debug > 0:
+        print(f"First cube ID: {first_id} ({first_kind}).")
+
+    return nx_g, taken

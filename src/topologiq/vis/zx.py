@@ -1,4 +1,4 @@
-"""Quick and simple grapher for dictionary-based graphs.
+"""Simple grapher for dictionary-based ZX graphs.
 
 Usage:
     Call `simple_graph_vis` from a separate script.
