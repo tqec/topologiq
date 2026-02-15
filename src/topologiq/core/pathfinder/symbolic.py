@@ -7,7 +7,13 @@ Usage:
 
 import numpy as np
 
-from topologiq.utils.classes import BeamAxisComponent, CubeBeams, SingleBeam, StandardCoord
+from topologiq.utils.classes import (
+    BeamAxisComponent,
+    CubeBeams,
+    SingleBeam,
+    StandardBlock,
+    StandardCoord,
+)
 
 
 ####################
@@ -318,6 +324,46 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[
 ###################
 # TRANSFORMATIONS #
 ###################
+def validate_nxt_kind(
+    current_block: StandardBlock, nxt_coords: StandardCoord, nxt_kind: str, hdm: bool
+) -> str:
+    """Return next kind after assessing if it needs to be rotated or not."""
+
+    curr_coords, _ = current_block
+
+    if hdm and "o" in nxt_kind:
+        nxt_kind += "h"
+        direction = sum(
+            [p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))]
+        )
+
+        if direction < 0:
+            nxt_kind = rotate_pipe(nxt_kind)
+
+    return nxt_kind
+
+
+def handle_kind_after_hadamard(
+    current_block: StandardBlock, nxt_coords: StandardCoord, hdm: bool
+) -> str:
+    """Rotate hadamard if current kind is a hadamard."""
+
+    curr_coords, curr_kind = current_block
+
+    alt_curr_kind = None
+    if "h" in curr_kind:
+        hdm = False
+        direction = sum(
+            [p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))]
+        )
+        if direction < 0:
+            pass
+        else:
+            alt_curr_kind = rotate_pipe(curr_kind)
+
+    return alt_curr_kind, hdm
+
+
 def rotate_pipe(k: str) -> str:
     """Rotate a pipe around its length.
 
