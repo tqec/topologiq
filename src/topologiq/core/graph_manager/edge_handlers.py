@@ -14,7 +14,7 @@ import networkx as nx
 from topologiq.core.graph_manager.beams import check_path_to_beam_clashes, check_tgt_beam_clashes
 from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
 from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
-from topologiq.core.pathfinder.pathfinder import get_taken_coords
+from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.utils.classes import (
     Colors,

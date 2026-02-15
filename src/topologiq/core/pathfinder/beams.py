@@ -13,18 +13,19 @@ Note:
 
 import numpy as np
 
-from topologiq.core.pathfinder.spatial import get_manhattan
+from topologiq.core.pathfinder.utils import get_manhattan
 from topologiq.utils.classes import CubeBeams, StandardCoord
 
 ##################
 # STANDARD EDGES #
 ##################
-# Beam management for standard edges happens in the graph manager.
-# Eventually, beams for cross edges may also be moved to the pathfinder.
+# Beam management for standard edges currently happens in the graph manager.
+# There is a need to either move standard edges to the pathfinder or
+# cross-edges beam management to the graph manager, or place them both somewhere
+# common.
+# At the moment, I favour moving cross edges out of the pathfinder.
 # It is cheaper to test a full path once at the end than to check many times
-# on each move.
-# Note. Not everyone agrees with this assessment, but I'm leaving this note here
-# to not forget.
+# on each move. Not everyone agrees with this assessment.
 
 ###############
 # CROSS EDGES #

@@ -9,13 +9,13 @@ import networkx as nx
 import numpy as np
 
 from topologiq.core.graph_manager.utils import get_node_degree
-from topologiq.core.pathfinder.spatial import get_manhattan
+from topologiq.core.pathfinder.utils import get_manhattan
 from topologiq.utils.classes import CubeBeams, StandardCoord
 
 
-#######################
-# PATH / BEAM CLASHES #
-#######################
+##################
+# STANDARD EDGES #
+##################
 def check_path_to_beam_clashes(
     nx_g: nx.Graph,
     src_id: int,
@@ -182,6 +182,16 @@ def check_tgt_beam_clashes(
 
     return clash, beams_broken_by_path
 
+###############
+# CROSS EDGES #
+###############
+# Beam management for cross edges currently happens in the pathfinder.
+# There is a need to either move standard edges beam management there,
+# or move cross-edges beam management here. Or place them both somewhere
+# common.
+# At the moment, I favour moving cross edges out of the pathfinder.
+# It is cheaper to test a full path once at the end than to check many times
+# on each move. Not everyone agrees with this assessment.
 
 ##############
 # LOOK-AHEAD #

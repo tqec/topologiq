@@ -25,8 +25,8 @@ from matplotlib import animation
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
-from topologiq.core.pathfinder.spatial import get_manhattan
 from topologiq.core.pathfinder.symbolic import check_is_exit, rotate_pipe
+from topologiq.core.pathfinder.utils import get_manhattan
 from topologiq.utils.classes import StandardBlock, StandardCoord
 
 #############
