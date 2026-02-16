@@ -15,6 +15,7 @@ Notes:
 
 """
 
+import traceback
 from collections import deque
 from pathlib import Path
 from typing import cast
@@ -298,7 +299,8 @@ def graph_manager_bfs(
             raise ValueError("ERROR. Graph manager ran but reported an successful outcome.")
 
     except Exception as e:
-        raise ValueError("ERROR. The graph_manager BFS crashed.", e)
+        traceback.print_exc()
+        raise ValueError("ERROR. The graph_manager BFS crashed.", e, "\n")
 
     return nx_g, edge_paths, lat_nodes, lat_edges
 

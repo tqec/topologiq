@@ -54,11 +54,10 @@ def init_bfs(
 
 def gen_exit_conditions(
     src_coords, tent_coords, taken, max_span, second_pass, **kwargs
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int]:
     """Calculate conditions that need to be met to exit the pathfinder BFS."""
 
     # Min numbers of targets that need to be filled for a run to be deemed successful
-    tgts_filled = 0
     tgts_to_fill = (
         int(len(tent_coords) * kwargs["min_succ_rate"] / 100) if len(tent_coords) > 1 else 1
     )
@@ -75,7 +74,7 @@ def gen_exit_conditions(
         )
     src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
 
-    return tgts_filled, tgts_to_fill, max_manhattan, src_tgt_manhattan
+    return tgts_to_fill, max_manhattan, src_tgt_manhattan
 
 
 ##########

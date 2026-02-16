@@ -22,10 +22,16 @@ Notes:
 
 from collections import deque
 
+from topologiq.core.pathfinder.beams import (
+    check_critical_beams,
+    check_unbreakable_beams,
+    split_critical_beams,
+)
 from topologiq.core.pathfinder.spatial import (
     check_skip_move,
     gen_bounding_box,
     get_coords_for_current_move,
+    get_taken_coords,
 )
 from topologiq.core.pathfinder.symbolic import (
     handle_kind_after_hadamard,
@@ -36,6 +42,7 @@ from topologiq.core.pathfinder.utils import (
     check_run_mode,
     gen_exit_conditions,
     gen_tent_tgt_kinds,
+    get_manhattan,
     get_max_manhattan,
     init_bfs,
 )
@@ -201,11 +208,14 @@ def core_pathfinder_bfs(
 
     # Preliminaries
     src_coords, _ = src_block_info
-    src_x, src_y, src_z = src_coords
     tgt_coords = tent_coords
-    exit_flag = False
     second_pass, taken = check_run_mode(src_coords, taken, tgt_coords, tent_tgt_kinds)
     bounding_box, max_span = gen_bounding_box(taken, second_pass=second_pass)
+    forbidden_paths, clash_coords = ([], [])
+    if second_pass:
+        unbreakable_beams, negotiable_beams = split_critical_beams(critical_beams, src_tgt_ids)
+    else:
+        unbreakable_beams, negotiable_beams = (None, None)
 
     # Initialise BFS
     queue, visited, visit_attempts, path_len, path, valid_paths, all_search_paths, moves = init_bfs(
@@ -213,7 +223,7 @@ def core_pathfinder_bfs(
     )
 
     # Define exit conditions in case something goes wrong
-    tgts_filled, tgts_to_fill, max_manhattan, src_tgt_manhattan = gen_exit_conditions(
+    tgts_to_fill, max_manhattan, src_tgt_manhattan = gen_exit_conditions(
         src_coords, tent_coords, taken, max_span, second_pass, **kwargs
     )
 
@@ -222,26 +232,61 @@ def core_pathfinder_bfs(
         # Unpack current block (source for iteration)
         current_block: StandardBlock = queue.popleft()
         curr_coords, curr_kind = current_block
-        x, y, z = curr_coords
+        scale = 2 if "o" in curr_kind else 1  # Block is pipe if "o" in kind
 
-        # Check exit conditions
-        curr_manhattan = abs(x - src_x) + abs(y - src_y) + abs(z - src_z)
+        # Ensure second pass is robust
+        try:
+            _ = path[current_block]
+            _ = get_taken_coords(path[current_block])
+        except (ValueError, KeyError):
+            continue
+
+        # Check skip/break tolerances
+        curr_manhattan = get_manhattan(src_coords, curr_coords)
         if curr_manhattan > src_tgt_manhattan + 6:
             continue
         if curr_manhattan > max_manhattan:
-            pass
+            pass  # Need to eventually delete, leaving it here for debugging purposes
+
+        # Check for success
         if curr_coords in tgt_coords:
-            if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
-                valid_paths[current_block] = path[current_block]
-                tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-                if tgts_filled >= tgts_to_fill:
+            if not second_pass:
+                if _check_for_success_std_edge(
+                    current_block, tent_tgt_kinds, path, valid_paths, tgts_to_fill
+                ):
                     break
-            else:
-                continue
+                else:
+                    continue
+            if second_pass:
+                queue, visited, forbidden_paths, clash_coords, valid_paths, break_flag = (
+                    _check_for_success_cross_edge(
+                        current_block,
+                        tgt_coords,
+                        src_tgt_ids,
+                        queue,
+                        visited,
+                        unbreakable_beams,
+                        negotiable_beams,
+                        path,
+                        valid_paths,
+                        forbidden_paths,
+                        clash_coords,
+                    )
+                )
+                if break_flag:
+                    break
+                else:
+                    continue
 
         # Try moving in all directions
-        scale = 2 if "o" in curr_kind else 1  # Block is pipe if "o" in kind
         for move in moves:
+            # Ensure second pass is robust
+            try:
+                _ = path[current_block]
+                _ = get_taken_coords(path[current_block])
+            except (ValueError, KeyError):
+                continue
+
             # Calculate next position and update paths accordingly
             nxt_coords, curr_path_coords, full_path_coords, mid_coords = (
                 get_coords_for_current_move((curr_coords, curr_kind), move, scale, path)
@@ -260,6 +305,7 @@ def core_pathfinder_bfs(
                 curr_kind,
                 curr_path_coords,
                 mid_coords,
+                clash_coords,
             ):
                 continue
 
@@ -273,39 +319,32 @@ def core_pathfinder_bfs(
 
             # Loop over all possible next types
             for possible_nxt_kind in possible_nxt_kinds:
+                # Ensure second pass is robust
+                try:
+                    _ = path[current_block]
+                    _ = get_taken_coords(path[current_block])
+                except (ValueError, KeyError):
+                    continue
+
                 # Check if next kind needs to be rotated due to Hadamard
                 nxt_type = validate_nxt_kind(current_block, nxt_coords, possible_nxt_kind, hdm)
                 nxt_block: StandardBlock = (nxt_coords, nxt_type)
 
                 # Log to visited and update path lengths if all conditions met
-                visit_attempts += 1
-                queue, visited, path, path_len, visit_possible = _to_visit_or_not_to_visit(
-                    current_block, nxt_block, mid_coords, queue, visited, move, path, path_len
-                )
-
-                if visit_possible:
-                    valid_paths, all_search_paths, tgts_filled, exit_flag = _check_for_success(
+                queue, visited, path, path_len, visit_attempts, all_search_paths = (
+                    _to_visit_or_not_to_visit(
+                        current_block,
                         nxt_block,
-                        tgt_coords,
-                        tent_tgt_kinds,
+                        mid_coords,
+                        queue,
+                        visited,
+                        move,
                         path,
-                        valid_paths,
+                        path_len,
+                        visit_attempts,
                         all_search_paths,
-                        tgts_to_fill,
-                        tgts_filled,
                     )
-
-                # Break if success was achieved in iteration
-                if exit_flag:
-                    break
-
-            # Break if exit flag is ON
-            if exit_flag:
-                break
-
-        # Break if exit flag is ON
-        if exit_flag:
-            break
+                )
 
     return valid_paths, all_search_paths, (visit_attempts, len(visited))
 
@@ -322,17 +361,43 @@ def _to_visit_or_not_to_visit(
     move: tuple[int, int, int],
     path: dict[StandardBlock, list[StandardBlock]],
     path_len: dict[StandardBlock, int],
+    visit_attempts: int,
+    all_search_paths: dict[StandardBlock, list[StandardBlock]],
 ) -> tuple[
     deque,
     dict[tuple[StandardBlock, StandardCoord], int],
     dict[StandardBlock, list[StandardBlock]],
     dict[StandardBlock, int],
-    bool,
+    int,
+    dict[StandardBlock, list[StandardBlock]],
 ]:
-    """Visit site if conditions are met."""
+    """Visit site if conditions are met.
 
-    # Default to no visit
-    visit_possible = False
+    Args:
+        current_block: The coordinates and kind of the current block.
+        nxt_block: The coordinates and kind of the current block.
+        mid_coords: Any intermediate coordinates skipped due to scaler/multiplier.
+        queue: The pathfinder's BFS primary queue.
+        visited: All visited sites by the pathfinder BFS.
+        move: The spatial displacement (aka. move) currently under consideration.
+        path: The full path object for the entire BFS.
+        path_len: The length of the current path.
+        visit_attempts:  Total number of visitation attempts made throughout the pathfinder BFS.
+        all_search_paths: All paths searched throughout the pathfinder BFS including those not leading to a visit.
+
+    Returns:
+        queue: The pathfinder's BFS primary queue.
+        visited: All visited sites by the pathfinder BFS.
+        path: The full path object for the entire BFS.
+        path_len: The length of the current path.
+        visit_attempt: Total number of visitation attempts made throughout the pathfinder BFS.
+        all_search_paths: All paths searched throughout the pathfinder BFS including those not leading to a visit.
+
+    """
+
+    # Update counters and add path to all_search_paths
+    visit_attempts += 1
+    all_search_paths[nxt_block] = path[current_block] + [nxt_block]
 
     # Avoid clashes with mid_coords
     if mid_coords is None or nxt_block[0] != mid_coords:
@@ -342,7 +407,6 @@ def _to_visit_or_not_to_visit(
         # Check next coords not in visited or path no longer than equiv. path
         if ((nxt_block, move)) not in visited or new_path_len < visited[(nxt_block, move)]:
             # Log to visited & append to queue
-            visit_possible = True
             visited[(nxt_block, move)] = new_path_len
             queue.append(nxt_block)
 
@@ -350,39 +414,158 @@ def _to_visit_or_not_to_visit(
             path_len[nxt_block] = new_path_len
             path[nxt_block] = path[current_block] + [nxt_block]
 
-    return queue, visited, path, path_len, visit_possible
+    return queue, visited, path, path_len, visit_attempts, all_search_paths
 
 
 def _check_for_success(
-    nxt_block: StandardCoord,
-    tgt_coords: list[StandardCoord],
+    current_block: StandardCoord,
     tent_tgt_kinds: list[str],
     path: dict[StandardBlock, list[StandardBlock]],
     valid_paths: dict[StandardBlock, list[StandardBlock]],
-    all_search_paths: dict[StandardBlock, list[StandardBlock]],
     tgts_to_fill: int,
-    tgts_filled: int,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]], dict[StandardBlock, list[StandardBlock]], int, bool
 ]:
-    """Check if iteration achieved success."""
+    """Check if iteration achieved success.
 
-    # Default to no success
-    exit_flag = False
+    Args:
+        current_block: The coordinates and kind of the current block.
+        tent_tgt_kinds: A list of kinds matching the zx-type of target block.
+        path: The full path object for the entire BFS.
+        valid_paths: All paths found in round covering some or all tent_coords.
+        tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
 
-    # Check if success was achieved
-    nxt_coords, nxt_kind = nxt_block
-    if nxt_coords in tgt_coords and (tent_tgt_kinds == ["ooo"] or nxt_kind in tent_tgt_kinds):
-        # If success is achieved log to valid paths
-        valid_paths[nxt_block] = path[nxt_block]
-        all_search_paths[nxt_block] = path[nxt_block]
+    Return:
+        [bool]: True if success was achieved in this iteration, else False.
 
-        # If enough targets have been filled, flag for exit
+    """
+
+    _, curr_kind = current_block
+    if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
+        valid_paths[current_block] = path[current_block]
         tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
         if tgts_filled >= tgts_to_fill:
-            exit_flag = True
-    else:
-        # Ensure path is added to historical all search paths irrespectively
-        all_search_paths[nxt_block] = path[nxt_block]
+            return True
 
-    return valid_paths, all_search_paths, tgts_filled, exit_flag
+    return False
+
+
+def _check_for_success_std_edge(
+    current_block: StandardCoord,
+    tent_tgt_kinds: list[str],
+    path: dict[StandardBlock, list[StandardBlock]],
+    valid_paths: dict[StandardBlock, list[StandardBlock]],
+    tgts_to_fill: int,
+) -> bool:
+    """Check if success was achieved when running on standard edge mode.
+
+    Args:
+        current_block: The coordinates and kind of the current block.
+        tent_tgt_kinds: A list of kinds matching the zx-type of target block.
+        path: The full path object for the entire BFS.
+        valid_paths: All paths found in round covering some or all tent_coords.
+        tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
+
+    Return:
+        [bool]: True if success was achieved in this iteration, else False.
+
+    """
+
+    _, curr_kind = current_block
+    if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
+        valid_paths[current_block] = path[current_block]
+        tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+        if tgts_filled >= tgts_to_fill:
+            return True
+
+    return False
+
+
+def _check_for_success_cross_edge(
+    current_block: StandardCoord,
+    tgt_coords: list[StandardCoord],
+    src_tgt_ids: tuple[int, int],
+    queue: deque,
+    visited: dict[tuple[StandardBlock, StandardCoord], int],
+    unbreakable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    negotiable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    path: dict[StandardBlock, list[StandardBlock]],
+    valid_paths: dict[StandardBlock, list[StandardBlock]],
+    forbidden_paths: dict[StandardBlock, list[StandardBlock]],
+    clash_coords: list[StandardCoord],
+) -> bool:
+    """Check if success was achieved when running on standard edge mode.
+
+    Args:
+        current_block: The coordinates and kind of the current block.
+        tgt_coords: The final "target" coordinates at which path should arrive.
+        src_tgt_ids (optional): The exact IDs of the source and target cubes.
+        queue: The pathfinder's BFS primary queue.
+        visited: All visited sites by the pathfinder BFS.
+        unbreakable_beams: The joint beam coordinates for nodes that need all beams they currently have.
+        negotiable_beams: A minified `critical_beams` object containing beams for nodes that can lose some beams.
+        path: The full path object for the entire BFS.
+        valid_paths: All paths found in round covering some or all tent_coords.
+        forbidden_paths: Paths that reached the target coordinates but were previously rejected.
+        clash_coords: A list of coordinates that have been deemed problematic throughout the course of the pathfinder BFS.
+
+    Return:
+        queue: The pathfinder's BFS primary queue.
+        visited: All visited sites by the pathfinder BFS.
+        forbidden_paths: Paths that reached the target coordinates but were previously rejected.
+        clash_coords: A list of coordinates that have been deemed problematic throughout the course of the pathfinder BFS.
+        valid_paths: All paths found in round covering some or all tent_coords.
+        break_flag: True if success was achieved in this iteration, else False.
+
+    """
+
+    _, curr_coords = current_block
+
+    break_flag = False
+    if path[current_block] not in forbidden_paths:
+        full_path_coords = get_taken_coords(path[current_block])
+        if tgt_coords in full_path_coords:
+            full_path_coords.remove(tgt_coords)
+
+        unbreakable_ok, new_problem_coords = check_unbreakable_beams(
+            unbreakable_beams, full_path_coords, src_tgt_ids
+        )
+        clash_coords.extend(new_problem_coords)
+
+        negotiable_beams_ok = check_critical_beams(
+            negotiable_beams, full_path_coords, curr_coords, tgt_coords, src_tgt_ids
+        )
+
+        if unbreakable_ok and negotiable_beams_ok:
+            valid_paths[current_block] = path[current_block]
+            break_flag = True
+
+        else:
+            forbidden_paths.append(path[current_block])
+
+            new_path = {}
+            good_visited = []
+            for k, p in path.items():
+                path_coords = [i[0] for i in p]
+                problem_coords_indexes = [
+                    path_coords.index(c) for c in path_coords if c in clash_coords
+                ]
+                if problem_coords_indexes:
+                    good_path_ends = min(
+                        [path_coords.index(c) for c in path_coords if c in clash_coords]
+                    )
+                    good_path = p[:good_path_ends]
+                    new_path[good_path[-1]] = good_path
+                    good_visited.extend([i[0] for i in good_path])
+                else:
+                    new_path[k] = p
+            path = new_path
+            good_visited = list(set(good_visited))
+
+            new_visited = {k: v for k, v in visited.items() if k[0][0] in good_visited}
+            visited = new_visited
+
+            new_queue = deque([k for k in path.keys()])
+            queue = new_queue
+
+    return queue, visited, forbidden_paths, clash_coords, valid_paths, break_flag
