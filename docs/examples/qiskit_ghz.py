@@ -85,7 +85,6 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
     """
 
     # Work with copy
-    zx.draw(zx_graph, labels=True)
     zx_graph_copy = zx_graph
 
     # Apply states

@@ -5,8 +5,8 @@ Usage:
 
 """
 
-from topologiq.core.pathfinder.beams import check_critical_beams
-from topologiq.utils.classes import StandardBlock, StandardCoord
+#from topologiq.core.pathfinder.beams import check_critical_beams
+from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 
 
 #######################
@@ -77,8 +77,27 @@ def get_taken_coords(all_blocks: list[StandardBlock]) -> list[StandardCoord]:
     return taken
 
 
-def get_coords_for_current_move(current_block: StandardBlock, move: tuple[int, int, int], scale: int, path: dict[StandardBlock, list[StandardBlock]]) -> tuple[StandardCoord, list[StandardCoord], list[StandardCoord], tuple[int, int, int] | None]:
-    """Update paths and generate the next coordinates for the current move."""
+def get_coords_for_current_move(
+    current_block: StandardBlock,
+    move: tuple[int, int, int],
+    scale: int,
+    path: dict[StandardBlock, list[StandardBlock]],
+) -> tuple[StandardCoord, list[StandardCoord], list[StandardCoord], tuple[int, int, int] | None]:
+    """Update paths and generate the next coordinates for the current move.
+
+    Args:
+        current_block: The current/source block at any given time in the pathfinder BFS.
+        move: The spatial displacement (aka. move) currently under consideration.
+        scale: A multiplier to increase the size of the displacement.
+        path: The full path object for the entire BFS.
+
+    Returns:
+        nxt_coords: The exact coordinates where the move would lead, i.e., current_block coords + move.
+        curr_path_coords: The coordinates for the current path.
+        full_path_coords: The coordinates for the current path including any intermediate coordinates.
+        mid_coords: Any intermediate coordinates skipped due to scaler/multiplier.
+
+    """
 
     # Extract current coordinates and kind
     (x, y, z), curr_kind = current_block
@@ -156,21 +175,38 @@ def gen_bounding_box(
 # CHECKS #
 ##########
 def check_skip_move(
-    nxt_coords,
-    tgt_coords,
-    taken,
-    critical_beams,
-    src_tgt_ids,
-    second_pass,
+    nxt_coords: StandardCoord,
+    tgt_coords: list[StandardCoord],
+    taken: list[StandardCoord],
+    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    src_tgt_ids: tuple[int, int],
+    second_pass: bool,
     bounding_box,
-    full_path_coords,
-    curr_kind,
-    curr_path_coords,
+    full_path_coords: list[StandardCoord],
+    curr_kind: str,
+    curr_path_coords: list[StandardCoord],
     mid_coords: tuple[int, int, int] | None,
+    clash_coords: list[StandardCoord],
 ) -> bool:
-    """Check if current move should be skipped to speed up pathfinding process."""
+    """Check if current move should be skipped to speed up pathfinding process.
 
-    if nxt_coords in taken or nxt_coords in full_path_coords:
+    Args:
+        nxt_coords: The coordinates being checked as potential next position to place a block.
+        tgt_coords: The final "target" coordinates at which path should arrive.
+        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        critical_beams: An object containing beams considered critical for future operations.
+        src_tgt_ids: The exact IDs of the source and target cubes.
+        second_pass: Whether the current BFS is part of a cross-edge operation.
+        bounding_box: The coordinates determining the bounding box outside of which moves are not allowed.
+        full_path_coords: The coordinates for the current path including any intermediate coordinates.
+        curr_kind: The kind of the current source block.
+        curr_path_coords: The coordinates for the current path.
+        mid_coords: Any intermediate coordinates skipped due to scaler/multiplier.
+        clash_coords: A list of coordinates considered problematic, if any.
+
+    """
+
+    if nxt_coords in taken or nxt_coords in full_path_coords or nxt_coords in clash_coords:
         return True
 
     nxt_x, nxt_y, nxt_z = nxt_coords
@@ -189,10 +225,10 @@ def check_skip_move(
     if mid_coords and (mid_coords in curr_path_coords or mid_coords in taken):
         return True
 
-    if critical_beams and "o" not in curr_kind:
-        if not check_critical_beams(
-            critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
-        ):
-            return True
+    #if critical_beams and "o" not in curr_kind:
+        #if not check_critical_beams(
+            #critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
+        #):
+            #return True
 
     return False

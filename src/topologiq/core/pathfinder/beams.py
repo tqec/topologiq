@@ -10,7 +10,6 @@ Note:
 
 """
 
-
 import numpy as np
 
 from topologiq.core.pathfinder.utils import get_manhattan
@@ -27,11 +26,13 @@ from topologiq.utils.classes import CubeBeams, StandardCoord
 # It is cheaper to test a full path once at the end than to check many times
 # on each move. Not everyone agrees with this assessment.
 
+
 ###############
 # CROSS EDGES #
 ###############
 def split_critical_beams(
     critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    src_tgt_ids: tuple[int, int] | None,
 ) -> tuple[
     dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
     dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
@@ -44,6 +45,7 @@ def split_critical_beams(
 
     Args:
         critical_beams: Beams considered critical for future operations.
+        src_tgt_ids: The exact IDs of the source and target cubes.
         max_span: the longest edge of the bounding box, equivalent to largest beam needed to clear box.
 
     Returns:
@@ -60,7 +62,7 @@ def split_critical_beams(
         node_beams,
         node_beams_short,
     ) in critical_beams.items():
-        if min_exit_num == len(node_beams):
+        if node_id not in src_tgt_ids and min_exit_num == len(node_beams):
             unbreakable_beams[node_id] = (
                 node_coords,
                 min_exit_num,
@@ -119,7 +121,6 @@ def critical_beams_to_set(
             )
         else:
             if min_exit_num == len(node_beams):
-
                 other_critical_beams[node_id] = (
                     node_coords,
                     min_exit_num,
@@ -149,9 +150,9 @@ def check_unbreakable_beams(
     """
 
     clash_coords = []
-    for node_id, (_, _, node_beams, node_beams_short) in unbreakable_beams.items():
+    for node_id, (_, _, _, node_beams_short) in unbreakable_beams.items():
         broken_beams = 0
-        for single_beam in node_beams:
+        for single_beam in node_beams_short:
             clash_coords = [coord for coord in full_path_coords if single_beam.contains(coord)]
             if clash_coords:
                 # Reject if beam is of nodes other src and tgt
@@ -269,7 +270,7 @@ def check_critical_beams(
                     intersections = [
                         out_beam.intersects(in_beam, 9) for out_beam in out_beams_short
                     ]
-                    #out_clash_tracker = out_clash_tracker + np.array(intersections)
+                    # out_clash_tracker = out_clash_tracker + np.array(intersections)
                     in_clash_tracker += any(intersections)
 
                 src_tgt_adjust = 1 if in_id in src_tgt_ids else 0
