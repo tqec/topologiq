@@ -22,16 +22,10 @@ Notes:
 
 from collections import deque
 
-from topologiq.core.pathfinder.beams import (
-    check_critical_beams,
-    check_unbreakable_beams,
-    split_critical_beams,
-)
 from topologiq.core.pathfinder.spatial import (
     check_skip_move,
     gen_bounding_box,
     get_coords_for_current_move,
-    get_taken_coords,
 )
 from topologiq.core.pathfinder.symbolic import (
     handle_kind_after_hadamard,
@@ -211,11 +205,6 @@ def core_pathfinder_bfs(
     tgt_coords = tent_coords
     second_pass, taken = check_run_mode(src_coords, taken, tgt_coords, tent_tgt_kinds)
     bounding_box, max_span = gen_bounding_box(taken, second_pass=second_pass)
-    forbidden_paths, clash_coords = ([], [])
-    if second_pass:
-        unbreakable_beams, negotiable_beams = split_critical_beams(critical_beams, src_tgt_ids)
-    else:
-        unbreakable_beams, negotiable_beams = (None, None)
 
     # Initialise BFS
     queue, visited, visit_attempts, path_len, path, valid_paths, all_search_paths, moves = init_bfs(
@@ -234,13 +223,6 @@ def core_pathfinder_bfs(
         curr_coords, curr_kind = current_block
         scale = 2 if "o" in curr_kind else 1  # Block is pipe if "o" in kind
 
-        # Ensure second pass is robust
-        try:
-            _ = path[current_block]
-            _ = get_taken_coords(path[current_block])
-        except (ValueError, KeyError):
-            continue
-
         # Check skip/break tolerances
         curr_manhattan = get_manhattan(src_coords, curr_coords)
         if curr_manhattan > src_tgt_manhattan + 6:
@@ -250,43 +232,13 @@ def core_pathfinder_bfs(
 
         # Check for success
         if curr_coords in tgt_coords:
-            if not second_pass:
-                if _check_for_success_std_edge(
-                    current_block, tent_tgt_kinds, path, valid_paths, tgts_to_fill
-                ):
-                    break
-                else:
-                    continue
-            if second_pass:
-                queue, visited, forbidden_paths, clash_coords, valid_paths, break_flag = (
-                    _check_for_success_cross_edge(
-                        current_block,
-                        tgt_coords,
-                        src_tgt_ids,
-                        queue,
-                        visited,
-                        unbreakable_beams,
-                        negotiable_beams,
-                        path,
-                        valid_paths,
-                        forbidden_paths,
-                        clash_coords,
-                    )
-                )
-                if break_flag:
-                    break
-                else:
-                    continue
+            if _check_for_success(current_block, tent_tgt_kinds, path, valid_paths, tgts_to_fill):
+                break
+            else:
+                continue
 
         # Try moving in all directions
         for move in moves:
-            # Ensure second pass is robust
-            try:
-                _ = path[current_block]
-                _ = get_taken_coords(path[current_block])
-            except (ValueError, KeyError):
-                continue
-
             # Calculate next position and update paths accordingly
             nxt_coords, curr_path_coords, full_path_coords, mid_coords = (
                 get_coords_for_current_move((curr_coords, curr_kind), move, scale, path)
@@ -295,13 +247,16 @@ def core_pathfinder_bfs(
             # Check if move can be skipped (for speed)
             if check_skip_move(
                 nxt_coords,
+                tgt_coords,
                 taken,
+                critical_beams,
+                src_tgt_ids,
                 second_pass,
                 bounding_box,
                 full_path_coords,
+                curr_kind,
                 curr_path_coords,
                 mid_coords,
-                clash_coords,
             ):
                 continue
 
@@ -315,13 +270,6 @@ def core_pathfinder_bfs(
 
             # Loop over all possible next types
             for possible_nxt_kind in possible_nxt_kinds:
-                # Ensure second pass is robust
-                try:
-                    _ = path[current_block]
-                    _ = get_taken_coords(path[current_block])
-                except (ValueError, KeyError):
-                    continue
-
                 # Check if next kind needs to be rotated due to Hadamard
                 nxt_type = validate_nxt_kind(current_block, nxt_coords, possible_nxt_kind, hdm)
                 nxt_block: StandardBlock = (nxt_coords, nxt_type)
@@ -475,93 +423,3 @@ def _check_for_success_std_edge(
             return True
 
     return False
-
-
-def _check_for_success_cross_edge(
-    current_block: StandardCoord,
-    tgt_coords: list[StandardCoord],
-    src_tgt_ids: tuple[int, int],
-    queue: deque,
-    visited: dict[tuple[StandardBlock, StandardCoord], int],
-    unbreakable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
-    negotiable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
-    path: dict[StandardBlock, list[StandardBlock]],
-    valid_paths: dict[StandardBlock, list[StandardBlock]],
-    forbidden_paths: dict[StandardBlock, list[StandardBlock]],
-    clash_coords: list[StandardCoord],
-) -> bool:
-    """Check if success was achieved when running on standard edge mode.
-
-    Args:
-        current_block: The coordinates and kind of the current block.
-        tgt_coords: The final "target" coordinates at which path should arrive.
-        src_tgt_ids (optional): The exact IDs of the source and target cubes.
-        queue: The pathfinder's BFS primary queue.
-        visited: All visited sites by the pathfinder BFS.
-        unbreakable_beams: The joint beam coordinates for nodes that need all beams they currently have.
-        negotiable_beams: A minified `critical_beams` object containing beams for nodes that can lose some beams.
-        path: The full path object for the entire BFS.
-        valid_paths: All paths found in round covering some or all tent_coords.
-        forbidden_paths: Paths that reached the target coordinates but were previously rejected.
-        clash_coords: A list of coordinates that have been deemed problematic throughout the course of the pathfinder BFS.
-
-    Return:
-        queue: The pathfinder's BFS primary queue.
-        visited: All visited sites by the pathfinder BFS.
-        forbidden_paths: Paths that reached the target coordinates but were previously rejected.
-        clash_coords: A list of coordinates that have been deemed problematic throughout the course of the pathfinder BFS.
-        valid_paths: All paths found in round covering some or all tent_coords.
-        break_flag: True if success was achieved in this iteration, else False.
-
-    """
-
-    _, curr_coords = current_block
-
-    break_flag = False
-    if path[current_block] not in forbidden_paths:
-        full_path_coords = get_taken_coords(path[current_block])
-        if tgt_coords in full_path_coords:
-            full_path_coords.remove(tgt_coords)
-
-        unbreakable_ok, new_problem_coords = check_unbreakable_beams(
-            unbreakable_beams, full_path_coords, src_tgt_ids
-        )
-        clash_coords.extend(new_problem_coords)
-
-        negotiable_beams_ok = check_critical_beams(
-            negotiable_beams, full_path_coords, curr_coords, tgt_coords, src_tgt_ids
-        )
-
-        if unbreakable_ok and negotiable_beams_ok:
-            valid_paths[current_block] = path[current_block]
-            break_flag = True
-
-        else:
-            forbidden_paths.append(path[current_block])
-
-            new_path = {}
-            good_visited = []
-            for k, p in path.items():
-                path_coords = [i[0] for i in p]
-                problem_coords_indexes = [
-                    path_coords.index(c) for c in path_coords if c in clash_coords
-                ]
-                if problem_coords_indexes:
-                    good_path_ends = min(
-                        [path_coords.index(c) for c in path_coords if c in clash_coords]
-                    )
-                    good_path = p[:good_path_ends]
-                    new_path[good_path[-1]] = good_path
-                    good_visited.extend([i[0] for i in good_path])
-                else:
-                    new_path[k] = p
-            path = new_path
-            good_visited = list(set(good_visited))
-
-            new_visited = {k: v for k, v in visited.items() if k[0][0] in good_visited}
-            visited = new_visited
-
-            new_queue = deque([k for k in path.keys()])
-            queue = new_queue
-
-    return queue, visited, forbidden_paths, clash_coords, valid_paths, break_flag
