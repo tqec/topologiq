@@ -392,34 +392,3 @@ def _check_for_success(
             return True
 
     return False
-
-
-def _check_for_success_std_edge(
-    current_block: StandardCoord,
-    tent_tgt_kinds: list[str],
-    path: dict[StandardBlock, list[StandardBlock]],
-    valid_paths: dict[StandardBlock, list[StandardBlock]],
-    tgts_to_fill: int,
-) -> bool:
-    """Check if success was achieved when running on standard edge mode.
-
-    Args:
-        current_block: The coordinates and kind of the current block.
-        tent_tgt_kinds: A list of kinds matching the zx-type of target block.
-        path: The full path object for the entire BFS.
-        valid_paths: All paths found in round covering some or all tent_coords.
-        tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
-
-    Return:
-        [bool]: True if success was achieved in this iteration, else False.
-
-    """
-
-    _, curr_kind = current_block
-    if tent_tgt_kinds == ["ooo"] or curr_kind in tent_tgt_kinds:
-        valid_paths[current_block] = path[current_block]
-        tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
-        if tgts_filled >= tgts_to_fill:
-            return True
-
-    return False
