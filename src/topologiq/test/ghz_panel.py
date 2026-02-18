@@ -17,7 +17,7 @@ from pyzx.graph.base import BaseGraph
 from qiskit import qasm2
 from qiskit.circuit import QuantumCircuit
 
-from topologiq.core.graph_manager.bfs import runner
+from topologiq.core.graph_manager.graph_manager import runner
 from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.utils.classes import Colors, StandardBlock
