@@ -6,7 +6,8 @@ Usage:
 """
 
 #from topologiq.core.pathfinder.beams import check_critical_beams
-from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.core.pathfinder.beams import check_critical_beams
+from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 
 
 #######################
@@ -176,13 +177,16 @@ def gen_bounding_box(
 ##########
 def check_skip_move(
     nxt_coords: StandardCoord,
+    tgt_coords: list[StandardCoord],
     taken: list[StandardCoord],
+    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    src_tgt_ids: tuple[int, int],
     second_pass: bool,
-    bounding_box,
+    bounding_box: dict[str, dict[str, int]],
     full_path_coords: list[StandardCoord],
+    curr_kind: str,
     curr_path_coords: list[StandardCoord],
     mid_coords: tuple[int, int, int] | None,
-    clash_coords: list[StandardCoord],
 ) -> bool:
     """Check if current move should be skipped to speed up pathfinding process.
 
@@ -202,7 +206,7 @@ def check_skip_move(
 
     """
 
-    if nxt_coords in taken or nxt_coords in full_path_coords or nxt_coords in clash_coords:
+    if nxt_coords in taken or nxt_coords in full_path_coords:
         return True
 
     nxt_x, nxt_y, nxt_z = nxt_coords
@@ -220,5 +224,11 @@ def check_skip_move(
     # Adjust coords and taken coords for pipes
     if mid_coords and (mid_coords in curr_path_coords or mid_coords in taken):
         return True
+
+    if critical_beams and "o" not in curr_kind:
+        if not check_critical_beams(
+            critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
+        ):
+            return True
 
     return False
