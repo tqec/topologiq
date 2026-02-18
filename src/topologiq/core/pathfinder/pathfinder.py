@@ -295,14 +295,10 @@ def core_pathfinder_bfs(
             # Check if move can be skipped (for speed)
             if check_skip_move(
                 nxt_coords,
-                tgt_coords,
                 taken,
-                critical_beams,
-                src_tgt_ids,
                 second_pass,
                 bounding_box,
                 full_path_coords,
-                curr_kind,
                 curr_path_coords,
                 mid_coords,
                 clash_coords,
