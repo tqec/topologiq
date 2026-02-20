@@ -77,13 +77,13 @@ def check_critical_beams(
 
                 src_tgt_adjust = 1 if in_id in src_tgt_ids else 0
                 in_pending = 1 if in_id not in src_tgt_ids else in_min_exit_num
-                if len(in_beams_short) + src_tgt_adjust - in_clash_tracker < in_pending:
+                if len(in_beams_short) + src_tgt_adjust - in_clash_tracker < min(in_pending, 1):
                     return False
 
         # Determine if clashes are within tolerance
         src_tgt_adjust = 1 if out_id in src_tgt_ids else 0
         out_pending = 1 if out_id not in src_tgt_ids else out_min_exit_num
-        if len(out_beams_short) + src_tgt_adjust - sum(out_clash_tracker) < out_pending:
+        if len(out_beams_short) + src_tgt_adjust - sum(out_clash_tracker) < min(out_pending, 1):
             return False
 
     return True
