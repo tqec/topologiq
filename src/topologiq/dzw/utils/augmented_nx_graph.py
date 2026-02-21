@@ -1,4 +1,5 @@
-from collections import deque
+from collections import deque, defaultdict
+from enum import Enum
 
 import pyzx as zx
 import networkx as nx
@@ -14,6 +15,13 @@ from topologiq.dzw.utils.path import Path
 from logging import getLogger
 console = getLogger(__name__)
 
+class LayerTransitionType(Enum):
+    EVERY = 0
+    LOWER = 1
+    INTRA = 2
+    UPPER = 3
+    OUTER = 4
+
 # TODO: figure out what the other VertexType and EdgeType represent
 # TODO: how do we deal with the last four VertexType (i.e. H_BOX, W_INPUT, W_OUTPUT, Z_BOX) ?
 # TODO: do we need the last EdgeType (i.e. W_IO) ?
@@ -22,6 +30,8 @@ console = getLogger(__name__)
 # TODO: construction of animation
 class AugmentedNxGraph:
     KEY_ZX_NODE_TYPE = 'zx_node_type'
+    KEY_ZX_NODE_QUBIT = 'zx_node_qubit'
+    KEY_ZX_NODE_LAYER = 'zx_node_layer'
     KEY_ZX_EDGE_TYPE = 'zx_edge_type'
     KEY_ZX_EDGES_REALISED = 'zx_edges_realised'
     KEY_ZX_BG_CUBE = 'zx_bg_cube'
@@ -40,6 +50,10 @@ class AugmentedNxGraph:
         self.__zx_graph = nx.Graph()
         self.__bg_graph = nx.Graph()
 
+        # Keeps track of which nodes appear on which qubit-line or layer of the ZX-graph
+        self.__zx_qubits: dict[int, list[NodeId]] = defaultdict(list)
+        self.__zx_layers: dict[int, list[NodeId]] = defaultdict(list)
+
         # Tracks the order in which nodes and edges from the ZX graph were realised into the Blockgraph
         self.__zx_node_realisation_order = []
         self.__zx_edge_realisation_order = []
@@ -51,6 +65,15 @@ class AugmentedNxGraph:
         for node in zx_graph.vertices():
             self.__zx_graph.add_node(node)
             self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE] = NodeType.convert(zx_graph.type(node))
+
+            node_qubit = zx_graph.qubit(node)
+            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
+            self.__zx_qubits[node_qubit].append(node)
+
+            node_layer = zx_graph.row(node)
+            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
+            self.__zx_layers[node_layer].append(node)
+
             self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] = 0
             self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] = None
 
@@ -75,14 +98,46 @@ class AugmentedNxGraph:
     def get_edge_realisation_order(self):
         return self.__zx_edge_realisation_order
 
+    def get_qubits(self):
+        return self.__zx_qubits.keys()
+
+    def get_qubit(self, node) -> int:
+        return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT]
+
     def get_nodes(self):
         return self.__zx_graph.nodes()
 
     def number_of_nodes(self) -> int:
         return self.__zx_graph.number_of_nodes()
 
-    def get_edges(self):
-        return self.__zx_graph.edges()
+    def get_layers(self):
+        return self.__zx_layers.keys()
+
+    def get_layer(self, layer):
+        return self.__zx_layers[layer]
+
+    def get_layer_density(self, layer: int) -> tuple[int,int]:
+        layer_nodes = self.get_layer(layer)
+        number_of_nodes = len(layer_nodes)
+        number_of_edges = 0
+        for node in layer_nodes:
+            number_of_edges += sum(1 for _ in self.get_node_neighbours(node, transition = LayerTransitionType.INTRA))
+        number_of_edges = number_of_edges // 2
+        return number_of_nodes, number_of_edges
+
+    def get_edges(self, layer: int, transition: LayerTransitionType = LayerTransitionType.EVERY):
+        if transition == LayerTransitionType.LOWER:
+            filtering = lambda edge : self.get_node_layer(edge[0]) <  layer == self.get_node_layer(edge[1])
+        elif transition == LayerTransitionType.INTRA:
+            filtering = lambda edge : self.get_node_layer(edge[0]) == layer == self.get_node_layer(edge[1])
+        elif transition == LayerTransitionType.UPPER:
+            filtering = lambda edge : self.get_node_layer(edge[0]) == layer <  self.get_node_layer(edge[1])
+        elif transition == LayerTransitionType.OUTER:
+            filtering = lambda edge : self.get_node_layer(edge[0]) <  layer <  self.get_node_layer(edge[1])
+        else:
+            filtering = lambda edge : True
+
+        return filter(filtering, self.__zx_graph.edges())
 
     def number_of_edges(self) -> int:
         return self.__zx_graph.number_of_edges()
@@ -105,8 +160,19 @@ class AugmentedNxGraph:
     def get_edges_unrealised(self, node: NodeId):
         return self.get_degree(node) - self.get_edges_realised(node)
 
-    def get_node_neighbours(self, node: NodeId):
-        return self.__zx_graph.neighbors(node)
+    def get_node_neighbours(self, node: NodeId, transition: LayerTransitionType = LayerTransitionType.EVERY):
+        if transition == LayerTransitionType.EVERY:
+            filtering = lambda other : True
+        elif transition == LayerTransitionType.LOWER:
+            filtering = lambda other : self.get_node_layer(other) < self.get_node_layer(node)
+        elif transition == LayerTransitionType.INTRA:
+            filtering = lambda other : self.get_node_layer(other) == self.get_node_layer(node)
+        elif transition == LayerTransitionType.UPPER:
+            filtering = lambda other : self.get_node_layer(node) < self.get_node_layer(other)
+        else: #transition == LayerTransitionType.OUTER
+            raise Exception(f"Requesting OUTER transition type for node neighbours. Will always be empty.")
+
+        return filter(filtering, self.__zx_graph.neighbors(node))
 
     def get_cube_neighbours(self, cube: CubeId):
         return self.__bg_graph.neighbors(cube)
@@ -131,6 +197,9 @@ class AugmentedNxGraph:
 
     def get_node_type(self, node: NodeId) -> NodeType:
         return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE]
+
+    def get_node_layer(self, node: int) -> int:
+        return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER]
 
     def get_cube_position(self, cube: CubeId) -> Coordinates:
         return self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE_POSITION]
