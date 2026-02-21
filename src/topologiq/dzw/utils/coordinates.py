@@ -27,6 +27,12 @@ class Coordinates:
     def __sub__(self, other):
         return Coordinates(self.x - other.x, self.y - other.y, self.z - other.z)
 
+    def __mul__(self, scalar):
+        if isinstance(scalar, (int, float)):
+            return Coordinates(self.x * scalar, self.y * scalar, self.z * scalar)
+        raise NotImplemented("Scalar multiplication requires <int> or <float>.")
+    __rmul__ = __mul__
+
     def dmul(self, other):
         return Coordinates(self.x * other.x, self.y * other.y, self.z * other.z)
 
@@ -55,6 +61,9 @@ class Coordinates:
     # The coordinates are coplanar if they share two identical components
     def coplanar(self, other) -> bool:
         return self.__different_components(other) == 2
+
+    def __len__(self):
+        return 3
 
     def __iter__(self):
         return iter((self.x, self.y, self.z))
