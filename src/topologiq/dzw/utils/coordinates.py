@@ -33,17 +33,23 @@ class Coordinates:
         raise NotImplemented("Scalar multiplication requires <int> or <float>.")
     __rmul__ = __mul__
 
+    def __truediv__(self, scalar: float):
+        return Coordinates(self.x / scalar, self.y / scalar, self.z / scalar)
+
     def dmul(self, other):
         return Coordinates(self.x * other.x, self.y * other.y, self.z * other.z)
 
-    def div(self, scalar: float):
-        return Coordinates(self.x / scalar, self.y / scalar, self.z / scalar)
 
     def normalized(self):
-        return self.div(sqrt(self.dot(self)))
+        return self / sqrt(self.dot(self))
 
     def dot(self, other) -> float:
         return sum([ s * o for s, o in zip(self, other) ])
+
+    def cross(self, other):
+        return Coordinates(self.y * other.z - self.z * other.y,
+                           self.z * other.x - self.x * other.z,
+                           self.x * other.y - self.y * other.x)
 
     def get_manhattan_distance(self, other):
         return sum([ abs(s - o) for s, o in zip(self, other) ])
