@@ -125,7 +125,10 @@ class AugmentedNxGraph:
         number_of_edges = number_of_edges // 2
         return number_of_nodes, number_of_edges
 
-    def get_edges(self, layer: int, transition: LayerTransitionType = LayerTransitionType.EVERY):
+    def get_edges(self):
+        return self.__zx_graph.edges()
+
+    def get_layered_edges(self, layer: int, transition: LayerTransitionType = LayerTransitionType.EVERY):
         if transition == LayerTransitionType.LOWER:
             filtering = lambda edge : self.get_node_layer(edge[0]) <  layer == self.get_node_layer(edge[1])
         elif transition == LayerTransitionType.INTRA:
