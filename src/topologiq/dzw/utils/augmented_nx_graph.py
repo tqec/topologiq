@@ -92,10 +92,10 @@ class AugmentedNxGraph:
         if max_degree > 4:
             raise NotImplemented("Enforcement of no-more-than-four-legs condition not implemented.")
 
-    def get_node_realisation_order(self):
+    def get_node_realisation_order(self) -> list[NodeId]:
         return self.__zx_node_realisation_order
 
-    def get_edge_realisation_order(self):
+    def get_edge_realisation_order(self) -> list[tuple[NodeId, NodeId]]:
         return self.__zx_edge_realisation_order
 
     def get_qubits(self):
@@ -180,7 +180,7 @@ class AugmentedNxGraph:
     def get_cube_neighbours(self, cube: CubeId):
         return self.__bg_graph.neighbors(cube)
 
-    def get_degree(self, node: NodeId):
+    def get_degree(self, node: NodeId) -> float:
         return self.__zx_graph.degree[node]
 
     def is_boundary(self, node: NodeId) -> bool:
@@ -192,10 +192,10 @@ class AugmentedNxGraph:
     def is_cube_placed(self, cube: CubeId) -> bool:
         return cube in self.__bg_graph
 
-    def get_cube(self, node: NodeId):
+    def get_cube(self, node: NodeId) -> CubeId:
         return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE]
 
-    def get_node(self, cube: CubeId):
+    def get_node(self, cube: CubeId) -> NodeId:
         return self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_ZX_NODE]
 
     def get_node_type(self, node: NodeId) -> NodeType:
@@ -216,7 +216,7 @@ class AugmentedNxGraph:
     def get_edge_type(self, source: NodeId, target: NodeId) -> EdgeType:
         return self.__zx_graph.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_EDGE_TYPE)
 
-    def get_edge_realisation(self, source: NodeId, target: NodeId):
+    def get_edge_realisation(self, source: NodeId, target: NodeId) -> Path:
         return self.__zx_graph.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_BG_PATH)
 
     def is_node_realised(self, node: NodeId) -> bool:
@@ -324,7 +324,7 @@ class AugmentedNxGraph:
         self.connect_pipe(previous_cube, target_cube, final_pipe_type)
 
         # Associate the path as a realisation of the edge
-        self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = extras
+        self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = proposed_path
 
         # One more edge has been realised
         self.__zx_graph.nodes[source][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] += 1

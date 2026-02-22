@@ -46,7 +46,7 @@ class ReportFormatter:
 
         previous_kind = source_kind
         previous_position = source_position
-        for current_cube in self.__nx_graph.get_edge_realisation(source, target):
+        for current_cube in self.__nx_graph.get_edge_realisation(source, target).get_extra_cubes():
             current_kind = self.__nx_graph.get_cube_kind(current_cube)
             current_position = self.__nx_graph.get_cube_position(current_cube)
             # Infer needed pipe

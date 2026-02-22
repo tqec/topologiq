@@ -122,7 +122,7 @@ class TikzWriter:
                 plain_cubes.add(source_cube)
                 plain_cubes.add(target_cube)
                 current = source_cube
-                extra_cubes = self.__nx_graph.get_edge_realisation(source, target)
+                extra_cubes = self.__nx_graph.get_edge_realisation(source, target).get_extra_cubes()
                 for extra_cube in extra_cubes:
                     plain_cubes.add(extra_cube)
                     pipe = (current, extra_cube) if current < extra_cube else (extra_cube, current)
