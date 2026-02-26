@@ -36,6 +36,7 @@ class AugmentedNxGraph:
     KEY_ZX_EDGES_REALISED = 'zx_edges_realised'
     KEY_ZX_BG_CUBE = 'zx_bg_cube'
     KEY_ZX_BG_PATH = 'zx_bg_path'
+    KEY_ZX_BG_ALTERNATIVE_PATHS = 'zx_bg_alternative_paths'
 
     KEY_BG_ZX_NODE   = 'bg_zx_node'
     KEY_BG_CUBE_KIND = 'bg_cube_kind'
@@ -219,6 +220,9 @@ class AugmentedNxGraph:
     def get_edge_realisation(self, source: NodeId, target: NodeId) -> Path:
         return self.__zx_graph.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_BG_PATH)
 
+    def get_edge_alternatives(self, source: NodeId, target: NodeId) -> list[Path]:
+        return self.__zx_graph.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_BG_ALTERNATIVE_PATHS)
+
     def is_node_realised(self, node: NodeId) -> bool:
         return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] is not None
 
@@ -263,7 +267,7 @@ class AugmentedNxGraph:
     def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
         return self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] is not None
 
-    def realise_edge(self, source: NodeId, target: NodeId, proposed_path: Path):
+    def realise_edge(self, source: NodeId, target: NodeId, proposed_path: Path, alternative_paths: list[Path] = None):
         if not self.is_node_realised(source):
             raise Exception(f"{source} is not placed; cannot connect with a path.")
 
@@ -328,6 +332,7 @@ class AugmentedNxGraph:
         # Associate the path as a realisation of the edge
         proposed_path.set_cube_ids(cube_ids)
         self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = proposed_path
+        self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_ALTERNATIVE_PATHS] = alternative_paths
 
         # One more edge has been realised
         self.__zx_graph.nodes[source][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] += 1
