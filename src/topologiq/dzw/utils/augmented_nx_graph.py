@@ -294,7 +294,7 @@ class AugmentedNxGraph:
         console.info(f"Realising edge {source}-{target} [type={self.get_edge_type(source,target)}] with extra cubes : {sequence}")
 
         # Representation of the path that will go into edge_realisations
-        extras = []
+        cube_ids = [ source_cube ]
 
         # Add all the extra cubes and pipes of the path to the BlockGraph
         previous_cube: int = source_cube
@@ -313,7 +313,7 @@ class AugmentedNxGraph:
             self.connect_pipe(previous_cube, current_cube, current_pipe_type)
 
             # Extend the sequence of extra node ids
-            extras.append(current_cube)
+            cube_ids.append(current_cube)
 
             # Prepare for the next iteration
             previous_cube = current_cube
@@ -323,7 +323,10 @@ class AugmentedNxGraph:
         final_pipe_type = proposed_pipes[-1]
         self.connect_pipe(previous_cube, target_cube, final_pipe_type)
 
+        cube_ids.append(target_cube)
+
         # Associate the path as a realisation of the edge
+        proposed_path.set_cube_ids(cube_ids)
         self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = proposed_path
 
         # One more edge has been realised

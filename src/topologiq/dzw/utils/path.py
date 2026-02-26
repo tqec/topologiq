@@ -24,6 +24,7 @@ class Path:
         self.__proposed_cube_beams = proposed_beams
         self.__cubes = proposed_cubes
         self.__pipes = proposed_pipes
+        self.__cube_ids = None
         self.__cube_beams = None
         self.__total_beams_interrupted = None
 
@@ -41,6 +42,12 @@ class Path:
 
     def get_target_position(self):
         return self.__target_position
+
+    def set_cube_ids(self, cube_ids: list[CubeId]):
+        self.__cube_ids = cube_ids
+
+    def get_cube_ids(self):
+        return self.__cube_ids
 
     def get_cubes(self):
         return self.__cubes
