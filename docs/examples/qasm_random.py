@@ -22,6 +22,7 @@ from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 from topologiq.utils.classes import Colors, StandardBlock
 from topologiq.utils.core import datetime_manager
+from topologiq.utils.read_write import write_bgraph
 
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent.parent
@@ -176,17 +177,12 @@ def save_test_results_to_file(
 
     """
 
+    # Create output directory if it doesn't already exist
     os.makedirs(output_dir, exist_ok=True)
-    path_to_bgraph_file = output_dir / f"{circuit_name}.bgraph"
-    with open(path_to_bgraph_file, "w") as f:
-        f.write("BLOCKGRAPH 0.1.0;\n")
-        f.write("\nCUBES: key;(x, y, z);kind;\n")
-        f.writelines(
-            [f"{key};{cube_info[0]};{cube_info[1]};\n" for key, cube_info in lat_nodes.items()]
-        )
 
-        f.write("\nPIPES: (src, tgt),kind;\n")
-        f.writelines([f"{key};{pipe_info[0]};\n" for key, pipe_info in lat_edges.items()])
+    # Write to bgraph file
+    path_to_output_file = output_dir / f"{circuit_name}.bgraph"
+    write_bgraph(path_to_output_file, lat_nodes, lat_edges)
 
 
 # ...

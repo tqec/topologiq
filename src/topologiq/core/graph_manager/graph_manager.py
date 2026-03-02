@@ -47,7 +47,7 @@ from topologiq.vis.common import lattice_to_g
 #########
 # PATHS #
 #########
-REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent.parent
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent.parent.parent
 OUTPUT_DIR_PATH = REPO_ROOT / "output/txt"
 TEMP_DIR_PATH = REPO_ROOT / "output/temp"
 

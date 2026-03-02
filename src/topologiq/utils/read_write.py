@@ -64,6 +64,43 @@ HEADER_PARAMS_STATS = [
 ############
 # WRITE  #
 ############
+def write_bgraph(
+    path_to_output_file: Path | str,
+    lat_nodes: dict[int, StandardBlock],
+    lat_edges: dict[tuple[int, int], list[str]],
+    in_spiders: list[int] = [],
+    out_spiders: list[int] = [],
+):
+    """Write final outputs to a `.bgraph` file.
+
+    Args:
+        path_to_output_file: Path to the .bgraph file being written.
+        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
+        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
+        in_spiders: A list of in/start (depth=0) boundary spiders.
+        out_spiders: A list of out/end (depth=depth) boundary spiders
+
+    """
+
+    with open(path_to_output_file, "w") as f:
+        f.write("BLOCKGRAPH 0.1.0;\n")
+        f.write("\nCUBES: index;x;y;z;kind;label;\n")
+        f.writelines(
+            [
+                f"{cube_id};{';'.join([str(c) for c in cube_info[0]])};{cube_info[1]};{add_port_label(cube_id, in_spiders, out_spiders)};\n"
+                for cube_id, cube_info in lat_nodes.items()
+            ]
+        )
+
+        f.write("\nPIPES: src;tgt;kind;\n")
+        f.writelines(
+            [
+                f"{src_id!s};{src_id!s};{pipe_info[0]};\n"
+                for (src_id, tgt_id), pipe_info in lat_edges.items()
+            ]
+        )
+
+
 def write_outputs(
     simple_graph: SimpleDictGraph,
     circuit_name: str,
@@ -250,7 +287,8 @@ def prep_stats_n_log(
             repo_root: Path = Path(__file__).resolve().parent.parent
             stats_dir_path = repo_root / "assets/stats"
             path_to_debug_file = (
-                stats_dir_path / f"debug{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}.csv"
+                stats_dir_path
+                / f"debug{'_tests' if kwargs['log_stats_id'].endswith('*') else ''}.csv"
             )
 
             if path_to_debug_file.is_file():
@@ -326,6 +364,26 @@ def log_stats(stats_line: list[Any], stats_type: str, opt_header: list[str] = []
         f.close()
 
 
+def add_port_label(cube_id: int, in_spiders: list[int], out_spiders: list[int]) -> str:
+    """Return a label for an arbitrary cube_id depending on whether the ID corresponds to a boundary spider in the original ZX graph.
+
+    Args:
+        cube_id: The ID of the cube being examined.
+        in_spiders: A list of in/start (depth=0) boundary spiders.
+        out_spiders: A list of out/end (depth=depth) boundary spiders
+
+    Returns:
+        label: An appropriately formatted in or out port label, or empty string if ID is not a boundary.
+
+    """
+    label = ""
+    if cube_id in in_spiders:
+        label = f"in_{in_spiders.index(cube_id)}"
+    if cube_id in out_spiders:
+        label = f"out_{out_spiders.index(cube_id)}"
+    return label
+
+
 ###########
 # READ #
 ###########
@@ -365,14 +423,7 @@ def get_debug_cases(path_to_stats: Path) -> list[tuple[str, int, str]]:
         log_stats_id = kwargs["log_stats_id"]
         first_id, first_kind = list(literal_eval(case[4])[0].items())[0]
         debug_cases.append(
-            (
-                circuit_name,
-                first_id,
-                first_kind,
-                log_stats_id,
-                first_id_strategy,
-                seed
-            )
+            (circuit_name, first_id, first_kind, log_stats_id, first_id_strategy, seed)
         )
 
     return debug_cases
