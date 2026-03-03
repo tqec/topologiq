@@ -78,7 +78,9 @@ def vis_3d(
         src_tgt_ids (optional): The IDs of the (src, tgt) spiders/blocks for the pathfinder iteration.
         fig_data (optional): The Matplotlib figure of the input graph (used as optional overlay).
         filename_info (optional): The name of circuit and a iteration number needed to name any saved files.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
@@ -386,7 +388,11 @@ def vis_3d(
                 f.close()
 
     # Show
-    if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or (kwargs["vis_options"][0] == "final" and is_final_vis):
+    if (
+        kwargs["debug"] > 1
+        or kwargs["vis_options"][0] == "detail"
+        or (kwargs["vis_options"][0] == "final" and is_final_vis)
+    ):
         plt.show()
     else:
         plt.close()

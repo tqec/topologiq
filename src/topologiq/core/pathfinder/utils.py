@@ -165,4 +165,3 @@ def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord])
         return max([get_manhattan(src_coord, c) for c in all_coords])
 
     return 0
-

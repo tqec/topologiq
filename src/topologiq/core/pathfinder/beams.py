@@ -237,4 +237,3 @@ def check_negotiable_beams(
             return False
 
     return True
-

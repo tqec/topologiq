@@ -196,7 +196,9 @@ def prep_stats_n_log(
         tgt_zx_type: The ZX type of a target spider/cube
         visit_stats: Statistics about the number of visitation attempts and visits in a given pathfinder iteration.
         cross_edge: False if pathfinder ran to add a new cube, True if it found edge between existing cubes.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Keyword arguments (kwargs):
         See "CONSTANTS" for all possibilities.

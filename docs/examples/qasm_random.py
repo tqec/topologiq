@@ -55,7 +55,9 @@ def manage_single_qasm_test(
         log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
         save_to_file (optional): True to save the results to a `.bgraph` file, else False.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Return:
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.

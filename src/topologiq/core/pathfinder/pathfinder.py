@@ -79,7 +79,9 @@ def pathfinder(
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         valid_paths: All paths found in round, covering some or all tent_coords.
@@ -193,7 +195,9 @@ def core_pathfinder_bfs(
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): An object containing beams considered critical for future operations.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         valid_paths: All paths found in round covering some or all tent_coords.

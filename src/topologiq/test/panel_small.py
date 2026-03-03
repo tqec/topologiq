@@ -48,14 +48,19 @@ def run_panel_of_small_circuits():
 
     # List of circuits to test
     all_pyzx_circuits = ["cnot", "cnots", "simple_mess"]
-    all_simple_graph_circuits = ["steane", "steane_obfs", "hadamard_line", "hadamard_bend", "hadamard_mess"]
+    all_simple_graph_circuits = [
+        "steane",
+        "steane_obfs",
+        "hadamard_line",
+        "hadamard_bend",
+        "hadamard_mess",
+    ]
 
     # List of available strategies for choosing a first ID
     all_first_id_strategies = ["first_spider", "centrality_majority", "centrality_random"]
 
     for circuit_name in all_pyzx_circuits + all_simple_graph_circuits:
         for strategy in all_first_id_strategies:
-
             # Test 10 times for deterministic approaches and 100 for probabilistic ones
             kwargs["max_attempts"] = 100 if "random" in strategy else 10
 

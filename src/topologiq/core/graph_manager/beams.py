@@ -133,7 +133,9 @@ def check_tgt_beam_clashes(
         tgt_degree: The number of neighbours of the potential target cube.
         beams_broken_by_path (optional): A pre-existent count of broken beams.
         strict (optional): Whether to perform a strict or loose check.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         clash: False if no critical beam clashed found, else True.
@@ -182,6 +184,7 @@ def check_tgt_beam_clashes(
 
     return clash, beams_broken_by_path
 
+
 ###############
 # CROSS EDGES #
 ###############
@@ -192,6 +195,7 @@ def check_tgt_beam_clashes(
 # At the moment, I favour moving cross edges out of the pathfinder.
 # It is cheaper to test a full path once at the end than to check many times
 # on each move. Not everyone agrees with this assessment.
+
 
 ##############
 # LOOK-AHEAD #

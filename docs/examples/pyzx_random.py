@@ -28,17 +28,15 @@ from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 ####################
 # MAIN RUN MANAGER #
 ####################
-def run_random(
-    pyzx_graph: BaseGraph | GraphS,
-    fig_data: matplotlib.figure.Figure,
-    **kwargs
-):
+def run_random(pyzx_graph: BaseGraph | GraphS, fig_data: matplotlib.figure.Figure, **kwargs):
     """Run a single random PyZX graph m_times.
 
     Args:
         pyzx_graph: The random PyZX graph.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     """
 
@@ -85,7 +83,9 @@ if __name__ == "__main__":
 
     # Get a valid random PyZX circuit graph
     graph_type = "cnot"  # Tells PyZX to generate a circuit based on CNOTS
-    pyzx_graph, fig_data = random_graph(qubit_n, depth, graph_type=graph_type, draw_graph=True, **kwargs)
+    pyzx_graph, fig_data = random_graph(
+        qubit_n, depth, graph_type=graph_type, draw_graph=True, **kwargs
+    )
 
     # Build and run Topologiq on random graph
     run_random(

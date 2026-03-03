@@ -60,7 +60,9 @@ def handle_std_edge(
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         twin_mode (optional): True when this function is used to create a twin of a given cube.
         ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
@@ -257,7 +259,9 @@ def handle_cross_edge(
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
         circuit_name: The name of the ZX circuit.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         taken: Updated list of all coordinates occupied by any blocks/pipes, including any placed by this function iteration.

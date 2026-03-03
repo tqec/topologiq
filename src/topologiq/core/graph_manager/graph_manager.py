@@ -78,10 +78,9 @@ def runner(
         circuit_name: The name of the ZX circuit.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
-        **kwargs: !
-
-            ! If a given kwarg is not given explicitly, this function will create it based on `./src/topologiq/run_hyperparams.py`.
-            By extension, it only makes sense to give kwargs initially to deviate from defaults.
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         simple_graph: The original `simple_graph` given to function (returned for ease of use and traceability).
@@ -214,7 +213,9 @@ def graph_manager_bfs(
         circuit_name: The name of the ZX circuit.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
@@ -330,7 +331,9 @@ def do_bfs(
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         trackers: A list containing several trackers used to track Topologiq statistics.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         edge_paths: Updated edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.

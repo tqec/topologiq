@@ -150,7 +150,9 @@ def random_graph(
             "cnot": A graph composed of only CNOTs.
             "cnot_had_phase": A graph with CNOTs, Hadamards, and phases.
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         pyzx_graph: The PyZX graph corresponding to the requested circuit.

@@ -101,9 +101,9 @@ def run_debug():
                     print("Exiting debug mode.\n")
                     break
 
-                circuit_name, first_id, first_kind, log_stats_id, first_id_strategy, random_seed = debug_cases[
-                    case_number
-                ]
+                circuit_name, first_id, first_kind, log_stats_id, first_id_strategy, random_seed = (
+                    debug_cases[case_number]
+                )
 
                 break
             except (ValueError, KeyError, IndexError):
