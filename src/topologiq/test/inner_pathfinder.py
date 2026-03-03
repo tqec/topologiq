@@ -1,8 +1,10 @@
-"""Test the inner pathfinder algorithm.
+"""Test panel for the inner pathfinder algorithm.
 
-This file allows testing the inner pathfinder algorithm with a combination of
-source and target kinds/zx types. Using the default setup, the pathfinder should
-return 4 valid paths for any given combination of src_kind and tgt_zx_type.
+This script allows testing the inner pathfinder algorithm with a combination of
+src and tgt kinds/types. Using the default setup, the pathfinder should return
+4 valid paths for any given combination of src_kind and tgt_zx_type.
+The script is not yet tied to an automated testing pipeline,
+but is meant to eventually be used for the said purpose.
 
 Usage:
     Run the file to trigger tests.
@@ -59,7 +61,7 @@ def test_pathfinder(src_kinds: list[str], tgt_zx_types: list[str], step: int = 3
             for tgt_zx_type in tgt_zx_types:
                 # Start timer for individual test
                 t_1, _ = datetime_manager()
-                print("Testing", src_block, "-->", tgt_zx_type)
+                print("===> Testing", src_block, "-->", tgt_zx_type)
 
                 valid_paths, _ = pathfinder(
                     src_block,
@@ -74,7 +76,9 @@ def test_pathfinder(src_kinds: list[str], tgt_zx_types: list[str], step: int = 3
                 _, duration_iter = datetime_manager(t_1=t_1)
 
                 print(
-                    f"==> TEST ENDS. Received: {len(valid_paths)} valid paths. Duration: {duration_iter * 1000:.2f}ms\n",
+                    f"Manhattan distance between src and tgt: {step}.",
+                    f"\nNum paths received: {len(valid_paths)} valid paths."
+                    f"\nDuration: {duration_iter * 1000:.2f}ms\n",
                 )
 
 
@@ -82,4 +86,5 @@ if __name__ == "__main__":
     src_kinds = ["zzx", "zxz", "xzz", "xxz", "xzx", "zxx"]
     tgt_zx_types = ["X", "Z"]
     step = 3
+
     test_pathfinder(src_kinds, tgt_zx_types, step=step)

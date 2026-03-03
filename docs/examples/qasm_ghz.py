@@ -1,8 +1,8 @@
-"""Run test using a couple GHZ circuits encoded as QASM.
+"""Example of how to use Topologiq to perform LS on GHZ circuits encoded as QASM.
 
-This script tests Topologiq performance using a couple canonical GHZ circuits
-saved as QASM file. After each run, outputs are saved to a `.bgraph` file in
-`./outputs/bgraph/`.
+This script contains an example of how to use Topologiq to perform algorithmic lattice
+surgery (LS) using a couple GHZ circuits saved as QASM file. Outputs are saved to
+a `.bgraph` file in `./outputs/bgraph/`.
 
 Usage:
     Run script as given.

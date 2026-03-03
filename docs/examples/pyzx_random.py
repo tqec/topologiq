@@ -1,8 +1,7 @@
-"""Example using a random PyZX graphs of arbitrary dimensions.
+"""Example of how to use Topologiq to perform LS on random PyZX graphs.
 
 This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery on a random PyZX graphs. The script is meant as an example of what Topologiq can do
-but can also be used as the base for running automated randomised tests.
+surgery (LS) on random PyZX graphs.
 
 Usage:
     Run script as given.

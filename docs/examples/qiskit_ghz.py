@@ -1,7 +1,7 @@
-"""Example using a 16-qubit GHZ circuit produced using Qiskit.
+"""Example of how to use Topologiq to perform LS on a 16-qubit GHZ designed in Qiskit.
 
 This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery on a 16-qubit GHZ circuit designed using Qiskit.
+surgery (LS) on a 16-qubit GHZ circuit originally designed in Qiskit.
 
 Usage:
     Run script as given.

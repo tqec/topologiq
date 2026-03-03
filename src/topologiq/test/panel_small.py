@@ -1,7 +1,8 @@
-"""Run a test panel containing a series of pre-existing circuit examples.
+"""Test panel containing a series of pre-existing circuit examples.
 
 This script tests Topologiq performance using a number of pre-existing circuits
-available in `src/topologiq/assets`.
+available in `src/topologiq/assets`. The script is not yet tied to an automated
+testing pipeline, but is meant to eventually be used for the said purpose.
 
 Usage:
     Run script as given.
