@@ -76,7 +76,9 @@ def run():
     # Key default parameters
     visualisation_mode: str | None = None  # Change to final for a single visualisation in the end
     animation_mode: str | None = None  # Change to trigger an animation of the entire process
-    fig_data: Figure | None = None  # Placeholder, overwrite with a Matplotlib ZX graph visualisation to overlay on 3D visualisations
+    fig_data: Figure | None = (
+        None  # Placeholder, overwrite with a Matplotlib ZX graph visualisation to overlay on 3D visualisations
+    )
 
     # Assemble key kwargs
     # Note! Not a comprehensive list of kwargs.
@@ -92,7 +94,6 @@ def run():
         "log_stats": False,  # (bool) Change to trigger automated performance metrics logs
         "debug": 0,  # (int: 0, 1, 2, 3) Change to turn debug mode on, with increasing level of stringency
     }
-
 
     # Handle any arguments passed via the command
     circuit_name: str = None

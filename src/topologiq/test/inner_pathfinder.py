@@ -39,7 +39,7 @@ def test_pathfinder(src_kinds: list[str], tgt_zx_types: list[str], step: int = 3
     kwargs = {
         "seed": None,  # (None | int) Change to use a specific random seed across the entire algorithm
         "max_attempts": 1,  # (int) Change to limit the max number of runs for any given circuit
-        "min_succ_rate": 100, # % of paths needed to consider run successful (len(tent_coords)/len(valid paths))
+        "min_succ_rate": 100,  # % of paths needed to consider run successful (len(tent_coords)/len(valid paths))
         "debug": 0,  # (int: 0, 1, 2, 3) Change to turn debug mode on, with increasing level of stringency
     }
     kwargs = check_assemble_kwargs(**kwargs)
@@ -74,7 +74,7 @@ def test_pathfinder(src_kinds: list[str], tgt_zx_types: list[str], step: int = 3
                 _, duration_iter = datetime_manager(t_1=t_1)
 
                 print(
-                    f"==> TEST ENDS. Received: {len(valid_paths)} valid paths. Duration: {duration_iter*1000:.2f}ms\n",
+                    f"==> TEST ENDS. Received: {len(valid_paths)} valid paths. Duration: {duration_iter * 1000:.2f}ms\n",
                 )
 
 

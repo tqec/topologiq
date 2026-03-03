@@ -11,7 +11,6 @@ Usage:
 
 """
 
-
 from topologiq.kwargs import (
     BEAMS_SHORT_LEN,
     DEBUG,
@@ -32,7 +31,14 @@ from topologiq.utils.core import datetime_manager
 # KWARGs MANAGER #
 ##################
 def check_assemble_kwargs(**kwargs) -> dict[str, any]:
-    """Check if all kwargs are present and add any missing."""
+    """Check if all kwargs are present and add any missing.
+
+    Args:
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, this function will auto-complete it based on
+            on `./src/topologiq/kwargs.py`.
+
+    """
 
     if len(kwargs) == 0:
         kwargs = {

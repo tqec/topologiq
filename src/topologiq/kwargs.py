@@ -16,8 +16,18 @@ Example:
         # Assemble hyperparameters as kwargs
         kwargs = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "deterministic": False,
-            "seed": None,
+            "first_id_strategy": FIRST_ID_STRATEGY,
+            "beams_len_short": BEAMS_SHORT_LEN,
+            "seed": SEED,
+            "vis_options": (None, None),
+            "max_attempts": MAX_ATTEMPTS,
+            "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
+            "min_succ_rate": MIN_SUCC_RATE,
+            "strip_ports": STRIP_PORTS,
+            "hide_ports": HIDE_PORTS,
+            "log_stats": LOG_STATS,
+            "log_stats_id": None,
+            "debug": DEBUG,
         }
         # ...
 
@@ -26,14 +36,8 @@ Example:
             _, _, _, _ = runner(
                 simple_graph,
                 circuit_name,
-                min_succ_rate=min_pathfinder_success_rate,
-                strip_ports=strip_ports,
-                hide_ports=hide_ports,
-                max_attempts=num_attempts,
-                stop_on_first_success=stop_on_first_success,
-                vis_options=(vis_0, vis_1),
-                log_stats=log_stats,
-                debug=debug,
+                fig_data=None,
+                first_cube=(None, None),
                 **kwargs,
             )
 
@@ -78,4 +82,3 @@ LOG_STATS = False
 
 # Turn debug mode on, with increasing level of stringency: 0 -> 4
 DEBUG = 0
-

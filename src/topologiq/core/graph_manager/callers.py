@@ -54,7 +54,9 @@ def call_pathfinder(
         hdm (optional): If True, it tells the inner pathfinding algorithm that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
         clean_paths: A list of paths each containing the 3D cubes and pipes needed to connect source and target in the 3D space.
@@ -231,7 +233,9 @@ def call_logger(
         circuit_info: A list containing name of circuit, log_stats_id, edge_paths, lat_nodes, and lat_edges.
         runtimes: Key runtime metrics for graph manager BFS.
         metrics: Key performance metrics for graph manager BFS.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     """
 
@@ -308,7 +312,9 @@ def call_debug_vis(
         src_block_info: The information of the source cube including its position in the 3D space and its kind.
         pathfinder_vis_data: A list containing data for visualisation of a given pathfinder run.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     """
 

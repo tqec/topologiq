@@ -59,7 +59,9 @@ def manage_single_ghz_test(
         log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
         random_seed (optional): A specific seed to use for a particular run.
         save_to_file (optional): True to save the results to a `.bgraph` file, else False.
-        **kwargs: !
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Return:
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
@@ -70,7 +72,7 @@ def manage_single_ghz_test(
 
     # Timer, unique ID, and seed
     success = True
-    t_1,_ = datetime_manager()
+    t_1, _ = datetime_manager()
 
     # Retrieve QASM as PyZX graph
     qasm_str = ghz_to_qasm(n_qubits, circuit_name)
@@ -109,6 +111,7 @@ def manage_single_ghz_test(
     }
 
     return lat_nodes, lat_edges, test_stats
+
 
 # ...
 def ghz_to_qasm(n_qubits: int, circuit_name: str) -> str:
@@ -166,6 +169,7 @@ def pyzx_reduce(zx_graph: BaseGraph) -> BaseGraph:
     zx.full_reduce(zx_graph_copy)
 
     return zx_graph_copy
+
 
 def save_test_results_to_file(
     circuit_name: str,

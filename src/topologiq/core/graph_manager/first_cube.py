@@ -31,7 +31,6 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
 
     # ID of first non-boundary node
     if first_id_strategy == "first_spider":
-
         # Sort all IDS in graph excluding boundaries
         all_node_ids = sorted(
             [node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"]
@@ -42,7 +41,6 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
 
     # Majority vote from applicable centrality measures
     elif first_id_strategy == "centrality_majority":
-
         # Append ID determined as central by several centrality measures to a single array
         central_nodes = []
 
@@ -50,18 +48,26 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
         central_nodes.append(sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0])
 
         closeness_centrality = nx.closeness_centrality(nx_g)
-        central_nodes.append(sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0])
+        central_nodes.append(
+            sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0]
+        )
 
-        info_centrality = nx.current_flow_closeness_centrality(nx_g, weight=None, solver='lu')
+        info_centrality = nx.current_flow_closeness_centrality(nx_g, weight=None, solver="lu")
         central_nodes.append(sorted(info_centrality, key=info_centrality.get, reverse=True)[0])
 
         betweenness_centrality = nx.betweenness_centrality(nx_g, normalized=True, endpoints=True)
-        central_nodes.append(sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0])
+        central_nodes.append(
+            sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0]
+        )
 
         harmonic_centrality = nx.harmonic_centrality(nx_g, nbunch=None, distance=None, sources=None)
-        central_nodes.append(sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0])
+        central_nodes.append(
+            sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0]
+        )
 
-        laplacian = nx.laplacian_centrality(nx_g, normalized=True, nodelist=None, weight='weight', walk_type=None, alpha=0.95)
+        laplacian = nx.laplacian_centrality(
+            nx_g, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
+        )
         central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
 
         eigen_centrality = nx.eigenvector_centrality_numpy(nx_g)
@@ -72,7 +78,6 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
 
     # Random choice from central spiders
     elif first_id_strategy == "centrality_random":
-
         # Loose build a list of central spiders
         max_degree = -1
         central_nodes: list[int] = []

@@ -5,7 +5,6 @@ Usage:
 
 """
 
-#from topologiq.core.pathfinder.beams import check_critical_beams
 from topologiq.core.pathfinder.beams import check_critical_beams
 from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
 

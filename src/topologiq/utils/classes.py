@@ -172,15 +172,30 @@ class SingleBeam:
         beams_are_co_planar, co_planarity_idx = self.check_co_planarity(other)
         if beams_are_co_planar:
             if co_planarity_idx == 0:
-                ok = (self.y.contains(other.y.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.y.contains(self.y.start)) or (self.y.contains(other.z.start) and other.z.contains(self.y.start)) or (self.z.contains(other.y.start) and other.y.contains(self.z.start))
+                ok = (
+                    (self.y.contains(other.y.start) and other.z.contains(self.z.start))
+                    or (self.z.contains(other.z.start) and other.y.contains(self.y.start))
+                    or (self.y.contains(other.z.start) and other.z.contains(self.y.start))
+                    or (self.z.contains(other.y.start) and other.y.contains(self.z.start))
+                )
                 return ok
 
             elif co_planarity_idx == 1:
-                ok = (self.x.contains(other.x.start) and other.z.contains(self.z.start)) or (self.z.contains(other.z.start) and other.x.contains(self.x.start)) or (self.x.contains(other.z.start) and other.z.contains(self.x.start)) or (self.z.contains(other.x.start) and other.x.contains(self.z.start))
+                ok = (
+                    (self.x.contains(other.x.start) and other.z.contains(self.z.start))
+                    or (self.z.contains(other.z.start) and other.x.contains(self.x.start))
+                    or (self.x.contains(other.z.start) and other.z.contains(self.x.start))
+                    or (self.z.contains(other.x.start) and other.x.contains(self.z.start))
+                )
                 return ok
 
             elif co_planarity_idx == 2:
-                ok = (self.x.contains(other.x.start) and other.y.contains(self.y.start)) or (self.y.contains(other.y.start) and other.x.contains(self.x.start)) or (self.x.contains(other.y.start) and other.y.contains(self.x.start)) or (self.y.contains(other.x.start) and other.x.contains(self.y.start))
+                ok = (
+                    (self.x.contains(other.x.start) and other.y.contains(self.y.start))
+                    or (self.y.contains(other.y.start) and other.x.contains(self.x.start))
+                    or (self.x.contains(other.y.start) and other.y.contains(self.x.start))
+                    or (self.y.contains(other.x.start) and other.x.contains(self.y.start))
+                )
                 return ok
 
         return False

@@ -136,7 +136,6 @@ def run_topologiq(
 
 # ...
 if __name__ == "__main__":
-
     # General GHZ characteristics
     circuit_name = "ghz16"
     n_qubits = 16  # This can be changed to any number of qubits
