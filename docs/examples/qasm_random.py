@@ -1,9 +1,8 @@
-"""Run test using a small collection of QASM circuits.
+"""Example of how to use Topologiq to perform LS on a small collection of QASM circuits.
 
-This script tests Topologiq performance using a number of circuits generated
-randomly in PyZX and saved as QASM. A novelty of this file is that outputs are
-saved to a `.bgraph` file in `./outputs/bgraph/`. Eventually, the hope is to develop
-a standard that allows easy interoperability between lattice surgery tools.
+This script contains an example of how to use Topologiq to perform algorithmic lattice
+surgery (LS) on a number of circuits generated randomly in PyZX and saved as QASM.
+Outputs are saved to a `.bgraph` file in `./outputs/bgraph/`.
 
 Usage:
     Run script as given.

@@ -1,3 +1,5 @@
+> NB! Major breaking changes just merged. Most things seem to be working but since we do not yet have a comprehensive testing strategy (we'll get there, one squirrel at a time), maybe there's still some bug hidden somewhere. Do not feel shy to open an Issue if you run into any bug. Please do.
+
 # Topologiq: Algorithmic Lattice Surgery
 **Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
