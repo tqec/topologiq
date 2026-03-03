@@ -1,8 +1,7 @@
-"""Example using a random PyZX graphs of arbitrary dimensions.
+"""Example of how to use Topologiq to perform LS on random PyZX graphs.
 
 This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery on a random PyZX graphs. The script is meant as an example of what Topologiq can do
-but can also be used as the base for running automated randomised tests.
+surgery (LS) on random PyZX graphs.
 
 Usage:
     Run script as given.
@@ -15,48 +14,30 @@ Notes:
 
 """
 
-import random
-
 import matplotlib.figure
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
 from topologiq.assets.pyzx_graphs import random_graph
-from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
-from topologiq.scripts.runner import runner
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
+from topologiq.core.graph_manager.graph_manager import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
+from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
 
 
 ####################
 # MAIN RUN MANAGER #
 ####################
-def run_random(
-    pyzx_graph: BaseGraph | GraphS,
-    fig_data: matplotlib.figure.Figure,
-    m_times: int,
-    vis_options: tuple[str | None, str | None] = (None, None),
-    stop_on_first_success: bool = False,
-    log_stats: bool = False,
-    debug: int = 0,
-):
+def run_random(pyzx_graph: BaseGraph | GraphS, fig_data: matplotlib.figure.Figure, **kwargs):
     """Run a single random PyZX graph m_times.
 
     Args:
         pyzx_graph: The random PyZX graph.
-        m_times: How many times to repeat-run the circuit.
-        vis_options (optional): Visualisation settings provided as a tuple.
-        stop_on_first_success: Whether to stop after the first successful attempt.
-        log_stats (optional): If True, triggers automated stats logging to CSV files in `./benchmark/data`.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     """
-
-    # Assemble kwargs
-    kwargs: dict[str, tuple[int, int] | int] = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
-    }
 
     # call Topologiq on graph if graph is available
     if pyzx_graph is not None:
@@ -69,11 +50,6 @@ def run_random(
             _, _, _, _ = runner(
                 simple_graph,
                 circuit_name,
-                max_attempts=m_times,
-                stop_on_first_success=stop_on_first_success,
-                vis_options=vis_options,
-                log_stats=log_stats,
-                debug=debug,
                 fig_data=fig_data,
                 **kwargs,
             )
@@ -88,30 +64,31 @@ def run_random(
 # ...
 if __name__ == "__main__":
     # Topologiq generation parameters
-    vis_options = ("final", None)
-    stop_on_first_success = True
-    log_stats = False
-    debug = 1
+    kwargs = {
+        "weights": VALUE_FUNCTION_HYPERPARAMS,
+        "first_id_strategy": "first_spider",
+        "seed": None,
+        "vis_options": ("final", None),
+        "max_attempts": 1,
+        "stop_on_first_success": True,
+        "debug": 1,
+        "log_stats": True,
+    }
 
-    # Parameters for random generation of input graph
-    seed = 1
-    random.seed(seed)
+    # General description of circuit
     qubit_n = 5
     depth = 15
+    circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph
-    circuit_name = f"random_{seed}_{qubit_n}_{depth}"
-    graph_type = "cnot"
-    pyzx_graph, fig_data = random_graph(qubit_n, depth, graph_type=graph_type, draw_graph=True)
+    graph_type = "cnot"  # Tells PyZX to generate a circuit based on CNOTS
+    pyzx_graph, fig_data = random_graph(
+        qubit_n, depth, graph_type=graph_type, draw_graph=True, **kwargs
+    )
 
     # Build and run Topologiq on random graph
-    m_times = 1  # Number of times to repeat the run of single random graph
     run_random(
         pyzx_graph,
         fig_data,
-        m_times,
-        vis_options=vis_options,
-        stop_on_first_success=stop_on_first_success,
-        log_stats=log_stats,
-        debug=debug,
+        **kwargs,
     )

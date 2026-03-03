@@ -1,3 +1,5 @@
+> NB! Major breaking changes just merged. Most things seem to be working but since we do not yet have a comprehensive testing strategy (we'll get there, one squirrel at a time), maybe there's still some bug hidden somewhere. Do not feel shy to open an Issue if you run into any bug. Please do.
+
 # Topologiq: Algorithmic Lattice Surgery
 **Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
@@ -102,8 +104,8 @@ python3 src/topologiq/run.py --pyzx:<circuit_name> --vis:detail --debug:1  # Req
 There is also an accessible debug facility to quickly run any edge case encountered while running Topologiq with `log_stats` enabled.
 ``` bash
 # Pick up and replicate any available edge case (i.e. circuits Topologiq failed to build).
-uv run src/topologiq/debug.py
-python3 src/topologiq/debug.py  # Requires active .venv
+uv run src/topologiq/utils/debug.py
+python3 src/topologiq/utils/debug.py  # Requires active .venv
 
 # NB! Case must have been logged to stats, which only happens when Topologiq runs with `log_stats` enabled.
 # NB! Currently available only for example graphs (the foundational graph must exist in file to replicate it).

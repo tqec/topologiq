@@ -18,6 +18,10 @@ Options:
     --hide_boundaries       Keep boundary nodes in graph but do not show corresponding cubes in visualisations.
     --log_stats             Log key performance metrics for the run.
     --debug                 Run in debug mode (enables verbose logging and more detailed visualisations).
+    --first_id:             Select strategy to use when defining the ID and kind of the first cube placed in 3D space.
+                                first_spider: lowest ID of non-boundary spiders.
+                                centrality_majority: majority vote from applicable centrality measures.
+                                centrality_random (default): random pick from a list of central nodes.
 
 Notes:
     If command uses '--graph', example circuit must exist in `./assets/graphs/simple_graphs.py`.
@@ -32,11 +36,10 @@ import sys
 from matplotlib.figure import Figure
 
 from topologiq.assets import pyzx_graphs, simple_graphs
-from topologiq.run_hyperparams import LENGTH_OF_BEAMS, VALUE_FUNCTION_HYPERPARAMS
-from topologiq.scripts.runner import runner
+from topologiq.core.graph_manager.graph_manager import runner
+from topologiq.input.pyzx import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph
-from topologiq.utils.interop_pyzx import pyzx_g_to_simple_g
-from topologiq.utils.simple_grapher import simple_graph_vis
+from topologiq.vis.zx import simple_graph_vis
 
 
 ####################
@@ -70,36 +73,38 @@ def run():
         print(__doc__)
         sys.exit(0)
 
-    # Assemble kwargs
-    kwargs: dict[str, tuple[int, int] | int] = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "length_of_beams": LENGTH_OF_BEAMS,
+    # Key default parameters
+    visualisation_mode: str | None = None  # Change to final for a single visualisation in the end
+    animation_mode: str | None = None  # Change to trigger an animation of the entire process
+    fig_data: Figure | None = (
+        None  # Placeholder, overwrite with a Matplotlib ZX graph visualisation to overlay on 3D visualisations
+    )
+
+    # Assemble key kwargs
+    # Note! Not a comprehensive list of kwargs.
+    # Only included those that can be adjusted from terminal and a couple other that are commonly adjusted.
+    # Topologiq has an internal function to assemble full kwargs.
+    kwargs = {
+        "first_id_strategy": "centrality_random",  # (bool) Change between several strategies for selecting the ID of the first spider
+        "seed": None,  # (None | int) Change to use a specific random seed across the entire algorithm
+        "max_attempts": 1,  # (int) Change to limit the max number of runs for any given circuit
+        "stop_on_first_success": True,  # (bool) Change to force multiple runs for same circuit
+        "strip_ports": False,  # (bool) Change to eliminate boundary spiders from ZX graph before processing
+        "hide_ports": False,  # (bool) Change to hide boundary spiders/ports in any 3D visualisations
+        "log_stats": False,  # (bool) Change to trigger automated performance metrics logs
+        "debug": 0,  # (int: 0, 1, 2, 3) Change to turn debug mode on, with increasing level of stringency
     }
 
-    # Get the circuit
+    # Handle any arguments passed via the command
     circuit_name: str = None
     simple_graph: SimpleDictGraph = {"nodes": [], "edges": []}
-
-    # Default values for key parameters
-    num_attempts: int = 10
-    vis_0: str | None = None
-    vis_1: str | None = None
-    stop_on_first_success: bool = True
-    min_pathfinder_success_rate: int = 60
-    strip_ports: bool = False
-    hide_ports: bool = False
-    log_stats: bool = False
-    debug: int = 0
-    fig_data: Figure | None = None
-
-    # Handle any arguments passed via the command
     for arg in sys.argv:
         # Visualisation settings
         if arg == "--strip_boundaries":
-            strip_ports = True
+            kwargs["strip_ports"] = True
 
         if arg == "--hide_boundaries":
-            hide_ports = True
+            kwargs["hide_ports"] = True
 
         # Look for name of a "simple" or "non-descript" graph
         if arg.startswith("--graph:"):
@@ -121,38 +126,33 @@ def run():
 
         # Look for visualisation options
         if arg.startswith("--vis:"):
-            vis_0 = arg.replace("--vis:", "")
-
-        # Look for animation options
+            visualisation_mode = arg.replace("--vis:", "")
         if arg.startswith("--animate:"):
-            vis_1 = arg.replace("--animate:", "")
+            animation_mode = arg.replace("--animate:", "")
+        kwargs["vis_options"] = (visualisation_mode, animation_mode)
 
         # Look for log_stats to file flag
         if arg.startswith("--log_stats"):
-            log_stats = True
+            kwargs["log_stats"] = True
 
-        # Look for number of repetitions parameter
+        # Look for number of repetitions
         if arg.startswith("--repeat:"):
-            num_attempts = int(arg.replace("--repeat:", ""))
-            stop_on_first_success = False
+            kwargs["max_attempts"] = int(arg.replace("--repeat:", ""))
+            kwargs["stop_on_first_success"] = False
 
-            # Look for number of repetitions parameter
+        # Look for debug mode
         if arg.startswith("--debug"):
-            debug = int(arg.replace("--debug:", ""))
+            kwargs["debug"] = int(arg.replace("--debug:", ""))
+
+        # Look for debug mode
+        if arg.startswith("--first_id"):
+            kwargs["first_id_strategy"] = arg.replace("--first_id:", "")
 
     # Call Topologiq on `simple_graph` of circuit
     if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:
         _, _, _, _ = runner(
             simple_graph,
             circuit_name,
-            min_succ_rate=min_pathfinder_success_rate,
-            strip_ports=strip_ports,
-            hide_ports=hide_ports,
-            max_attempts=num_attempts,
-            stop_on_first_success=stop_on_first_success,
-            vis_options=(vis_0, vis_1),
-            log_stats=log_stats,
-            debug=debug,
             fig_data=fig_data,
             **kwargs,
         )

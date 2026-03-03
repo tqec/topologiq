@@ -24,19 +24,16 @@ Schemas for the data files inside the data folder are as follows:
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,
 - run_success: whether the process was successful, i.e., it produced a complete lattice surgery/space-time diagram of the original circuit,
 - circuit_name: the name of the circuit,
-- num_input_nodes: the number of spiders in the input ZX graph,
-- num_input_edges: the number of spiders in the input ZX graph,
-- len_beams: the length of the beams used for the specific run,
-- num_input_nodes_processed: the number of nodes in the original/input ZX graph that were processed successfully,
-- num_input_edges_processed: the number of edges in the original/input ZX graph that were processed successfully,
-- num_1st_pass_edges_processed: the number of normal edges (edges between a "placed" block and a "new" one yet to be assigned coordinates and kind) in the original/input ZX graph that were processed successfully,
-- num_2n_pass_edges_processed: the number of special edges (edges between nodes placed as part of the "first pass") in the original/input ZX graph that were processed successfully,
+- num_zx_spiders: the number of spiders in the input ZX graph,
+- num_zx_edges: the number of spiders in the input ZX graph,
+- num_std_edges: the number of standard edges, i.e., between a "placed" block and a "new" one yet to be assigned coordinates and kind,
+- num_cross_edges: the number of special "cross" edges, i.e., edges between previously placed src and tgt blocks,
 - num_edges_in_edge_paths: the total number of edges in the final set of edges produced by the algorithm (same as `num_input_edges_processed` if `run_success==True`),
-- num_blocks_output: the number of 3D spider blocks (cubes) in the output,
-- num_edges_output: the number of 3D edge blocks (pipes) in the output,
-- volume: the volume of the resulting space-time diagram (measured by number of non-port cubes)
-- duration_first_pass: the total duration of the first pass of the algorithm, i.e., the "while" loop that takes care of "first pass" edges,
-- duration_second_pass: the total duration of the second pass of the algorithm, i.e., the "while" loop that takes care of "second pass" edges,
+- num_blocks_output: the number of cubes in the output including boundary/port cubes,
+- num_edges_output: the number of pipes in the output,
+- volume: the volume of the resulting space-time diagram, i.e., the number of cubes that are not boundaries/ports,
+- t_std_edges: the total duration of the first pass of the algorithm, i.e., the "while" loop that takes care of "first pass" edges,
+- t_cross_edges: the total duration of the second pass of the algorithm, i.e., the "while" loop that takes care of "second pass" edges,
 - duration_total: the total duration of the entire algorithmic lattice surgery process for this circuit, irrespective of `run_success`. 
 
 ### Pathfinder (one log per iteration)
@@ -60,8 +57,9 @@ Schemas for the data files inside the data folder are as follows:
 - unique_run_id: the unique identifier for the specific run of the full algorithmic flow,
 - run_success: whether the process was successful, i.e., it produced a complete lattice surgery/space-time diagram of the original circuit,
 - circuit_name: the name of the circuit,
-- run_params: the main parameters needed to replicate the run.
+- kwargs: all KWARGs for run, including all parameters needed to replicate the run.
 - edge_paths: a list of the original ZX edges processed successfully in the order in which the algorithm processed them.
+
 
 ### Debug (optional logs as needed)
 Same as "params" but only for runs identified as edge cases.
