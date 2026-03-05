@@ -120,9 +120,12 @@ class SingleBeam:
         """Return a readable representation."""
         return f"({self.x!s}, {self.y!s}, {self.z!s})"
 
-    def coords(self) -> tuple[BeamAxisComponent, BeamAxisComponent, BeamAxisComponent]:
+    def coords(self) -> StandardCoord:
         """Return the beam coordinates across all axes."""
-        return (self.x, self.y, self.z)
+        return self.x.start, self.y.start, self.z.start
+
+    def direction(self) -> StandardCoord:
+        return self.x.direction, self.y.direction, self.z.direction
 
     def contains(self, coords_to_check: StandardCoord) -> bool:
         """Check if beam contains a given coordinate."""
@@ -160,45 +163,54 @@ class SingleBeam:
 
         return False, None
 
-    def intersects(self, other: object, len_of_materialised_beam: int) -> bool:
+    def intersects(self, other: 'SingleBeam', len_of_materialised_beam: int) -> bool:
         """Check if two beams intersect one another."""
 
-        other_as_array = other.to_array(len_of_materialised_beam)
-        return any([self.contains(c) for c in other_as_array])
+        other_as_array = other.to_array(50)
+        condition_array = any([self.contains(c) for c in other_as_array])
 
-    def intersects_co_planarity(self, other: object) -> bool:
+        condition_rays = self.intersects_co_planarity(other)
+
+        if condition_array != condition_rays:
+            raise Exception(f"INTERSECTION inconsistency. {self} vs {other} [{condition_array}/{condition_rays}].")
+
+        return condition_array
+
+    @staticmethod
+    def __dot_product(v1, v2):
+        return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+
+    @staticmethod
+    def __cross_product(v1, v2):
+        return v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]
+
+    # Based on: https://medium.com/data-science/3d-ray-intersection-closest-point-dc8c72122224
+    def intersects_co_planarity(self, other: 'SingleBeam') -> bool:
         """Check if two beams intersect one another."""
 
-        beams_are_co_planar, co_planarity_idx = self.check_co_planarity(other)
-        if beams_are_co_planar:
-            if co_planarity_idx == 0:
-                ok = (
-                    (self.y.contains(other.y.start) and other.z.contains(self.z.start))
-                    or (self.z.contains(other.z.start) and other.y.contains(self.y.start))
-                    or (self.y.contains(other.z.start) and other.z.contains(self.y.start))
-                    or (self.z.contains(other.y.start) and other.y.contains(self.z.start))
-                )
-                return ok
+        p1 = self.coords()
+        d1 = self.direction()
+        p2 = other.coords()
+        d2 = other.direction()
 
-            elif co_planarity_idx == 1:
-                ok = (
-                    (self.x.contains(other.x.start) and other.z.contains(self.z.start))
-                    or (self.z.contains(other.z.start) and other.x.contains(self.x.start))
-                    or (self.x.contains(other.z.start) and other.z.contains(self.x.start))
-                    or (self.z.contains(other.x.start) and other.x.contains(self.z.start))
-                )
-                return ok
+        # The cross product will provide a third vector orthogonal to the two beam directions.
+        cross = SingleBeam.__cross_product(d1, d2)
 
-            elif co_planarity_idx == 2:
-                ok = (
-                    (self.x.contains(other.x.start) and other.y.contains(self.y.start))
-                    or (self.y.contains(other.y.start) and other.x.contains(self.x.start))
-                    or (self.x.contains(other.y.start) and other.y.contains(self.x.start))
-                    or (self.y.contains(other.x.start) and other.x.contains(self.y.start))
-                )
-                return ok
+        # If the cross product is the zero-vector, then two beams are parallel and thus cannot intersect
+        delta = SingleBeam.__dot_product(cross, cross)
+        if delta == 0:
+            return False
 
-        return False
+        # Check if the source of the second beam lies in the correct octant relative to the source of the first beam
+        sigma = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
+
+        common = SingleBeam.__cross_product(sigma, cross)
+
+        t1 = - SingleBeam.__dot_product(common, d1) / delta
+        t2 = - SingleBeam.__dot_product(common, d2) / delta
+
+        # TODO: Set bound to 1 if coords() is the cube position and not the first position occupied by the beam
+        return t1 >= 0 and t2 >= 0
 
 
 CubeBeams = list[SingleBeam]
