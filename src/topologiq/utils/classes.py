@@ -166,7 +166,7 @@ class SingleBeam:
     def intersects(self, other: 'SingleBeam', len_of_materialised_beam: int) -> bool:
         """Check if two beams intersect one another."""
 
-        other_as_array = other.to_array(50)
+        other_as_array = other.to_array(len_of_materialised_beam)
         condition_array = any([self.contains(c) for c in other_as_array])
 
         condition_rays = self.intersects_co_planarity(other)
@@ -196,13 +196,20 @@ class SingleBeam:
         # The cross product will provide a third vector orthogonal to the two beam directions.
         cross = SingleBeam.__cross_product(d1, d2)
 
+        # The difference of the source positions is used in checking in both cases that intersection occurs
+        sigma = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
+
         # If the cross product is the zero-vector, then two beams are parallel and thus cannot intersect
         delta = SingleBeam.__dot_product(cross, cross)
+
         if delta == 0:
-            return False
+            direction_lineup = SingleBeam.__dot_product(d1, d2)
+            colinear_vector = SingleBeam.__cross_product(sigma, d1)
+            colinear = SingleBeam.__dot_product(colinear_vector, colinear_vector) == 0
+            position_lineup = SingleBeam.__dot_product(sigma, d1)
+            return colinear and (position_lineup > 0 or np.sign(direction_lineup) != np.sign(position_lineup))
 
         # Check if the source of the second beam lies in the correct octant relative to the source of the first beam
-        sigma = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
 
         common = SingleBeam.__cross_product(sigma, cross)
 
