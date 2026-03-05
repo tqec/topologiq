@@ -1,9 +1,9 @@
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.common.coordinates import Coordinates
 
-from topologiq.dzw.utils.components_zx import EdgeType
-from topologiq.dzw.utils.components_bg import CubeId, CubeKind
+from topologiq.dzw.common.components_zx import EdgeType
+from topologiq.dzw.common.components_bg import CubeId, CubeKind
 
-from topologiq.dzw.utils.cube_beams import CubeBeams
+from topologiq.dzw.common.cube_beams import CubeBeams
 
 from logging import getLogger
 console = getLogger(__name__)

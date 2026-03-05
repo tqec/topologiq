@@ -2,9 +2,9 @@ from enum import Enum
 from functools import total_ordering
 
 from topologiq.dzw.helpers.spacetime import Spacetime
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.common.coordinates import Coordinates
 
-from topologiq.dzw.utils.components_zx import NodeType
+from topologiq.dzw.common.components_zx import NodeType
 
 CubeId = int
 

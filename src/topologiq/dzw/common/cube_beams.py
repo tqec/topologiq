@@ -1,7 +1,7 @@
 from topologiq.dzw.helpers.spacetime import Spacetime
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.common.coordinates import Coordinates
 
-from topologiq.dzw.utils.components_bg import CubeKind
+from topologiq.dzw.common.components_bg import CubeKind
 
 from topologiq.utils.classes import NodeBeams
 

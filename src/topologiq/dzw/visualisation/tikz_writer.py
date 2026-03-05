@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from topologiq.dzw.utils.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.coordinates import Coordinates
 
 from logging import getLogger
 console = getLogger(__name__)

@@ -1,4 +1,4 @@
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.common.coordinates import Coordinates
 
 class Spacetime:
     ORIGIN = Coordinates(0, 0, 0)

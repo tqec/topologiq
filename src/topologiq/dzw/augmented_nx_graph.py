@@ -4,13 +4,13 @@ from enum import Enum
 import pyzx as zx
 import networkx as nx
 
-from topologiq.dzw.utils.coordinates import Coordinates
+from topologiq.dzw.common.coordinates import Coordinates
 from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.helpers.blockgraph import BlockGraphHelper
 
-from topologiq.dzw.utils.components_zx import NodeId, NodeType, EdgeType
-from topologiq.dzw.utils.components_bg import CubeId, CubeKind
-from topologiq.dzw.utils.path import Path
+from topologiq.dzw.common.components_zx import NodeId, NodeType, EdgeType
+from topologiq.dzw.common.components_bg import CubeId, CubeKind
+from topologiq.dzw.common.path import Path
 
 from logging import getLogger
 console = getLogger(__name__)
