@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Bolanos"
+  given-names: "Jose A"
+  orcid: "https://orcid.org/0000-0001-6694-1928"
+- family-names: "Fowler"
+  given-names: "Austin"
+  orcid: "https://orcid.org/0000-0002-9048-2896"
+title: "Topologiq: Algorithmic Lattice Surgery"
+date-released: 2025-04-05
+url: "https://github.com/tqec/topologiq"
