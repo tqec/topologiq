@@ -168,8 +168,8 @@ class SingleBeam:
 
         self_as_array = self.to_array(len_of_materialised_beam)
         other_as_array = other.to_array(len_of_materialised_beam)
-        condition_array = any([self.contains(c) for c in other_as_array])
-        # condition_array = any(c in self_as_array for c in other_as_array)
+        # condition_array = any([self.contains(c) for c in other_as_array])
+        condition_array = any(c in self_as_array for c in other_as_array)
 
         condition_rays = self.intersects_co_planarity(other)
 
