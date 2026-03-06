@@ -268,9 +268,7 @@ def core_pathfinder_bfs(
             alt_curr_kind, hdm = handle_kind_after_hadamard(current_block, nxt_coords, hdm)
 
             # Create a list of kinds that are valid for the next block
-            possible_nxt_kinds = nxt_kinds(
-                curr_coords, curr_kind if not alt_curr_kind else alt_curr_kind, nxt_coords
-            )
+            possible_nxt_kinds = nxt_kinds(curr_kind if not alt_curr_kind else alt_curr_kind, move)
 
             # Loop over all possible next types
             for possible_nxt_kind in possible_nxt_kinds:

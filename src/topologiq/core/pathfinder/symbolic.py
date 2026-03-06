@@ -5,6 +5,8 @@ Usage:
 
 """
 
+from functools import lru_cache
+
 import numpy as np
 
 from topologiq.utils.classes import (
@@ -19,19 +21,16 @@ from topologiq.utils.classes import (
 ####################
 # COMPOSITE CHECKS #
 ####################
-def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: str) -> bool:
-    """Check if two cubes match.
+def cube_match(src_kind: str, move: StandardCoord, tgt_kind: str) -> bool:
+    """Check if two cubes have valid exits facing one another.
 
-    This function checks if two cubes match by comparing the symbols of their colours.
-    To handle hadamards as `tgt_k`, strip the "h" from the block kind and run as a regular pipe,
-    adding the "h" after match is determined. To handle hadamards in `src_k`, rotate it,
-    then run as regular pipe.
+        This function checks if two cubes can spatially converge into one another
+        by ensuring both cubes have a valid exit toward one another.
 
     Args:
-        src_c: (x, y, z) coordinates for the current node.
-        src_k: current node's kind.
-        tgt_pos: (x, y, z) coordinates for the next node.
-        tgt_k: target node's kind.
+        src_kind: The kind of the source block being checked.
+        move: The (x, y, z) displacement between current and target position.
+        tgt_kind: The kind of the target block being checked.
 
     Returns:
         (bool): True if cubes match else False.
@@ -39,19 +38,20 @@ def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: 
     """
 
     # CHECK SOURCE TO TARGET
-    if not check_is_exit(src_c, src_k.lower(), tgt_pos):
+    if not check_is_exit(src_kind.lower(), move):
         return False
 
     # CHECK TARGET TO SOURCE
-    if not check_is_exit(tgt_pos, tgt_k.lower(), src_c):
+    if not check_is_exit(tgt_kind.lower(), tuple([-i for i in (move)])):
         return False
 
     return True
 
 
+
 def check_exits(
-    src_c: StandardCoord,
-    src_k: str | None,
+    src_coords: StandardCoord,
+    src_kind: str | None,
     taken: list[StandardCoord],
     coords_in_path: list[StandardCoord],
 ) -> tuple[int, CubeBeams, CubeBeams]:
@@ -62,8 +62,8 @@ def check_exits(
     exit is unobstructed.
 
     Args:
-        src_c: The (x, y, z) coordinates for the block.
-        src_k: The kind of the block.
+        src_coords: The (x, y, z) coordinates for the block.
+        src_kind: The kind of the block.
         taken: A list of coordinates taken by any blocks placed as a result of previous operations.
         coords_in_path: The coordinates taken by the path under current evaluation.
 
@@ -87,14 +87,14 @@ def check_exits(
     ]
 
     for d in diffs:
-        tgt_c = (
-            src_c[0] + d[0],
-            src_c[1] + d[1],
-            src_c[2] + d[2],
+        tgt_coords = (
+            src_coords[0] + d[0],
+            src_coords[1] + d[1],
+            src_coords[2] + d[2],
         )
 
-        if check_is_exit(src_c, src_k, tgt_c):
-            is_unobstr, single_beam, single_beam_short = check_unobstructed(src_c, tgt_c, taken)
+        if check_is_exit(src_kind, d):
+            is_unobstr, single_beam, single_beam_short = check_unobstructed(src_coords, tgt_coords, taken)
             if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
                 unobstr_exits_n += 1
                 cube_beams.append(single_beam)
@@ -130,24 +130,24 @@ def check_move(src_c: StandardCoord, tgt_c: StandardCoord) -> bool:
 #################
 # SIMPLE CHECKS #
 #################
-def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord) -> bool:
+@lru_cache
+def check_is_exit(src_kind: str, move: StandardCoord) -> bool:
     """Check if a face is an exit.
 
     This function works by matching exit markers in a block's kind against a displacement
     array symbolising the direction of the target block/pipe.
 
     Args:
-        src_c: (x, y, z) coordinates for the current block/pipe.
-        src_k: current block's/pipe's kind.
-        tgt_c: coordinates for the target block/pipe.
+        src_kind: The kind of the source block being checked.
+        move: The (x, y, z) displacement between current and target position.
 
     Returns:
         (bool): True if face is an exit else False.
 
     """
 
-    src_k = src_k.lower()[:3] if isinstance(src_k, str) else ""
-    kind_3d = [src_k[0], src_k[1], src_k[2]]
+    src_kind = src_kind.lower()[:3]
+    kind_3d = [src_kind[0], src_kind[1], src_kind[2]]
 
     if "o" in kind_3d:
         marker = "o"
@@ -155,10 +155,9 @@ def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord)
         marker = [i for i in set(kind_3d) if kind_3d.count(i) >= 2][0]
 
     exit_idxs = [i for i, char in enumerate(kind_3d) if char == marker]
-    diffs = [tgt - src for src, tgt in zip(src_c, tgt_c)]
 
     diff_idx = -1
-    for i, diff in enumerate(diffs):
+    for i, diff in enumerate(move):
         if diff != 0:
             diff_idx = i
             break
@@ -245,7 +244,7 @@ def check_unobstructed(
     return True, single_beam, single_beam_short
 
 
-def face_match(src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: str) -> bool:
+def face_match(src_kind: str, move: StandardCoord, tgt_kind: str) -> bool:
     """Check if block has an available exit pointing towards a target coordinate.
 
     This function checks if a block has an available exit that could be used to reach an
@@ -254,47 +253,43 @@ def face_match(src_c: StandardCoord, src_k: str, tgt_c: StandardCoord, tgt_k: st
     the function does not test if target coordinate is available or an exit is unobstructed.
 
     Args:
-        src_c: (x, y, z) coords for source node.
-        src_k: kind for the source node.
-        tgt_c: (x, y, z) coords for target node.
-        tgt_k: kind for the target node.
+        src_kind: The kind of the source block being checked.
+        move: The (x, y, z) displacement between current and target position.
+        tgt_kind: The kind of the target block being checked.
 
     Returns:
         (boolean): True if an available exit points towards target coordinate else False.
 
     """
 
-    # Sanitise kind in case of mixed case inputs
-    src_k = src_k.lower()
-    if "h" in src_k:
-        src_k = src_k.replace("h", "")
-    tgt_k = tgt_k.lower()
+    # Sanitise kind in case of mixed case inputs and remove any Hadamard flag
+    src_kind = src_kind.lower().replace("h", "")
+    tgt_kind = tgt_kind.lower()
 
     # Extract axis of displacement from kinds
-    diffs = [p[1] - p[0] for p in list(zip(src_c, tgt_c))]
-    ax_diffs = [True if ax != 0 else False for ax in diffs]
+    idx = int(np.nonzero(move)[0])
 
-    idx = ax_diffs.index(True)
+    src_kind_new = src_kind[:idx] + src_kind[idx + 1 :]
+    tgt_kind_new = tgt_kind[:idx] + tgt_kind[idx + 1 :]
 
-    src_k_new = src_k[:idx] + src_k[idx + 1 :]
-    tgt_k_new = tgt_k[:idx] + tgt_k[idx + 1 :]
-
-    if not src_k_new == tgt_k_new:
+    if not src_kind_new == tgt_kind_new:
         return False
 
     return True
 
 
-def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[str]:
+@lru_cache
+def nxt_kinds(src_kind: str, move: StandardCoord) -> list[str]:
     """Reduce the number of possible kinds for next block.
 
-    This function reduces the total number of potential kinds to check as plausible next
-    kinds by quickly running the current kind through a few quick pre-match expectations.
+    This function reduces the number of kinds to check as potential next
+    through a few quick pre-match expectations that consider the direction
+    of the current move. It returns only kinds that would constitute a
+    topologically-correct placement.
 
     Args:
-        src_c: (x, y, z) coordinates for the current node.
-        src_k: current node's kind.
-        tgt_pos: (x, y, z) coordinates for the next node.
+        src_kind: The current node's kind.
+        move: The (x, y, z) displacement between current and target position.
 
     Returns:
         reduced_valid_kinds: a subset of kinds applicable to next move.
@@ -305,19 +300,17 @@ def nxt_kinds(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord) -> list[
     c_ks = ["xxz", "zzx", "xzz", "zxx", "zxz", "xzx"]
     p_ks = ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"]
 
-    # CHECK FOR ALL POSSIBLE NEXT KINDS IN DISPLACEMENT AXIS
-    # Remove Hadamard flag if present
-    if "h" in src_k:
-        src_k = src_k[:3]
+    # Sanitise kind in case of mixed case inputs and remove any hadamard flag
+    src_kind = src_kind.lower().replace("h", "")
+
     # If current kind has an "o", the next kind is a cube
-    if "o" in src_k:
-        ok = [tgt_k for tgt_k in c_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]
-    # If current kind does not have an "o", then current kind is cube and the next kind is a pipe
-    else:
-        ok = [tgt_k for tgt_k in p_ks if cube_match(src_c, src_k, tgt_pos, tgt_k)]
+    if "o" in src_kind:
+        ok = [tgt_k for tgt_k in c_ks if cube_match(src_kind, move, tgt_k)]
+    else:  # Else, the next kind is a pipe
+        ok = [tgt_k for tgt_k in p_ks if cube_match(src_kind, move, tgt_k)]
 
     # Discard kinds where there is no colour match, and return
-    ok_min = [tgt_k for tgt_k in ok if face_match(src_c, src_k, tgt_pos, tgt_k)]
+    ok_min = [tgt_k for tgt_k in ok if face_match(src_kind, move, tgt_k)]
     return ok_min
 
 

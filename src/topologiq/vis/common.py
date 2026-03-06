@@ -597,7 +597,7 @@ def render_block(
             )
 
             if (
-                check_is_exit(coords, node_type, label_pos) is not True or node_type == "ooo"
+                check_is_exit(node_type, d) is not True or node_type == "ooo"
             ) and label_pos not in taken:
                 ax.text(
                     label_pos[0],
