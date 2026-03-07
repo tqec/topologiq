@@ -163,20 +163,23 @@ class SingleBeam:
 
         return False, None
 
+    INTERSECTION_BY_RAYS = True
+
     def intersects(self, other: 'SingleBeam', len_of_materialised_beam: int) -> bool:
         """Check if two beams intersect one another."""
 
-        self_as_array = self.to_array(len_of_materialised_beam)
-        other_as_array = other.to_array(len_of_materialised_beam)
-        # condition_array = any([self.contains(c) for c in other_as_array])
-        condition_array = any(c in self_as_array for c in other_as_array)
+        if SingleBeam.INTERSECTION_BY_RAYS:
+            intersecting_rays = self.intersects_co_planarity(other)
+        else:
+            other_as_array = other.to_array(len_of_materialised_beam)
+            self_as_array = self.to_array(len_of_materialised_beam)
+            intersecting_rays = any(c in self_as_array for c in other_as_array)
+            # intersecting_rays = any([self.contains(c) for c in other_as_array])
 
-        condition_rays = self.intersects_co_planarity(other)
+        # if condition_array != condition_rays:
+        #     raise Exception(f"INTERSECTION inconsistency. {self} vs {other} [A:{condition_array}/R:{condition_rays}]\n> {self.to_array(len_of_materialised_beam)}\n> {other_as_array}.")
 
-        if condition_array != condition_rays:
-            raise Exception(f"INTERSECTION inconsistency. {self} vs {other} [A:{condition_array}/R:{condition_rays}]\n> {self.to_array(len_of_materialised_beam)}\n> {other_as_array}.")
-
-        return condition_array
+        return intersecting_rays
 
     @staticmethod
     def __vector_subtraction(v1, v2):
