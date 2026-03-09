@@ -16,12 +16,11 @@ from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
-    PathBetweenNodes,
     SimpleDictGraph,
     StandardBlock,
     StandardCoord,
 )
-
+from topologiq.core.paths import PathBetweenNodes
 
 #################
 # HEALTH CHECKS #

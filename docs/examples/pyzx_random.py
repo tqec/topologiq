@@ -67,7 +67,7 @@ if __name__ == "__main__":
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "first_id_strategy": "first_spider",
-        "seed": 42,
+        "seed": None,
         "vis_options": ("final", None),
         "max_attempts": 1,
         "stop_on_first_success": True,

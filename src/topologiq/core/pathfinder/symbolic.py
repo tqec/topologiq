@@ -7,14 +7,8 @@ Usage:
 
 import numpy as np
 
-from topologiq.utils.classes import (
-    BeamAxisComponent,
-    CubeBeams,
-    SingleBeam,
-    StandardBlock,
-    StandardCoord,
-)
-
+from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.core.beams import BeamAxisComponent, CubeBeams, SingleBeam
 
 ####################
 # COMPOSITE CHECKS #

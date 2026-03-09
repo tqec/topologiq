@@ -10,7 +10,8 @@ import numpy as np
 
 from topologiq.core.graph_manager.utils import get_node_degree
 from topologiq.core.pathfinder.utils import get_manhattan
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.utils.classes import StandardCoord
+from topologiq.core.beams import CubeBeams
 
 
 ##################

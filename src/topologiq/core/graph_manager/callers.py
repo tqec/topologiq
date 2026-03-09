@@ -12,7 +12,9 @@ import networkx as nx
 
 from topologiq.core.graph_manager.utils import reindex_path_dict
 from topologiq.core.pathfinder.pathfinder import pathfinder
-from topologiq.utils.classes import CubeBeams, PathBetweenNodes, StandardBlock, StandardCoord
+from topologiq.core.beams import CubeBeams
+from topologiq.core.paths import PathBetweenNodes
+from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.read_write import prep_stats_n_log
 from topologiq.vis.animation import create_animation
 from topologiq.vis.blockgraph import vis_3d

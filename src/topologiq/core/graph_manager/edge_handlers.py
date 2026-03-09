@@ -16,10 +16,10 @@ from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
 from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
 from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.core.beams import CubeBeams
+from topologiq.core.paths import PathBetweenNodes
 from topologiq.utils.classes import (
     Colors,
-    CubeBeams,
-    PathBetweenNodes,
     StandardBlock,
     StandardCoord,
 )

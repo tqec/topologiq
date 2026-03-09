@@ -13,7 +13,8 @@ Note:
 import numpy as np
 
 from topologiq.core.pathfinder.utils import get_manhattan
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.utils.classes import StandardCoord
+from topologiq.core.beams import CubeBeams
 
 ##################
 # STANDARD EDGES #

@@ -40,7 +40,8 @@ from topologiq.core.pathfinder.utils import (
     get_max_manhattan,
     init_bfs,
 )
-from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
+from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.core.beams import CubeBeams
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
 
