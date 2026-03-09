@@ -108,6 +108,7 @@ exclude = [
 ignore = [
     "E501",     # Line lenght: default to [tool.ruff] settings
     "B905",     # zip(): allow without "strict=True"
+    "D105",     # Do NOT require docstrings on magic methods
     "D202",     # Allow blank-lines after function docstrings
     "D203",     # incorrect-blank-line-before-class incompatible w. D211
     "D213",     # multi-line-summary-second-line incompatible w. D212
