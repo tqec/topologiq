@@ -15,6 +15,9 @@ from topologiq.dzw.common.path import Path
 from logging import getLogger
 console = getLogger(__name__)
 
+QubitId = int
+LayerId = int
+
 class LayerTransitionType(Enum):
     EVERY = 0
     LOWER = 1
@@ -52,8 +55,8 @@ class AugmentedNxGraph:
         self.__bg_graph = nx.Graph()
 
         # Keeps track of which nodes appear on which qubit-line or layer of the ZX-graph
-        self.__zx_qubits: dict[int, list[NodeId]] = defaultdict(list)
-        self.__zx_layers: dict[int, list[NodeId]] = defaultdict(list)
+        self.__zx_qubits: dict[QubitId, list[NodeId]] = defaultdict(list)
+        self.__zx_layers: dict[LayerId, list[NodeId]] = defaultdict(list)
 
         # Tracks the order in which nodes and edges from the ZX graph were realised into the Blockgraph
         self.__zx_node_realisation_order = []
@@ -102,7 +105,7 @@ class AugmentedNxGraph:
     def get_qubits(self):
         return self.__zx_qubits.keys()
 
-    def get_qubit(self, node) -> int:
+    def get_qubit(self, node) -> QubitId:
         return self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT]
 
     def get_nodes(self):
@@ -114,7 +117,7 @@ class AugmentedNxGraph:
     def get_layers(self):
         return self.__zx_layers.keys()
 
-    def get_layer(self, layer):
+    def get_layer(self, layer) -> list[NodeId]:
         return self.__zx_layers[layer]
 
     def get_layer_density(self, layer: int) -> tuple[int,int]:
@@ -339,7 +342,7 @@ class AugmentedNxGraph:
         self.__zx_graph.nodes[target][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] += 1
         self.__zx_edge_realisation_order.append( (source, target) )
 
-    def place_cube(self, kind: CubeKind, position: Coordinates):
+    def place_cube(self, kind: CubeKind, position: Coordinates) -> CubeId:
         if position in self.occupied:
             raise Exception(f"Proposed position for {kind}@{position} is already occupied by another cube.")
 
