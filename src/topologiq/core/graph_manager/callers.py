@@ -23,12 +23,13 @@ from topologiq.vis.common import lattice_to_g
 # PATHFINDER #
 ##############
 def call_pathfinder(
+    # TODO-ANG: adapt to use ang to query revelant information
     src_block_info: StandardBlock,
     tgt_zx_type: str,
     init_step: int,
-    taken: list[StandardCoord],
+    taken: list[StandardCoord], # TODO-ANG: drop this
     tgt_block_info: StandardCoord | None = None,
-    hdm: bool = False,
+    hdm: bool = False, # TODO-ANG: drop this
     critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,

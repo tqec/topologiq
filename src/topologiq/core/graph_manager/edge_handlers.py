@@ -32,9 +32,9 @@ from topologiq.utils.core import datetime_manager
 def handle_std_edge(
     src_id: int,
     tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
+    nx_g: nx.Graph, # TODO-ANG: replace with ang
+    taken: list[StandardCoord], # TODO-ANG: drop
+    edge_paths: dict, # TODO-ANG: drop
     circuit_name: str = "circuit",
     init_step: int = 3,
     fig_data: matplotlib.figure.Figure | None = None,
@@ -78,6 +78,7 @@ def handle_std_edge(
     nx_g = prune_beams(nx_g, taken)
 
     # Get source cube data
+    # TODO-ANG: replace with ang.get_cube_position(..), ang.get_cube_kind(..)
     src_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
     src_kind: str | None = nx_g.nodes[src_id].get("kind")
     if src_coords is None or src_kind is None:
@@ -195,8 +196,8 @@ def handle_std_edge(
         if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
             call_debug_vis(
                 circuit_name,
-                nx_g,
-                edge_paths,
+                nx_g, # TODO-ANG: replace with ang
+                edge_paths, # TODO-ANG: drop
                 winner_path,
                 None,
                 (src_id, tgt_id),
@@ -208,6 +209,7 @@ def handle_std_edge(
 
         # Write to edge_paths if winner is found
         if winner_path:
+            # TODO-ANG: adapt to use ang, drop taken, edge_paths
             nx_g, taken, edge_paths, edge_success = update_edge_paths(
                 nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
             )
@@ -238,9 +240,9 @@ def handle_std_edge(
 def handle_cross_edge(
     src_id: int,
     tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
+    nx_g: nx.Graph, # TODO-ANG: replace with ang
+    taken: list[StandardCoord], # TODO-ANG: drop
+    edge_paths: dict, # TODO-ANG: drop
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
     **kwargs,
@@ -274,10 +276,11 @@ def handle_cross_edge(
 
     # Prune taken and beams
     edge_success = False
-    taken = list(set(taken))
-    nx_g = prune_beams(nx_g, taken)
+    taken = list(set(taken)) # TODO-ANG: drop
+    nx_g = prune_beams(nx_g, taken) # TODO-ANG: adapt to use ang
 
     # Get source and target data for current (src_id, tgt_id) pair
+    # TODO-ANG: replace to use ang.get_cube_position(..)
     u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
 
     # Process edge only if both src_id and tgt_id have already been placed in the 3D space
@@ -293,6 +296,7 @@ def handle_cross_edge(
             critical_beams = _assemble_critical_beams(nx_g)
 
             # Check if edge is hadamard
+            # TODO-ANG: replace to use get_edge_type(..)
             zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
             hdm: bool = True if zx_edge_type == "HADAMARD" else False
 
@@ -300,6 +304,7 @@ def handle_cross_edge(
             v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
 
             if v_coords and v_kind:
+                # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
                     (u_coords, u_kind),
                     v_zx_type,
@@ -326,8 +331,8 @@ def handle_cross_edge(
                     # Call visualisation
                     call_debug_vis(
                         circuit_name,
-                        nx_g,
-                        edge_paths,
+                        nx_g, # TODO-ANG: adapt to use ang
+                        edge_paths, # TODO-ANG: drop
                         None,
                         clean_paths[0] if clean_paths else None,
                         (src_id, tgt_id),
@@ -338,6 +343,7 @@ def handle_cross_edge(
                     )
 
                 # Write to edge_paths if an edge is found
+                # TODO-ANG: adapt this to use ang
                 nx_g, taken, edge_paths, edge_success = update_edge_paths(
                     nx_g,
                     edge_paths,
@@ -364,6 +370,7 @@ def handle_cross_edge(
                         f"Runtime: ~{int(t_total_iter * 1000)}ms.",
                     )
 
+    # TODO-ANG: adapt to use ang
     nx_g = prune_beams(nx_g, taken)
     return nx_g, taken, edge_paths, edge_success
 
@@ -410,13 +417,14 @@ def _assemble_critical_beams(
 #####################################################
 # RECOVERY EDGES / CREATE SPIDERS TO AVOID SHUTDOWN #
 #####################################################
+# TODO-ANG: adapt to work with ang
 def add_twin(
     circuit_name,
-    nx_g,
+    nx_g, # TODO-ANG: adapt to use ang
     queue,
     visited,
-    edge_paths,
-    taken,
+    edge_paths, # TODO-ANG: drop
+    taken, # TODO-ANG: drop
     fig_data,
     twins,
     priority_ids,

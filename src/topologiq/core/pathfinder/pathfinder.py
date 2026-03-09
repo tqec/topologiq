@@ -48,6 +48,7 @@ from topologiq.utils.read_write import prep_stats_n_log
 ############################
 # MAIN PATHFINDER WORKFLOW #
 ############################
+# TODO-ANG: adapt to use ang
 def pathfinder(
     src_block_info: StandardBlock,
     tent_coords: list[StandardCoord],
@@ -166,6 +167,7 @@ def pathfinder(
 ###############################
 # CORE PATHFINDER SPATIAL BFS #
 ###############################
+# TODO-ANG: adapt this to use ang
 def core_pathfinder_bfs(
     src_block_info: StandardBlock,
     tent_coords: list[StandardCoord],

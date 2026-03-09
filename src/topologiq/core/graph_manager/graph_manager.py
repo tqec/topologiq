@@ -235,7 +235,7 @@ def graph_manager_bfs(
     # TODO-ANG: replace this with initialisation of AugmentedNxGraph
     nx_g = prep_3d_g(simple_graph)
     first_cube = get_first_cube(
-        nx_g,
+        nx_g, # TODO-ANG: replace with ang
         first_cube=first_cube,
         first_id_strategy=kwargs["first_id_strategy"],
         random_seed=kwargs["seed"],

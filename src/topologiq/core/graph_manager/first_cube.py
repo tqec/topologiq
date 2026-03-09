@@ -103,7 +103,7 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
 
 
 def get_first_cube(
-    nx_g: nx.Graph,
+    nx_g: nx.Graph, # TODO-ANG: replace with ang
     first_cube: tuple[int | None, str | None] = (None, None),
     first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
@@ -142,7 +142,7 @@ def get_first_cube(
 
 
 def place_first_cube(
-    nx_g: nx.Graph,
+    nx_g: nx.Graph, # TODO-ANG: replace with ang
     taken: list[StandardCoord],
     first_cube: StandardBlock,
     log_stats_id: int | None = None,
