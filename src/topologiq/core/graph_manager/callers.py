@@ -10,9 +10,9 @@ from typing import Any
 import matplotlib
 import networkx as nx
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.graph_manager.utils import reindex_path_dict
 from topologiq.core.pathfinder.pathfinder import pathfinder
-from topologiq.core.beams import CubeBeams
 from topologiq.core.paths import PathBetweenNodes
 from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.read_write import prep_stats_n_log

@@ -1,6 +1,15 @@
+"""Paths and related classes used across graph manager and pathfinder.
+
+Usage:
+    Call any required class from a separate script.
+
+"""
+
 from dataclasses import dataclass
-from topologiq.utils.classes import StandardCoord, StandardBlock
+
 from topologiq.core.beams import CubeBeams
+from topologiq.utils.classes import StandardBlock, StandardCoord
+
 
 # Edge path class with in-built value-function to enable path comparisons
 @dataclass(order=True)

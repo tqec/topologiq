@@ -12,9 +12,8 @@ Note:
 
 import numpy as np
 
-from topologiq.core.pathfinder.utils import get_manhattan
-from topologiq.utils.classes import StandardCoord
 from topologiq.core.beams import CubeBeams
+from topologiq.utils.classes import StandardCoord
 
 ##################
 # STANDARD EDGES #
@@ -71,7 +70,7 @@ def check_critical_beams(
                 in_clash_tracker = 0
                 for in_beam in in_beams_short:
                     intersections = [
-                        out_beam.intersects(in_beam, 9) for out_beam in out_beams_short
+                        out_beam.intersects(in_beam, 3, by_rays=True) for out_beam in out_beams_short
                     ]
                     # out_clash_tracker = out_clash_tracker + np.array(intersections)
                     in_clash_tracker += any(intersections)
@@ -179,62 +178,3 @@ def check_unbreakable_beams(
 
     return True, clash_coords
 
-
-def check_negotiable_beams(
-    negotiable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
-    full_path_coords: list[StandardCoord],
-    src_tgt_ids: tuple[int, int],
-) -> bool:
-    """Check that move does not break any beams of cubes that need all their exits.
-
-    Args:
-        negotiable_beams: A minified `critical_beams` object containing beams for nodes that can lose some beams.
-        full_path_coords: All coordinates occupied by current path.
-        src_tgt_ids: The exact IDs of the source and target cubes.
-
-    Return:
-        (bool): True if move clears all checks, False otherwise.
-
-    """
-
-    for node_id, (
-        node_coords,
-        min_exit_num,
-        cube_beams,
-        cube_beams_short,
-    ) in negotiable_beams.items():
-        # For each beam of current cube, check if path breaks the beam
-        out_broken_beams = 0
-        for single_beam in cube_beams_short:
-            if any([single_beam.contains(coord) for coord in full_path_coords]):
-                out_broken_beams += 1
-
-            # If beam is broken, add pre-existing beam-to-beam clashes to consider previously-used allowances
-            for other_node_id, (
-                other_node_coords,
-                other_min_exit_num,
-                other_cube_beams,
-                other_cube_beams_short,
-            ) in negotiable_beams.items():
-                adjust = 1 if other_node_id in src_tgt_ids else 0
-                manhattan_between = get_manhattan(node_coords, other_node_coords)
-                intersections = [
-                    single_beam.intersects(negotiable_beam, manhattan_between)
-                    for negotiable_beam in other_cube_beams_short
-                ]
-                if intersections:
-                    in_broken_beams = sum(intersections) - adjust
-                    out_broken_beams += in_broken_beams
-
-                # Flip check to false if number of broken beams exceeds tolerance
-                if len(other_cube_beams) - in_broken_beams < (other_min_exit_num - adjust):
-                    return False
-
-        # Adjust to consider the broken beam of outgoing/incoming edge in src and tgt cubes
-        adjust = 1 if node_id in src_tgt_ids else 0
-
-        # Flip check to false if number of broken beams exceeds tolerance
-        if len(cube_beams) - out_broken_beams < (min_exit_num - adjust):
-            return False
-
-    return True

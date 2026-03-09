@@ -5,10 +5,7 @@ Usage:
 
 """
 
-from dataclasses import dataclass
 from typing import TypedDict
-
-import numpy as np
 
 # Types & class for input ZX graph
 GraphNode = tuple[int, str]

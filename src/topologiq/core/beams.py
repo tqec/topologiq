@@ -1,7 +1,17 @@
+"""Beams and related classes used across graph_manager and pathfinder.
+
+Usage:
+    Call any required class from a separate script.
+
+"""
+
 from dataclasses import dataclass
+
 import numpy as np
 
+from topologiq.core.pathfinder.utils import get_manhattan
 from topologiq.utils.classes import StandardCoord
+
 
 @dataclass
 class BeamAxisComponent:
@@ -100,6 +110,7 @@ class SingleBeam:
         return self.x.start, self.y.start, self.z.start
 
     def direction(self) -> StandardCoord:
+        """Return te beam direction as a coordinate tuple."""
         return self.x.direction, self.y.direction, self.z.direction
 
     def contains(self, coords_to_check: StandardCoord) -> bool:
@@ -139,9 +150,10 @@ class SingleBeam:
         return False, None
 
     INTERSECTION_CONSISTENCY_CHECKS = False
-    INTERSECTION_BY_RAYS = True
 
-    def intersects(self, other: 'SingleBeam', len_of_materialised_beam: int) -> bool:
+    def intersects(
+        self, other: "SingleBeam", len_of_materialised_beam: int, by_rays: bool = False
+    ) -> bool:
         """Check if two beams intersect one another."""
 
         if SingleBeam.INTERSECTION_CONSISTENCY_CHECKS:
@@ -151,42 +163,44 @@ class SingleBeam:
             intersecting_arrays = any(c in self_as_array for c in other_as_array)
 
             if intersecting_arrays != intersecting_beams:
-                report  = f"INTERSECTION inconsistency. {self} vs {other} [A:{intersecting_arrays}/R:{intersecting_beams}]\n"
+                report = f"INTERSECTION inconsistency. {self} vs {other} [A:{intersecting_arrays}/R:{intersecting_beams}]\n"
                 report += f"> {self.to_array(len_of_materialised_beam)}\n> {other_as_array}."
                 raise Exception(report)
-        elif SingleBeam.INTERSECTION_BY_RAYS:
+        elif by_rays:
             intersecting_beams = self.intersects_co_planarity(other)
-        else: # SingleBeam.INTERSECTION_BY_RAYS == False
+        else:  # SingleBeam.INTERSECTION_BY_RAYS == False
             other_as_array = other.to_array(len_of_materialised_beam)
             intersecting_beams = any([self.contains(c) for c in other_as_array])
 
         return intersecting_beams
 
-    def intersects_co_planarity(self, other: 'SingleBeam') -> bool:
+    def intersects_co_planarity(self, other: "SingleBeam") -> bool:
         """Check if two beams intersect one another."""
 
         p1 = self.coords()
-        d1 = self.direction()
         p2 = other.coords()
+
+        if get_manhattan(p1, p2) > 9:
+            return False
+
+        d1 = self.direction()
         d2 = other.direction()
 
         # The orientation will describe which case of directions we're dealing with; same, opposite or orthogonal
         orientation = np.dot(d1, d2)
+
+        if orientation != 0:
+            return False
+
+        p1 = self.coords()
+        p2 = other.coords()
+
+        # Beams are orthogonal; source of the other beam must be in the positive quadrant of the span of {d1, -d2}
         # sigma is the position of the source of the other beam relative to the source of this beam
         sigma = np.subtract(p2, p1)
 
-        if orientation == 0:
-            # Beams are orthogonal; source of the other beam must be in the positive quadrant of the span of {d1, -d2}
-            basis = np.subtract(d1, d2)
-            intersecting_rays = np.all( (sigma == 0) | ( np.sign(sigma) == np.sign(basis)) )
-        else:
-            # Beams are parallel; source of other beam must be located along the same line as direction of this beam
-            cross = np.cross(d1, sigma)
-            intersecting_rays = np.dot(cross, cross) == 0
-            if orientation == -1:
-                # Beams are in opposite directions; source of other beam cannot be located behind source of this beam
-                intersecting_rays &= np.dot(d1, sigma) >= 0
+        basis = np.subtract(d1, d2)
+        return np.all((sigma == 0) | (np.sign(sigma) == np.sign(basis)))
 
-        return intersecting_rays
 
 CubeBeams = list[SingleBeam]
