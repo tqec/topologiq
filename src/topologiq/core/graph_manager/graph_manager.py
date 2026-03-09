@@ -195,7 +195,7 @@ def graph_manager_bfs(
     first_cube: tuple[int | None, str | None] = (None, None),
     **kwargs,
 ) -> tuple[
-    nx.Graph,
+    nx.Graph, #TODO-ANG: Replace this with AugmentedNxGraph
     dict,
     dict[int, StandardBlock] | None,
     dict[tuple[int, int], list[str]] | None,
@@ -232,6 +232,7 @@ def graph_manager_bfs(
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
     # First spider/cube
+    # TODO-ANG: replace this with initialisation of AugmentedNxGraph
     nx_g = prep_3d_g(simple_graph)
     first_cube = get_first_cube(
         nx_g,
@@ -253,6 +254,7 @@ def graph_manager_bfs(
         return nx_g, edge_paths, lat_nodes, lat_edges
 
     # 3. Place first spider/cube
+    # TODO-ANG: replace this with ang.place_cube(..)
     nx_g, taken = place_first_cube(nx_g, taken, first_cube)
 
     # 4. Graph manager BFS
@@ -262,6 +264,7 @@ def graph_manager_bfs(
     trackers = duration_trackers, edge_trackers
 
     try:
+        # TODO-ANG: Replace nx_g with ang. Drop taken, edge_paths
         edge_paths, taken, run_success, trackers, _ = do_bfs(
             nx_g,
             queue,
@@ -310,12 +313,12 @@ def graph_manager_bfs(
 # BFS #
 #######
 def do_bfs(
-    nx_g: nx.Graph,
+    nx_g: nx.Graph, # TODO-ANG: replace with AugmentedNxGraph
     queue: deque,
     visited: set,
-    taken: list[StandardCoord],
+    taken: list[StandardCoord], # TODO-ANG: drop
     circuit_name: str,
-    edge_paths: dict,
+    edge_paths: dict, # TODO-ANG: drop
     trackers: list[any],
     fig_data: matplotlib.figure.Figure | None = None,
     **kwargs,
@@ -356,7 +359,7 @@ def do_bfs(
     while queue:
         repeat_current_src = False
         if hold_for_edge_removal:
-            nx_g.remove_edges_from(hold_for_edge_removal)
+            nx_g.remove_edges_from(hold_for_edge_removal) # TODO-ANG: what is this ??
             nx_g = prune_beams(nx_g, taken)
 
             hold_for_edge_removal = []
@@ -365,7 +368,7 @@ def do_bfs(
         src_id: int = queue.popleft()
 
         # Iterate over neighbours of current source
-        for tgt_id in cast(list[int], nx_g.neighbors(src_id)):
+        for tgt_id in cast(list[int], nx_g.neighbors(src_id)): # TODO-ANG: replace with ang.get_neighbours(..)
             # Handle cubes that need to be placed for the first time
             if tgt_id not in visited:
                 # Start iteration timer
@@ -376,7 +379,7 @@ def do_bfs(
                 visited.add(tgt_id)
 
                 # Ensure taken has unique entries on each run
-                taken = list(set(taken))
+                taken = list(set(taken)) # TODO-ANG: drop
 
                 # Try to place blocks as close to one another as as possible
                 step, max_step = (3, 15)
@@ -384,9 +387,9 @@ def do_bfs(
                     nx_g, taken, edge_paths, edge_success = handle_std_edge(
                         src_id,
                         tgt_id,
-                        nx_g,
-                        taken,
-                        edge_paths,
+                        nx_g,       # TODO-ANG: replace with ang
+                        taken,      # TODO-ANG: drop
+                        edge_paths, # TODO-ANG: drop
                         circuit_name=circuit_name,
                         init_step=step,
                         fig_data=fig_data,
@@ -404,6 +407,7 @@ def do_bfs(
                         num_edges_processed += 1
 
                         # Check move didn't cause problems elsewhere
+                        # TODO-ANG: replace nx_g with ang, drop taken
                         priority_ids = check_need_for_twins(
                             nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
                         )
@@ -416,7 +420,7 @@ def do_bfs(
                                     "==> Adding twin nodes for IDs:" + Colors.RESET,
                                     priority_ids,
                                 )
-
+                            # TODO-ANG: adapt all this to use ang
                             (
                                 nx_g,
                                 queue,
@@ -454,11 +458,13 @@ def do_bfs(
                 if run_success is False:
                     break
 
+            # TODO-ANG: adapt this condition to use ang.is_edge_realised(..)
             elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
                 # Trigger connection for previously placed cubes
+                # TODO-ANG: adapt this to use ang, drop taken & edge_paths
                 nx_g, taken, edge_paths, edge_success = handle_cross_edge(
                     src_id,
                     tgt_id,
@@ -480,6 +486,7 @@ def do_bfs(
                     num_edges_processed += 1
 
                     # Check move didn't cause problems elsewhere
+                    # TODO-ANG: adapt this to use ang
                     priority_ids = check_need_for_twins(
                         nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
                     )
@@ -493,6 +500,7 @@ def do_bfs(
                                 priority_ids,
                             )
 
+                        # TODO-ANG: adapt this to use ang
                         nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal = (
                             add_twin(
                                 circuit_name,
