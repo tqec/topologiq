@@ -1,5 +1,6 @@
 from collections import deque, defaultdict
 from enum import Enum
+from typing import Iterable
 
 import pyzx as zx
 import networkx as nx
@@ -13,6 +14,9 @@ from topologiq.dzw.common.components_bg import CubeId, CubeKind
 from topologiq.dzw.common.path import Path
 
 from logging import getLogger
+
+from topologiq.utils.classes import SimpleDictGraph
+
 console = getLogger(__name__)
 
 QubitId = int
@@ -47,9 +51,7 @@ class AugmentedNxGraph:
     KEY_BG_PIPE_TYPE = 'bg_pipe_type'
     KEY_BG_CUBE_BEAMS = 'bg_cube_beams'
 
-    def __init__(self, zx_graph: zx.graph.base.BaseGraph):
-        super().__init__()
-
+    def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]], edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]]):
         # Separate ZX-graph and BG-graph
         self.__zx_graph = nx.Graph()
         self.__bg_graph = nx.Graph()
@@ -62,39 +64,60 @@ class AugmentedNxGraph:
         self.__zx_node_realisation_order = []
         self.__zx_edge_realisation_order = []
 
-        # Keeps track of the coordinates in 3D that are occupied by some cube
-        # TODO: Replace with efficient data-structure for crowded space (Binary Space Partitioning ?)
-        self.occupied: set[Coordinates] = set()
-
-        for node in zx_graph.vertices():
+        for node, node_type in nodes:
             self.__zx_graph.add_node(node)
-            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE] = NodeType.convert(zx_graph.type(node))
-
-            node_qubit = zx_graph.qubit(node)
-            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
-            self.__zx_qubits[node_qubit].append(node)
-
-            node_layer = zx_graph.row(node)
-            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
-            self.__zx_layers[node_layer].append(node)
-
+            self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE] = node_type
             self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] = 0
             self.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] = None
 
-        for edge in zx_graph.edges():
+        for edge, edge_type in edges:
             source = min(edge)
             target = max(edge)
             self.__zx_graph.add_edge(source, target)
-            self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE_TYPE] = EdgeType.convert(zx_graph.edge_type(edge))
+            self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE_TYPE] = edge_type
             self.__zx_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = None
 
         self.__next_cube_id = self.__zx_graph.number_of_nodes()
+
+        # Keeps track of the coordinates in 3D that are occupied by some cube
+        # TODO: replace with efficient data-structure for crowded space (Binary Space Partitioning ?)
+        self.occupied: set[Coordinates] = set()
 
         # TODO: split any spider with more than 4 edges (cfr. graph_manager.py; prep_3d_g)
         # TODO: does the choice of how to split such spiders affect the minimal achievable volume ?
         _, max_degree = max(self.__zx_graph.degree, key=lambda entry: entry[1])
         if max_degree > 4:
             raise NotImplemented("Enforcement of no-more-than-four-legs condition not implemented.")
+
+    @staticmethod
+    def from_pyzx_graph(zx_graph: zx.graph.base.BaseGraph):
+        nodes = zip( zx_graph.vertices(), [ NodeType.convert(zx_graph.type(node)) for node in zx_graph.vertices() ] )
+        edges = zip( zx_graph.edges(), [ EdgeType.convert(zx_graph.edge_type(edge)) for edge in zx_graph.edges() ] )
+
+        ang = AugmentedNxGraph(nodes, edges)
+
+        # Add qubit and layer information
+        for node in zx_graph.vertices():
+            node_qubit = zx_graph.qubit(node)
+            ang.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
+            ang.__zx_qubits[node_qubit].append(node)
+
+            node_layer = zx_graph.row(node)
+            ang.__zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
+            ang.__zx_layers[node_layer].append(node)
+
+        return ang
+
+    @staticmethod
+    def from_simple_graph(simple_graph: SimpleDictGraph):
+        console.warning(f"SimpleDictGraph does not provide qubit and layer information.")
+
+        nodes = map( lambda nt : (nt[0], NodeType.convert_simple(nt[1])) , simple_graph["nodes"] )
+        edges = map( lambda et : (et[0], EdgeType.convert_simple(et[1])) , simple_graph["edges"] )
+
+        ang = AugmentedNxGraph(nodes, edges)
+
+        return ang
 
     def get_node_realisation_order(self) -> list[NodeId]:
         return self.__zx_node_realisation_order

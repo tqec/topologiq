@@ -20,6 +20,17 @@ class NodeType(Enum):
         else:
             raise ValueError(f"Unsupported vertex type: {vertex_type}")
 
+    @staticmethod
+    def convert_simple(vertex_type: str):
+        if vertex_type == zx.VertexType.Z.name:
+            return NodeType.Z
+        elif vertex_type == zx.VertexType.X.name:
+            return NodeType.X
+        elif vertex_type == zx.VertexType.BOUNDARY.name:
+            return NodeType.O
+        else:
+            raise ValueError(f"Unsupported vertex type: {vertex_type}")
+
     def __str__(self):
         return self.name
 
@@ -33,6 +44,15 @@ class EdgeType(Enum):
         if edge_type == zx.EdgeType.SIMPLE:
             return EdgeType.IDENTITY
         elif edge_type == zx.EdgeType.HADAMARD:
+            return EdgeType.HADAMARD
+        else:
+            raise ValueError(f"Unsupported edge type: {edge_type}")
+
+    @staticmethod
+    def convert_simple(edge_type: str):
+        if edge_type == zx.EdgeType.SIMPLE.name:
+            return EdgeType.IDENTITY
+        elif edge_type == zx.EdgeType.HADAMARD.name:
             return EdgeType.HADAMARD
         else:
             raise ValueError(f"Unsupported edge type: {edge_type}")
