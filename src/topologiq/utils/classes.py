@@ -24,6 +24,7 @@ StandardCoord = tuple[int, int, int]
 StandardBlock = tuple[StandardCoord, str]
 StandardBeam = list[StandardCoord]
 
+
 # Misc classes
 class Colors:
     """Colours to use in printouts."""

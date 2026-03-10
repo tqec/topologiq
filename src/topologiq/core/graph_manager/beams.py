@@ -351,7 +351,10 @@ def check_need_twins_beams(
                         in_pending = in_degree - nx_g.nodes[in_id]["completed"]
 
                         for beam in in_beams:
-                            broken_beams = [beam.intersects(out_beam, short_beams=False) for out_beam in out_beams]
+                            broken_beams = [
+                                beam.intersects(out_beam, short_beams=False)
+                                for out_beam in out_beams
+                            ]
                             out_tracker = out_tracker + np.array(broken_beams)
 
                             inner_count += sum(broken_beams)
