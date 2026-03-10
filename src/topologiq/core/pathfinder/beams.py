@@ -69,9 +69,7 @@ def check_critical_beams(
             for in_id, (_, in_min_exit_num, _, in_beams_short) in critical_beams.items():
                 in_clash_tracker = 0
                 for in_beam in in_beams_short:
-                    intersections = [
-                        out_beam.intersects(in_beam, 3, by_rays=True) for out_beam in out_beams_short
-                    ]
+                    intersections = [out_beam.intersects(in_beam) for out_beam in out_beams_short]
                     # out_clash_tracker = out_clash_tracker + np.array(intersections)
                     in_clash_tracker += any(intersections)
 
@@ -177,4 +175,3 @@ def check_unbreakable_beams(
                 broken_beams += 1
 
     return True, clash_coords
-

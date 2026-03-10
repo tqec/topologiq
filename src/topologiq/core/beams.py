@@ -5,11 +5,14 @@ Usage:
 
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import numpy as np
 
 from topologiq.core.pathfinder.utils import get_manhattan
+from topologiq.kwargs import BEAMS_SHORT_LEN
 from topologiq.utils.classes import StandardCoord
 
 
@@ -43,14 +46,6 @@ class BeamAxisComponent:
     def __str__(self) -> str:
         """Return a readable representation."""
         return f"[{self.start} => {self.end})"
-
-    def is_parallel(self, other: object) -> bool:
-        """Check if two beams run parallel to one another (ignores collinearity)."""
-        return (
-            self.x.is_point() == other.x.is_point()
-            and self.y.is_point() == other.y.is_point()
-            and self.z.is_point() == other.z.is_point()
-        )
 
     def contains(self, point: int) -> bool:
         """Check if a given point is contained in the segment."""
@@ -118,88 +113,33 @@ class SingleBeam:
         x, y, z = coords_to_check
         return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
 
-    def to_array(self, len_of_materialised_beam: int) -> list[StandardCoord]:
-        """Convert beam into an array of 3D coordinates of arbitrary length."""
-
-        if self.x.direction != 0:
-            y_start = self.y.start
-            z_start = self.z.start
-            return [(i, y_start, z_start) for i in self.x.to_array(len_of_materialised_beam)]
-
-        if self.y.direction != 0:
-            x_start = self.x.start
-            z_start = self.z.start
-            return [(x_start, i, z_start) for i in self.y.to_array(len_of_materialised_beam)]
-
-        if self.z.direction != 0:
-            x_start = self.x.start
-            y_start = self.y.start
-            return [(x_start, y_start, i) for i in self.z.to_array(len_of_materialised_beam)]
-
-    def check_co_planarity(self, other: object) -> tuple[bool, int | None]:
-        """Check if two beams are co-planar."""
-        co_planarity_checks = [
-            self.x.direction == other.x.direction == 0,
-            self.y.direction == other.y.direction == 0,
-            self.z.direction == other.z.direction == 0,
-        ]
-
-        if sum(co_planarity_checks) == 1:
-            return True, co_planarity_checks.index(True)
-
-        return False, None
-
-    INTERSECTION_CONSISTENCY_CHECKS = False
-
-    def intersects(
-        self, other: "SingleBeam", len_of_materialised_beam: int, by_rays: bool = False
-    ) -> bool:
+    def intersects(self, other: SingleBeam, short_beams: bool = True) -> bool:
         """Check if two beams intersect one another."""
 
-        if SingleBeam.INTERSECTION_CONSISTENCY_CHECKS:
-            intersecting_beams = self.intersects_co_planarity(other)
-            other_as_array = other.to_array(50)
-            self_as_array = self.to_array(50)
-            intersecting_arrays = any(c in self_as_array for c in other_as_array)
-
-            if intersecting_arrays != intersecting_beams:
-                report = f"INTERSECTION inconsistency. {self} vs {other} [A:{intersecting_arrays}/R:{intersecting_beams}]\n"
-                report += f"> {self.to_array(len_of_materialised_beam)}\n> {other_as_array}."
-                raise Exception(report)
-        elif by_rays:
-            intersecting_beams = self.intersects_co_planarity(other)
-        else:  # SingleBeam.INTERSECTION_BY_RAYS == False
-            other_as_array = other.to_array(len_of_materialised_beam)
-            intersecting_beams = any([self.contains(c) for c in other_as_array])
-
-        return intersecting_beams
-
-    def intersects_co_planarity(self, other: "SingleBeam") -> bool:
-        """Check if two beams intersect one another."""
-
+        # Get source coords for both beams
         p1 = self.coords()
         p2 = other.coords()
 
-        if get_manhattan(p1, p2) > 9:
+        # If checking on short mode,
+        # exit if beams' sources are further than LEN_SHORT_BEAMS
+        if short_beams and get_manhattan(p1, p2) > BEAMS_SHORT_LEN:
             return False
 
+        # Check if beams are parallel or orthogonal
+        # No clashes possible if beams are parallel
         d1 = self.direction()
         d2 = other.direction()
-
-        # The orientation will describe which case of directions we're dealing with; same, opposite or orthogonal
         orientation = np.dot(d1, d2)
 
         if orientation != 0:
             return False
 
-        p1 = self.coords()
-        p2 = other.coords()
-
-        # Beams are orthogonal; source of the other beam must be in the positive quadrant of the span of {d1, -d2}
-        # sigma is the position of the source of the other beam relative to the source of this beam
+        # Evaluate clash if beams are orthogonal
+        # Source of the other beam must be in the positive quadrant of the span of {d1, -d2}
+        # Sigma is the position of the source of the other beam relative to the source of this beam
         sigma = np.subtract(p2, p1)
-
         basis = np.subtract(d1, d2)
+
         return np.all((sigma == 0) | (np.sign(sigma) == np.sign(basis)))
 
 
