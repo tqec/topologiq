@@ -26,7 +26,7 @@ class NodeType(Enum):
             return NodeType.Z
         elif vertex_type == zx.VertexType.X.name:
             return NodeType.X
-        elif vertex_type == zx.VertexType.BOUNDARY.name:
+        elif vertex_type == 'O': # zx.VertexType.BOUNDARY.name:
             return NodeType.O
         else:
             raise ValueError(f"Unsupported vertex type: {vertex_type}")

@@ -12,12 +12,14 @@ import networkx as nx
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.utils.classes import StandardBlock, StandardCoord
 
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_bg import CubeKind
 
-def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -> int:
+def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_random") -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
 
     Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
         first_id_strategy (optional): Enables switch between available strategies for choosing first node.
 
     Returns:
@@ -26,15 +28,13 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
     """
 
     # Terminate if graph is empty
-    if not nx_g.nodes:
+    if ang.number_of_nodes() == 0:
         raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
 
     # ID of first non-boundary node
     if first_id_strategy == "first_spider":
         # Sort all IDS in graph excluding boundaries
-        all_node_ids = sorted(
-            [node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"]
-        )
+        all_node_ids = sorted([ node for node in ang.get_nodes() if not ang.is_boundary(node) ])
 
         # Pick first
         first_id = all_node_ids[0]
@@ -44,33 +44,33 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
         # Append ID determined as central by several centrality measures to a single array
         central_nodes = []
 
-        degree_centrality = nx.degree_centrality(nx_g)
+        degree_centrality = nx.degree_centrality(ang.zx_graph)
         central_nodes.append(sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0])
 
-        closeness_centrality = nx.closeness_centrality(nx_g)
+        closeness_centrality = nx.closeness_centrality(ang.zx_graph)
         central_nodes.append(
             sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0]
         )
 
-        info_centrality = nx.current_flow_closeness_centrality(nx_g, weight=None, solver="lu")
+        info_centrality = nx.current_flow_closeness_centrality(ang.zx_graph, weight=None, solver="lu")
         central_nodes.append(sorted(info_centrality, key=info_centrality.get, reverse=True)[0])
 
-        betweenness_centrality = nx.betweenness_centrality(nx_g, normalized=True, endpoints=True)
+        betweenness_centrality = nx.betweenness_centrality(ang.zx_graph, normalized=True, endpoints=True)
         central_nodes.append(
             sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0]
         )
 
-        harmonic_centrality = nx.harmonic_centrality(nx_g, nbunch=None, distance=None, sources=None)
+        harmonic_centrality = nx.harmonic_centrality(ang.zx_graph, nbunch=None, distance=None, sources=None)
         central_nodes.append(
             sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0]
         )
 
         laplacian = nx.laplacian_centrality(
-            nx_g, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
+            ang.zx_graph, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
         )
         central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
 
-        eigen_centrality = nx.eigenvector_centrality_numpy(nx_g)
+        eigen_centrality = nx.eigenvector_centrality_numpy(ang.zx_graph)
         central_nodes.append(sorted(eigen_centrality, key=eigen_centrality.get, reverse=True)[0])
 
         # Choose most common
@@ -81,10 +81,10 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
         # Loose build a list of central spiders
         max_degree = -1
         central_nodes: list[int] = []
-        node_degrees = nx_g.degree
+        node_degrees = ang.zx_graph.degree
 
         if isinstance(node_degrees, int):
-            raise ValueError("ERROR: nx_g.degree() returned int. Cannot determine first ID.")
+            raise ValueError("ERROR: ang.zx_graph.degree returned int. Cannot determine first ID.")
 
         for node, degree in node_degrees:
             if degree > max_degree:
@@ -103,7 +103,7 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
 
 
 def get_first_cube(
-    nx_g: nx.Graph, # TODO-ANG: replace with ang
+    ang: AugmentedNxGraph, # TODO-ANG: replace with ang
     first_cube: tuple[int | None, str | None] = (None, None),
     first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
@@ -111,7 +111,7 @@ def get_first_cube(
     """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
         first_cube (optional): Override ID and kind (used to replicate specific cases).
         first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
             centrality_majority: Use a majority vote from several centrality measures (deterministic).
@@ -131,14 +131,14 @@ def get_first_cube(
         random.seed(random_seed)
 
     if not first_id:
-        first_id = get_first_id(nx_g, first_id_strategy=first_id_strategy)
+        first_id = get_first_id(ang, first_id_strategy=first_id_strategy)
 
     if not first_kind:
         deterministic = False if first_id_strategy == "centrality_random" else True
-        tentative_kinds = nx_g.nodes[first_id].get("type_fam")
+        tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id)) # nx_g.nodes[first_id].get("type_fam")
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
 
-    return first_id, first_kind
+    return first_id, first_kind.name.lower()
 
 
 def place_first_cube(

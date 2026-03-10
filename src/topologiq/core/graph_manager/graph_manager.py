@@ -36,6 +36,7 @@ from topologiq.core.graph_manager.utils import (
     rm_temp_files,
     validity_checks,
 )
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
@@ -121,7 +122,7 @@ def runner(
         # Call algorithm
         edge_paths, lat_nodes, lat_edges = (None, None, None)
         try:
-            nx_g, edge_paths, lat_nodes, lat_edges = graph_manager_bfs(
+            nx_g, edge_paths, lat_nodes, lat_edges, ang = graph_manager_bfs(
                 simple_graph,
                 circuit_name=circuit_name,
                 fig_data=fig_data,
@@ -199,6 +200,7 @@ def graph_manager_bfs(
     dict,
     dict[int, StandardBlock] | None,
     dict[tuple[int, int], list[str]] | None,
+    AugmentedNxGraph
 ]:
     """Process all nodes/edges in the input ZX graph and select best paths.
 
@@ -231,11 +233,12 @@ def graph_manager_bfs(
     zx_spiders_num, zx_edges_num = (len(simple_graph["nodes"]), len(simple_graph["edges"]))
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
-    # First spider/cube
-    # TODO-ANG: replace this with initialisation of AugmentedNxGraph
+    ang = AugmentedNxGraph.from_simple_graph(simple_graph)
     nx_g = prep_3d_g(simple_graph)
+
+    # First spider/cube
     first_cube = get_first_cube(
-        nx_g, # TODO-ANG: replace with ang
+        ang,
         first_cube=first_cube,
         first_id_strategy=kwargs["first_id_strategy"],
         random_seed=kwargs["seed"],
@@ -306,7 +309,7 @@ def graph_manager_bfs(
         traceback.print_exc()
         raise ValueError("ERROR. The graph_manager BFS crashed.", e, "\n")
 
-    return nx_g, edge_paths, lat_nodes, lat_edges
+    return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
 
 #######

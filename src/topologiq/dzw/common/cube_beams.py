@@ -3,7 +3,7 @@ from topologiq.dzw.common.coordinates import Coordinates
 
 from topologiq.dzw.common.components_bg import CubeKind
 
-from topologiq.utils.classes import NodeBeams
+# from topologiq.utils.classes import NodeBeams
 
 from logging import getLogger
 console = getLogger(__name__)
@@ -54,15 +54,6 @@ class CubeBeams:
 
     def count_intersected(self, other):
         beams_intersected = 0
-
-        return beams_intersected
-
-    def old_count_intersected(self, node_beams: NodeBeams, target_beams: NodeBeams) -> int:
-        beams_intersected = 0
-        for node_beam in node_beams:
-            for target_beam in target_beams:
-                if any([ c in node_beam for c in target_beam ]):
-                    beams_intersected += 1
 
         return beams_intersected
 
