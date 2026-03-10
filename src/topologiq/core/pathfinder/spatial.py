@@ -5,9 +5,9 @@ Usage:
 
 """
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.pathfinder.beams import check_critical_beams
 from topologiq.utils.classes import StandardBlock, StandardCoord
-from topologiq.core.beams import CubeBeams
 
 
 #######################

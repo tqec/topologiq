@@ -13,6 +13,7 @@ from pathlib import Path
 import networkx as nx
 
 from topologiq.core.pathfinder.spatial import get_taken_coords
+from topologiq.core.paths import PathBetweenNodes
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
@@ -20,7 +21,7 @@ from topologiq.utils.classes import (
     StandardBlock,
     StandardCoord,
 )
-from topologiq.core.paths import PathBetweenNodes
+
 
 #################
 # HEALTH CHECKS #
