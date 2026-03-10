@@ -1,9 +1,9 @@
 from enum import Enum
 from functools import total_ordering
 
-from topologiq.dzw.helpers.spacetime import Spacetime
-from topologiq.dzw.common.coordinates import Coordinates
+from topologiq.utils.classes import StandardCoord
 
+from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.common.components_zx import NodeType
 
 CubeId = int
@@ -32,7 +32,7 @@ class CubeKind(Enum):
             raise Exception(f"{node_type} has no representation as a cube of any kind.")
 
     @staticmethod
-    def convert(node_type: NodeType, node_reach: Coordinates):
+    def convert(node_type: NodeType, node_reach: StandardCoord):
         if node_type == NodeType.X:
             if node_reach == Spacetime.XY:
                 return CubeKind.ZZX
@@ -63,7 +63,7 @@ class CubeKind(Enum):
             return NodeType.O
 
     # TODO: a CubeKind.YYY has Spacetime.XYZ and single port ?
-    def get_reach(self) -> Coordinates:
+    def get_reach(self) -> StandardCoord:
         if self == CubeKind.XZZ or self == CubeKind.ZXX:
             return Spacetime.YZ
         elif self == CubeKind.ZXZ or self == CubeKind.XZX:

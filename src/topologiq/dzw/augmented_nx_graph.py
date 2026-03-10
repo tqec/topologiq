@@ -5,7 +5,8 @@ from typing import Iterable
 import pyzx as zx
 import networkx as nx
 
-from topologiq.dzw.common.coordinates import Coordinates
+from topologiq.utils.classes import StandardCoord
+
 from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.helpers.blockgraph import BlockGraphHelper
 
@@ -16,6 +17,7 @@ from topologiq.dzw.common.path import Path
 from logging import getLogger
 
 from topologiq.utils.classes import SimpleDictGraph
+from topologiq.utils.utils_pathfinder import get_manhattan
 
 console = getLogger(__name__)
 
@@ -81,7 +83,7 @@ class AugmentedNxGraph:
 
         # Keeps track of the coordinates in 3D that are occupied by some cube
         # TODO: replace with efficient data-structure for crowded space (Binary Space Partitioning ?)
-        self.occupied: set[Coordinates] = set()
+        self.occupied: set[StandardCoord] = set()
 
         # TODO: split any spider with more than 4 edges (cfr. graph_manager.py; prep_3d_g)
         # TODO: does the choice of how to split such spiders affect the minimal achievable volume ?
@@ -231,7 +233,7 @@ class AugmentedNxGraph:
     def get_node_layer(self, node: int) -> int:
         return self.zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER]
 
-    def get_cube_position(self, cube: CubeId) -> Coordinates:
+    def get_cube_position(self, cube: CubeId) -> StandardCoord:
         return self.bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE_POSITION]
 
     def get_cube_kind(self, cube: CubeId) -> CubeKind:
@@ -252,7 +254,7 @@ class AugmentedNxGraph:
     def is_node_realised(self, node: NodeId) -> bool:
         return self.zx_graph.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] is not None
 
-    def realise_node(self, node: NodeId, kind: CubeKind, position: Coordinates) -> CubeId:
+    def realise_node(self, node: NodeId, kind: CubeKind, position: StandardCoord) -> CubeId:
         """Realise the node as a cube of the given kind placed at the given coordinates."""
         if kind not in CubeKind.suitable_kinds(self.get_node_type(node)):
             raise Exception(f"Requested {kind} is not compatible with {self.get_node_type(node)}")
@@ -365,7 +367,7 @@ class AugmentedNxGraph:
         self.zx_graph.nodes[target][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] += 1
         self.__zx_edge_realisation_order.append( (source, target) )
 
-    def place_cube(self, kind: CubeKind, position: Coordinates) -> CubeId:
+    def place_cube(self, kind: CubeKind, position: StandardCoord) -> CubeId:
         if position in self.occupied:
             raise Exception(f"Proposed position for {kind}@{position} is already occupied by another cube.")
 
@@ -402,7 +404,7 @@ class AugmentedNxGraph:
         source_position = self.get_cube_position(source_cube)
         target_position = self.get_cube_position(target_cube)
         # TODO: replace 3 with 1 once the pathfinder has been rewritten
-        if source_position.get_manhattan_distance(target_position) != 1:
+        if get_manhattan(source_position, target_position) != 3:
             raise Exception(f"Cubes #{source_cube}@{source_position} and #{target_cube}@{target_position} are not at adjacent positions.")
 
         self.bg_graph.add_edge(source_cube, target_cube)
@@ -415,7 +417,7 @@ class AugmentedNxGraph:
         target_cube = path.get_target_cube()
 
         source_kind: CubeKind = self.get_cube_kind(source_cube)
-        source_position: Coordinates = self.get_cube_position(source_cube)
+        source_position: StandardCoord = self.get_cube_position(source_cube)
 
         cubes = path.get_cubes()
         pipes = path.get_pipes()
@@ -431,7 +433,7 @@ class AugmentedNxGraph:
 
         previous_kind = source_kind
         previous_position = source_position
-        previous_reach: Coordinates = source_kind.get_reach()
+        previous_reach: StandardCoord = source_kind.get_reach()
 
         n = len(cubes)
         for index in range(1, n):
@@ -500,7 +502,7 @@ class AugmentedNxGraph:
 
         return hadamard_consistent
 
-    def __identify_cube_at_position(self, position: Coordinates) -> int:
+    def __identify_cube_at_position(self, position: StandardCoord) -> int:
         for cube in self.get_cubes():
             if self.get_cube_position(cube) == position:
                 return cube
