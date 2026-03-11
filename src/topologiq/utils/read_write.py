@@ -95,7 +95,7 @@ def write_bgraph(
         f.write("\nPIPES: src;tgt;kind;\n")
         f.writelines(
             [
-                f"{src_id!s};{src_id!s};{pipe_info[0]};\n"
+                f"{src_id!s};{tgt_id!s};{pipe_info[0]};\n"
                 for (src_id, tgt_id), pipe_info in lat_edges.items()
             ]
         )

@@ -62,13 +62,7 @@ class SpiderCubeRegistry:
             if not zx_type and kind:
                 zx_type = kind_to_zx_type(kind)
 
-            # Derive basis from kind or zx_type
-            if kind:
-                basis = (Basis(kind[0]), Basis(kind[1]), Basis(kind[2]))
-            else:
-                basis = (Basis(zx_type), Basis(zx_type), Basis(zx_type))
-
-            cls.cache[key] = SpiderCube(zx_type, kind, basis)
+            cls.cache[key] = SpiderCube(zx_type, kind)
 
         # Return instance
         return cls.cache[key]
@@ -89,39 +83,47 @@ class SpiderCube:
 
     zx_type: str
     kind: str | None
-    basis: tuple[Basis, Basis, Basis] | None = None
 
     def __post_init__(self) -> None:
         """Post-initialisation actions."""
 
         # Reject cubes with impossible open faces/axes counts
         if self.kind:
-            num_open_axes = self.basis.count(Basis.P)
+            num_open_axes = self.kind.count("o")
             if num_open_axes == 2:
                 raise ValueError("Error creating SpiderCube. Cubes cannot have two open bases.")
 
             # Reject malformed Y-cubes
-            y_count = self.basis.count(Basis.Y)
+            y_count = self.kind.count("y")
             if y_count not in {0, 3}:
                 raise ValueError("Error creating SpiderCube. Y-cubes can only have Y-bases.")
 
             # Reject malformed X or Z cubes
-            if num_open_axes == 1 and (self.basis[0] == self.basis[1] == self.basis[2]):
+            if num_open_axes == 1 and (self.kind[0] == self.kind[1] == self.kind[2]):
                 raise ValueError(
                     "Error creating SpiderCube. X/Z-cubes cannot have equal basis in all faces."
                 )
 
-        # Basis
+    @cached_property
+    def get_basis(self) -> Basis | tuple[Basis, Basis, Basis]:
+        """Get the basis of the SpiderCube."""
+
+        # Derive basis from kind or zx_type
         if self.kind:
-            x, y, z = list(self.kind)
-            self.basis = (Basis(x), Basis(y), Basis(z))
+            return (Basis(self.kind[0]), Basis(self.kind[1]), Basis(self.kind[2]))
         else:
-            self.basis = (Basis(self.zx_type), Basis(self.zx_type), Basis(self.zx_type))
+            return Basis(self.zx_type)
+
 
     @cached_property
-    def get_colours(self) -> tuple[str, tuple[str, str, str]]:
+    def get_zx_color(self) -> str:
         """Retrieve the SpiderCube's colours."""
-        return ZXColors.lookup(self)
+        return ZXColors.lookup(self.zx_type)
+
+    @cached_property
+    def get_cube_colors(self) -> tuple[str, tuple[str, str, str]]:
+        """Retrieve the SpiderCube's colours."""
+        return tuple([ZXColors.lookup(c) for c in self.kind])
 
     @cached_property
     def cube_exits(self) -> tuple[bool, bool, bool, bool, bool, bool]:
@@ -134,12 +136,12 @@ class SpiderCube:
 
         """
 
-        if self.basis == (Basis.Y, Basis.Y, Basis.Y):
+        if self.basis() == (Basis.Y, Basis.Y, Basis.Y):
             return (False, False, True) * 2
-        if self.basis == (Basis.P, Basis.P, Basis.P):
+        if self.basis() == (Basis.P, Basis.P, Basis.P):
             return (True, True, True) * 2
 
-        x, y, z = self.basis
+        x, y, z = self.basis()
         cube_exits = (x != self.zx_type, y != self.zx_type, z != self.zx_type) * 2
         return cube_exits
 
@@ -162,6 +164,14 @@ class Basis(Enum):
     Z = "Z"
     P = "O"
 
+    @classmethod
+    def _missing_(cls, val):
+
+        if val in ["o", "P", "p"]:
+            return cls.P
+        else:
+            return cls(val.upper())
+
     def flip_basis(self) -> Basis:
         """Return the opposite basis if applicable."""
         return Basis.X if self == Basis.Z else Basis.Z if self == Basis.X else self
@@ -172,34 +182,29 @@ class Basis(Enum):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}.{self.value}"
 
-
 class ZXColors(str, Enum):
     """Colour palette to standardise visualisations."""
 
     X = "#d7a4a1"
     Y = "#7fff00"
-    Z = "#d7a4a1"
+    Z = "#b9cdff"
     P = "#333333"
     H = "#ffff00"
     SIMPLE = "#000000"
 
     @classmethod
-    def lookup(cls, spider_cube: SpiderCube) -> tuple[str, tuple[str, str, str]]:
+    def lookup(cls, char: str) -> str:
         """Get standardised HEX colours for an arbitrary SpiderCube.
 
         Args:
-            spider_cube: The SpiderCube for which colours are being requested.
+            char: A character, typically signifying a zx_type or basis.
 
         Returns:
-            zx_color: The HEX corresponding to the ZX colour of the SpiderCube.
-            ax_colors: A tuple of HEX colours corresponding to the colours of (x, y, z) faces of the SpiderCube
-
+            zx_color: A colour HEX corresponding to the character.
 
         """
 
         try:
-            zx_color = cls[spider_cube.zx_type.upper()].value
-            ax_colors = tuple([cls[str(b)] for b in spider_cube.basis])
-            return zx_color, ax_colors
+            return cls[char.upper()]
         except (KeyError, AttributeError):
-            return cls.SIMPLE, (cls.SIMPLE, cls.SIMPLE, cls.SIMPLE)
+            return cls.SIMPLE
