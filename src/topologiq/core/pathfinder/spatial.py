@@ -181,7 +181,7 @@ def check_skip_move(
     nxt_coords: StandardCoord,
     tgt_coords: list[StandardCoord],
     taken: list[StandardCoord],
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
     src_tgt_ids: tuple[int, int],
     second_pass: bool,
     bounding_box: dict[str, dict[str, int]],
