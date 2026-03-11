@@ -219,7 +219,7 @@ def check_skip_move(
             or nxt_y < bounding_box["y"]["min"]
             or nxt_y > bounding_box["y"]["max"]
             or nxt_z < bounding_box["z"]["min"]
-            or nxt_x > bounding_box["z"]["max"]
+            or nxt_z > bounding_box["z"]["max"]
         ):
             return True
 
