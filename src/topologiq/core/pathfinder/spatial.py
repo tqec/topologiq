@@ -5,6 +5,8 @@ Usage:
 
 """
 
+import sys
+
 from topologiq.core.beams import CubeBeams
 from topologiq.core.pathfinder.beams import check_critical_beams
 from topologiq.utils.classes import StandardBlock, StandardCoord
@@ -226,8 +228,11 @@ def check_skip_move(
         return True
 
     if critical_beams and "o" not in curr_kind:
+        if len(tgt_coords) > 1:
+            sys.stderr.write("Warning: check_skip_move tgt_coords > 1")
+
         if not check_critical_beams(
-            critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
+            critical_beams, full_path_coords, nxt_coords, tgt_coords[0], src_tgt_ids
         ):
             return True
 
