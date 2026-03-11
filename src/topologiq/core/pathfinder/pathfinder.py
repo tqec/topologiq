@@ -22,6 +22,7 @@ Notes:
 
 from collections import deque
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.pathfinder.spatial import (
     check_skip_move,
     gen_bounding_box,
@@ -40,7 +41,7 @@ from topologiq.core.pathfinder.utils import (
     get_max_manhattan,
     init_bfs,
 )
-from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
+from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
 
@@ -55,7 +56,7 @@ def pathfinder(
     tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[
@@ -172,7 +173,7 @@ def core_pathfinder_bfs(
     tent_tgt_kinds: list[str],
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[
