@@ -56,7 +56,7 @@ def pathfinder(
     tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[
@@ -173,7 +173,7 @@ def core_pathfinder_bfs(
     tent_tgt_kinds: list[str],
     taken: list[StandardCoord] = [],
     hdm: bool = False,
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[

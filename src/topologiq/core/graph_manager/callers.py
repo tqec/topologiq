@@ -31,7 +31,7 @@ def call_pathfinder(
     taken: list[StandardCoord],
     tgt_block_info: StandardCoord | None = None,
     hdm: bool = False,
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]] = {},
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[

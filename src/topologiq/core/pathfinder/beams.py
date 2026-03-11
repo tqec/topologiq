@@ -31,7 +31,7 @@ from topologiq.utils.classes import StandardCoord
 # CROSS EDGES #
 ###############
 def check_critical_beams(
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
     full_path_coords: list[StandardCoord],
     nxt_coords: StandardCoord,
     tgt_coords: StandardCoord,
@@ -91,11 +91,11 @@ def check_critical_beams(
 # CROSS EDGES NOT CURRENTLY IN USED BUT NOT DISCARDED YET #
 ###########################################################
 def split_critical_beams(
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
-    src_tgt_ids: tuple[int, int] | None,
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
+    src_tgt_ids: tuple[int, int],
 ) -> tuple[
-    dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
-    dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
+    dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
 ]:
     """Split critical beams into simple and verbose object containing different kinds of beams.
 
@@ -141,10 +141,10 @@ def split_critical_beams(
 
 
 def check_unbreakable_beams(
-    unbreakable_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    unbreakable_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
     full_path_coords: list[StandardCoord],
     src_tgt_ids: tuple[int, int],
-) -> bool:
+) -> tuple[bool, list[StandardCoord]]:
     """Check that move does not break any beams of cubes that need all their exits.
 
     Args:

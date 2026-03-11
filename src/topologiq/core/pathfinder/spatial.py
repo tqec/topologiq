@@ -5,6 +5,8 @@ Usage:
 
 """
 
+import sys
+
 from topologiq.core.beams import CubeBeams
 from topologiq.core.pathfinder.beams import check_critical_beams
 from topologiq.utils.classes import StandardBlock, StandardCoord
@@ -179,7 +181,7 @@ def check_skip_move(
     nxt_coords: StandardCoord,
     tgt_coords: list[StandardCoord],
     taken: list[StandardCoord],
-    critical_beams: dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]],
+    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
     src_tgt_ids: tuple[int, int],
     second_pass: bool,
     bounding_box: dict[str, dict[str, int]],
@@ -217,7 +219,7 @@ def check_skip_move(
             or nxt_y < bounding_box["y"]["min"]
             or nxt_y > bounding_box["y"]["max"]
             or nxt_z < bounding_box["z"]["min"]
-            or nxt_x > bounding_box["z"]["max"]
+            or nxt_z > bounding_box["z"]["max"]
         ):
             return True
 
@@ -226,8 +228,11 @@ def check_skip_move(
         return True
 
     if critical_beams and "o" not in curr_kind:
+        if len(tgt_coords) > 1:
+            sys.stderr.write("Warning: check_skip_move tgt_coords > 1")
+
         if not check_critical_beams(
-            critical_beams, full_path_coords, nxt_coords, tgt_coords, src_tgt_ids
+            critical_beams, full_path_coords, nxt_coords, tgt_coords[0], src_tgt_ids
         ):
             return True
 
