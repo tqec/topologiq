@@ -1,0 +1,413 @@
+"""PyZX graph and PyZX graph manager classes."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from pathlib import Path
+from typing import cast
+
+import networkx as nx
+import pyzx as zx
+from pyzx.circuit import Circuit
+
+from topologiq.input.utils import ZXColors, ZXTypes
+from topologiq.utils.classes import SimpleDictGraph, StandardBlock
+from topologiq.utils.misc import kind_to_zx_type
+
+
+######################
+# PyZX GRAPH MANAGER #
+######################
+class ZXGraphManager:
+    """Registry class to keep augmented ZX graphs organised."""
+
+    def __init__(self, primary_key: str = "input"):
+        """Initialise class with incoming or default primary key and empty collection."""
+        self.primary_key: str = primary_key
+        self._collection: dict[str, AugmentedZXGraph] = {}
+
+    def set_primary(self, graph_key: str):
+        """Switch the key designating the primary augmented ZX graph."""
+        if graph_key not in self._collection:
+            raise ValueError(f"ERROR. Key {graph_key} not found in augmented ZX graph collection.")
+        self.primary_key = graph_key
+
+    def add_graph(
+        self,
+        aug_zx_graph: AugmentedZXGraph,
+        graph_key: str,
+    ):
+        """Add an augmented ZX graph to the collection.
+
+        Args:
+            aug_zx_graph: The augmented ZX graph to preserve.
+            graph_key: String to use as collection key.
+
+        """
+        if not graph_key:
+            raise ValueError("ERROR. A key is needed to add an augmented ZX graph to collection.")
+        if "input" in self._collection and graph_key == "input":
+            raise ValueError("ERROR. Cannot overwrite augmented ZX graph collection's input graph.")
+        self._collection[graph_key] = aug_zx_graph
+
+    def add_graph_from_pyzx(
+        self,
+        zx_graph: zx.Graph,
+        use_primary: bool = False,
+        graph_key: str = "",
+    ):
+        """Add an augmented ZX graph to the collection from a QASM string or file.
+
+        Args:
+            zx_graph: The PyZX graph.
+            use_primary: Flag to set key to primary key.
+            graph_key: Open key string to save intermediate/modified ZX graphs.
+
+        """
+        key = self.primary_key if use_primary else graph_key
+        self.add_graph(AugmentedZXGraph(zx_graph), graph_key=key)
+        return self._collection[key]
+
+    def add_graph_from_qasm(
+        self,
+        qasm_str: str | None = None,
+        path_to_qasm_file: Path | None = None,
+        use_primary: bool = False,
+        graph_key: str = "",
+    ):
+        """Add an augmented ZX graph to the collection from a QASM string or file.
+
+        Args:
+            qasm_str: A quantum circuit encoded as a QASM string.
+            path_to_qasm_file: A path to a QASM file.
+            use_primary: Flag to set key to primary key.
+            graph_key: Open key string to save intermediate/modified ZX graphs.
+
+        """
+        key = self.primary_key if use_primary else graph_key
+        aug_zx_graph = AugmentedZXGraph.from_qasm(
+            qasm_str=qasm_str, path_to_qasm_file=path_to_qasm_file
+        )
+        self.add_graph(aug_zx_graph, graph_key=key)
+        return self._collection[key]
+
+    def add_graph_from_blockgraph(
+        self,
+        blockgraph_cubes: dict[int, StandardBlock],
+        blockgraph_pipes: dict[tuple[int, int], list[str]],
+        use_primary: bool = False,
+        graph_key: str = "",
+        other: AugmentedZXGraph | None = None,
+    ):
+        """Add an augmented ZX graph to the collection from a blockgraph.
+
+        Args:
+            use_primary: Flag to set key to primary key.
+            graph_key: Open key string to save intermediate/modified ZX graphs.
+            blockgraph_cubes: The cubes of the blockgraph.
+            blockgraph_pipes: The pipes of the blockgraph.
+            other: A separate ZX graph against which to compare.
+
+        """
+        key = self.primary_key if use_primary else graph_key
+        aug_zx_graph = AugmentedZXGraph.from_blockgraph(
+            blockgraph_cubes=blockgraph_cubes, blockgraph_pipes=blockgraph_pipes, other=other
+        )
+        self.add_graph(aug_zx_graph, graph_key=key)
+        return self._collection[key]
+
+    def get_graph(
+        self,
+        use_primary: bool = False,
+        graph_key: str = "",
+    ) -> AugmentedZXGraph:
+        """Retrieve an augmented ZX graph from the collection.
+
+        Args:
+            use_primary: Flag to set key to primary key.
+            graph_key: Open key string to save intermediate/modified ZX graphs.
+
+        """
+        key = self.primary_key if use_primary else graph_key
+        if not key or key not in self._collection:
+            raise ValueError(f"ERROR. Key {key} not in augmented ZX graph collection.")
+        return self._collection[key]
+
+
+########################
+# AUGMENTED PyZX GRAPH #
+########################
+class AugmentedZXGraph:
+    """Topologiq's dual-graph PyZX Graph implementation."""
+
+    def __init__(self, zx_graph: zx.Graph):
+        """Initialise class with incoming ZX graph or empty one."""
+        self.zx_graph = zx_graph if zx_graph else zx.Graph()
+        self.zx_graph_reduced = self.zx_graph.copy()
+        zx.full_reduce(self.zx_graph_reduced)
+
+    @classmethod
+    def from_qasm(
+        cls,
+        qasm_str: str | None = None,
+        path_to_qasm_file: Path | None = None,
+        remove_lonely_resets: bool = True,
+    ) -> AugmentedZXGraph:
+        """Create ZX graph from a QASM string or QASM file.
+
+        Args:
+            qasm_str: A quantum circuit encoded as a QASM string.
+            path_to_qasm_file: A path to a QASM file.
+            remove_lonely_resets: Flag to trigger removal of any resets tied exclusively to an input.
+                * Lonely resets happen when QASM uses reset for initialisation and create isolated island graphs.
+                * Lonely resets are always followed by a gap and, immediately after, an initialisation spider.
+                * Lonely resets are therefore irrelevant for computation.
+
+        """
+
+        # Health checks
+        if not qasm_str and not path_to_qasm_file:
+            raise ValueError("ERROR. A QASM string or path to a QASM file is needed.")
+
+        # Load QASM from file, else from QASM string
+        if path_to_qasm_file:
+            zx_circuit = Circuit.load(str(path_to_qasm_file))
+        else:
+            zx_circuit = Circuit.from_qasm(qasm_str)
+
+        # Convert to graph
+        zx_graph = zx_circuit.to_graph()
+
+        # Remove lonely spiders
+        if remove_lonely_resets:
+            zx_graph = cls._rm_lonely_resets(zx_graph)
+
+        return cls(zx_graph)
+
+    @classmethod
+    def from_blockgraph(
+        cls,
+        blockgraph_cubes: dict[int, StandardBlock],
+        blockgraph_pipes: dict[tuple[int, int], list[str]],
+        other: AugmentedZXGraph | None = None,
+    ) -> AugmentedZXGraph:
+        """Create ZX graph from an blockgraph.
+
+        Args:
+            path_to_input_file: The path to the input `.bgraph` file.
+            blockgraph_cubes: The cubes of the blockgraph.
+            blockgraph_pipes: The pipes of the blockgraph.
+            other: A separate ZX graph against which to compare.
+
+        """
+
+        zx_graph = zx.Graph()
+        id_swaps = {}
+
+        for cube_id, (coords, kind) in blockgraph_cubes:
+            zx_type = ZXTypes(kind_to_zx_type(kind)).value
+
+            if other and cube_id in other.zx_graph.vertex_set():
+                qubit = other.zx_graph.vdata(cube_id, "qubit")
+                row = other.zx_graph.vdata(cube_id, "row")
+            else:
+                qubit, row = (None, None)
+
+            vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row)
+            zx_graph.set_vdata(vertex, "coords", coords)
+
+            id_swaps[cube_id] = vertex
+
+        for (src_id, tgt_id), kind in blockgraph_pipes:
+            zx_type = ZXTypes(kind_to_zx_type(kind)).value
+            zx_graph.add_edge((id_swaps[src_id], id_swaps[tgt_id]), edgetype=zx_type)
+
+        # Set graph in class
+        return cls(zx_graph)
+
+    def check_equality(self, other: AugmentedZXGraph):
+        """Check if two PyZX graphs are equivalent."""
+        # Attempt to verify circuit equality (faster)
+        try:
+            self_as_circuit = zx.extract_circuit(self.zx_graph_reduced)
+            other_as_circuit = zx.extract_circuit(other.zx_graph_reduced)
+            return self_as_circuit.verify_equality(other_as_circuit)
+        # Fallback to tensor comparison with full graph (very slow)
+        except Exception:
+            return zx.compare_tensors(self.zx_graph, other.zx_graph, preserve_scalar=False)
+
+    def get_visual_data(self, use_reduced: bool = False):
+        """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""
+
+        # Work on copy ZX graph
+        zx_graph = self.zx_graph_reduced.copy() if use_reduced else self.zx_graph.copy()
+
+        # Create base NX graph
+        zx_graph_as_nx = nx.Graph()
+
+        # Loop vertices -> nodes
+        for v_id in zx_graph.vertices():
+            # Core info
+            t = zx_graph.type(v_id)
+            phase = zx_graph.phase(v_id)
+            phase_float = float(phase) if isinstance(phase, (Fraction, int, float)) else 0.0
+
+            # Derivative info
+            t_name = ZXTypes(t).name
+            color = ZXColors.lookup(t_name)
+
+            # Create rich/verbose NX node
+            zx_graph_as_nx.add_node(
+                v_id, type=t_name, color=color, phase=phase, phase_float=phase_float
+            )
+
+        # Loop ZX edges -> NX edges
+        for e_id in zx_graph.edges():
+            # Core info
+            src_id, tgt_id = zx_graph.edge_st(e_id)
+            t = zx_graph.edge_type(e_id)
+
+            # Derivative info
+            t_name = ZXTypes(t).name
+            color = ZXColors.lookup(t_name)
+
+            # Create rich/verbose NX edge
+            zx_graph_as_nx.add_edge(
+                src_id, tgt_id, etype=t_name, color=color, hdm=True if t == 2 else False
+            )
+
+        # Define positions using NX layouts
+        if zx_graph_as_nx.number_of_nodes() > 1:
+            pos_dict = nx.spectral_layout(zx_graph_as_nx, dim=3)
+            for v_id, coords in pos_dict.items():
+                zx_graph_as_nx.nodes[v_id]["pos"] = tuple((coords * 10).tolist())
+        elif zx_graph_as_nx.number_of_nodes() == 1:
+            v_id = list(zx_graph_as_nx.nodes)[0]
+            zx_graph_as_nx.nodes[v_id]["pos"] = (0, 0, 0)
+
+        return zx_graph_as_nx
+
+    @staticmethod
+    def _rm_lonely_resets(zx_graph: zx.Graph) -> zx.Graph:
+        """Remove reset-initialisation spiders from a ZX graph.
+
+        Args:
+            zx_graph: A PyZX graph with lonely spiders in the first "row"
+                (which results from loading QASM files using reset for initialisation).
+
+        Returns:
+            zx_graph: The updated ZX graph.
+
+        """
+
+        lonely_spider_ids = []
+        inputs = zx_graph.inputs()
+        for in_id in inputs:
+            neigh_ids = list(zx_graph.neighbors(in_id))
+            if len(neigh_ids) == 1:
+                neigh_neigh_ids = list(zx_graph.neighbors(neigh_ids[0]))
+                if len(neigh_neigh_ids) == 1:
+                    if neigh_neigh_ids[0] == in_id:
+                        lonely_spider_ids.extend([in_id, neigh_ids[0]])
+        zx_graph.remove_vertices(lonely_spider_ids)
+
+        return zx_graph
+
+
+#########################
+# PyZX METHODS WRAPPERS #
+#########################
+# SOON TO BE LEGACY #
+#####################
+def qasm_to_pyzx(qasm_str: str) -> zx.BaseGraph:
+    """Import a circuit from QASM and convert it to a PyZX graph.
+
+    Args:
+        qasm_str: A quantum circuit encoded as a QASM string.
+
+    """
+    # QASM --> PyZX circuit --> PyZX graph
+    zx_circuit = zx.Circuit.from_qasm(qasm_str)
+    pyzx_graph = zx_circuit.to_graph()
+
+    return zx_circuit, pyzx_graph
+
+
+def get_dict_from_pyzx(g: zx.BaseGraph | zx.GraphS):
+    """Extract circuit information from a PyZX graph and dumps it into a dictionary.
+
+    Args:
+        g: a PyZX graph.
+
+    Returns:
+        g_dict: a dictionary with graph info.
+
+    """
+
+    # EMPTY DICT FOR RESULTS
+    g_dict: dict[str, dict] = {"meta": {}, "nodes": {}, "edges": {}}
+
+    # GET AND TRANSFER DATA FROM PyZX
+    try:
+        # Dump graph into dict
+        dict_graph = g.to_dict(include_scalar=True)
+
+        # Add meta-information
+        g_dict["meta"]["scalar"] = dict_graph["scalar"]
+
+        # Add nodes
+        for v in g.vertices():
+            g_dict["nodes"][v] = {
+                "coords": (0, 0, 0),
+                "rot": (0, 0, 0),
+                "scale": (0, 0, 0),
+                "type": g.type(v).name,
+                "phase": str(g.phase(v)),
+                "degree": g.vertex_degree(v),
+                "connections": list(g.neighbors(v)),
+            }
+
+        # Add edges
+        c = 0
+        for e in g.edges():
+            typed_type: zx.EdgeType = cast(zx.EdgeType, g.edge_type(e))
+            g_dict["edges"][f"e{c}"] = {
+                "type": typed_type.name,
+                "src": e[0],
+                "tgt": e[1],
+            }
+            c += 1
+
+    except Exception as e:
+        print(f"Error extracting info from graph: {e}")
+
+    return g_dict
+
+
+def pyzx_g_to_simple_g(g: zx.BaseGraph | zx.GraphS) -> SimpleDictGraph:
+    """Extract circuit information from a PyZX graph and dumps it into a simple graph.
+
+    Args:
+        g: a PyZX graph.
+
+    Returns:
+        g_simple: a dictionary with graph info.
+
+    """
+
+    # GET FULL GRAPH INTO DICTIONARY
+    g_full = get_dict_from_pyzx(g)
+
+    # TRANSFER INTO A SIMPLE GRAPH
+    g_simple: SimpleDictGraph = {"nodes": [], "edges": []}
+    for n in g_full["nodes"]:
+        n_type = "O" if g_full["nodes"][n]["type"] == "BOUNDARY" else g_full["nodes"][n]["type"]
+        g_simple["nodes"].append((n, n_type))
+
+    for e in g_full["edges"]:
+        src = g_full["edges"][e]["src"]
+        tgt = g_full["edges"][e]["tgt"]
+        e_type = g_full["edges"][e]["type"]
+        g_simple["edges"].append(((src, tgt), e_type))
+
+    return g_simple

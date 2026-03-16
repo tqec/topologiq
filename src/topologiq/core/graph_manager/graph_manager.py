@@ -39,7 +39,7 @@ from topologiq.core.graph_manager.utils import (
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
-from topologiq.utils.read_write import write_outputs
+from topologiq.utils.read_write import write_bgraph
 from topologiq.vis.animation import create_animation
 from topologiq.vis.blockgraph import vis_3d
 from topologiq.vis.common import lattice_to_g
@@ -143,9 +143,7 @@ def runner(
             )
 
             # Write outputs
-            write_outputs(
-                simple_graph, circuit_name, edge_paths, lat_nodes, lat_edges, OUTPUT_DIR_PATH
-            )
+            write_bgraph(OUTPUT_DIR_PATH, circuit_name, lat_nodes, lat_edges)
 
             # vis_options result
             if kwargs["vis_options"][0] or kwargs["vis_options"][1] or kwargs["debug"] > 1:

@@ -26,7 +26,7 @@ from pathlib import Path
 
 from topologiq.assets import pyzx_graphs, simple_graphs
 from topologiq.core.graph_manager.graph_manager import runner
-from topologiq.input.pyzx import pyzx_g_to_simple_g
+from topologiq.input.pyzx_manager import pyzx_g_to_simple_g
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.utils.read_write import get_debug_cases
 from topologiq.vis.zx import simple_graph_vis

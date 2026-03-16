@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from topologiq.utils.classes import SimpleDictGraph, StandardBlock, StandardCoord
+from topologiq.utils.classes import StandardBlock, StandardCoord
 
 #############
 # CONSTANTS #
@@ -65,7 +65,8 @@ HEADER_PARAMS_STATS = [
 # WRITE  #
 ############
 def write_bgraph(
-    path_to_output_file: Path | str,
+    output_dir: Path | str,
+    circuit_name: str,
     lat_nodes: dict[int, StandardBlock],
     lat_edges: dict[tuple[int, int], list[str]],
     in_spiders: list[int] = [],
@@ -74,6 +75,8 @@ def write_bgraph(
     """Write final outputs to a `.bgraph` file.
 
     Args:
+        output_dir: The path to the directory where results should be saved.
+        circuit_name: The name of the circuit.
         path_to_output_file: Path to the .bgraph file being written.
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
         lat_edges: The pipes of the final space-time diagram produced by Topologiq.
@@ -82,8 +85,22 @@ def write_bgraph(
 
     """
 
+    # Create output directory if it doesn't exist.
+    if not isinstance(output_dir, Path):
+        output_dir = Path(str(output_dir))
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Write to bgraph file
+    path_to_output_file = output_dir / f"{circuit_name}.bgraph"
+
     with open(path_to_output_file, "w") as f:
         f.write("BLOCKGRAPH 0.1.0;\n")
+        f.write("Produced using: Topologiq.\n")
+
+        f.write("\nMETADATA: attr_name; value;\n")
+        f.write("pipe_length; 2.0;\n")
+        f.write(f"circuit_name; {circuit_name};\n")
+
         f.write("\nCUBES: index;x;y;z;kind;label;\n")
         f.writelines(
             [
@@ -99,59 +116,6 @@ def write_bgraph(
                 for (src_id, tgt_id), pipe_info in lat_edges.items()
             ]
         )
-
-
-def write_outputs(
-    simple_graph: SimpleDictGraph,
-    circuit_name: str,
-    edge_paths: dict,
-    lat_nodes: dict[int, StandardBlock],
-    lat_edges: dict[tuple[int, int], list[str]],
-    output_dir_path: Path,
-):
-    """Write the final output to a TXT file.
-
-    Args:
-        simple_graph: The `simple_graph` form of an arbitrary ZX circuit.
-        circuit_name: The name of the circuit.
-        edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
-        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
-        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
-        output_dir_path: The directory where outputs are saved.
-
-    """
-
-    lines: list[str] = []
-
-    lines.append(f"RESULT SHEET. CIRCUIT NAME: {circuit_name}\n")
-
-    lines.append("\n__________________________\nORIGINAL ZX GRAPH\n")
-    lines.extend([f"Node ID: {node[0]}. Type: {node[1]}\n" for node in simple_graph["nodes"]])
-    lines.append("\n")
-    lines.extend([f"Edge ID: {edge[0]}. Type: {edge[1]}\n" for edge in simple_graph["edges"]])
-
-    lines.append(
-        '\n__________________________\n3D "EDGE PATHS" (Blocks needed to connect two original nodes)\n'
-    )
-    lines.extend(
-        [
-            f"Edge {edge_path['src_tgt_ids']}: {edge_path['path_nodes']}\n"
-            for key, edge_path in edge_paths.items()
-        ]
-    )
-
-    lines.append("\n__________________________\nLATTICE SURGERY (Graph)\n")
-    lines.extend([f"Node ID: {key}. Info: {node}\n" for key, node in lat_nodes.items()])
-    lines.extend(
-        [
-            f"Edge ID: {key}. Kind: {edge_info[0]}. Original edge in ZX graph: {edge_info[1]} \n"
-            for key, edge_info in lat_edges.items()
-        ]
-    )
-
-    with open(f"{output_dir_path}/{circuit_name}.txt", "w") as f:
-        f.writelines(lines)
-        f.close()
 
 
 def prep_stats_n_log(

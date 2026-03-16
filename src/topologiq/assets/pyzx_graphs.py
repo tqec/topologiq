@@ -208,6 +208,8 @@ def random_graph(
             # Return if all IDs are present
             if draw_graph:
                 fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+            else:
+                fig = None
 
             # Return graph and figure
             return pyzx_graph, fig
