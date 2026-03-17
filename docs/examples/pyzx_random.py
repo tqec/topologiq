@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # General description of circuit
     qubit_n = 5
-    depth = 100
+    depth = 15
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph
