@@ -43,7 +43,6 @@ def cube_match(src_kind: str, move: StandardCoord, tgt_kind: str) -> bool:
     return True
 
 
-
 def check_exits(
     src_coords: StandardCoord,
     src_kind: str | None,
@@ -89,7 +88,9 @@ def check_exits(
         )
 
         if check_is_exit(src_kind, d):
-            is_unobstr, single_beam, single_beam_short = check_unobstructed(src_coords, tgt_coords, taken)
+            is_unobstr, single_beam, single_beam_short = check_unobstructed(
+                src_coords, tgt_coords, taken
+            )
             if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
                 unobstr_exits_n += 1
                 cube_beams.append(single_beam)
