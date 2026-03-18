@@ -266,7 +266,7 @@ def core_pathfinder_bfs(
                 continue
 
             # Rotate if current kind is a Hadamard
-            alt_curr_kind, hdm = handle_kind_after_hadamard(current_block, nxt_coords, hdm)
+            alt_curr_kind, hdm = handle_kind_after_hadamard(curr_kind, move, hdm)
 
             # Create a list of kinds that are valid for the next block
             possible_nxt_kinds = nxt_kinds(curr_kind if not alt_curr_kind else alt_curr_kind, move)
@@ -274,7 +274,7 @@ def core_pathfinder_bfs(
             # Loop over all possible next types
             for possible_nxt_kind in possible_nxt_kinds:
                 # Check if next kind needs to be rotated due to Hadamard
-                nxt_type = validate_nxt_kind(current_block, nxt_coords, possible_nxt_kind, hdm)
+                nxt_type = validate_nxt_kind(move, possible_nxt_kind, hdm)
                 nxt_block: StandardBlock = (nxt_coords, nxt_type)
 
                 # Log to visited and update path lengths if all conditions met

@@ -28,12 +28,10 @@ def cube_match(src_kind: str, move: StandardCoord, tgt_kind: str) -> bool:
         (bool): True if cubes match else False.
 
     """
-
-    # CHECK SOURCE TO TARGET
+    # Check source -> target
     if not check_is_exit(src_kind.lower(), move):
         return False
-
-    # CHECK TARGET TO SOURCE
+    # Check target -> source
     if not check_is_exit(tgt_kind.lower(), tuple([-i for i in (move)])):
         return False
 
@@ -200,8 +198,8 @@ def check_unobstructed(
 def face_match(src_kind: str, move: StandardCoord, tgt_kind: str) -> bool:
     """Check if the faces of two adjacent blocks match.
 
-    NB! The function needs to be called twice to robustly determine if two cubes match,
-    src_kind -> tgt_kind and then tgt_kind -> src_kind with inverted move vector.
+    NB! Call twice to robustly determine if two cubes match, (1) src_kind -> tgt_kind
+    and then (2) tgt_kind -> src_kind with inverted `move` vector.
 
     Args:
         src_kind: The kind of the source block being checked.
@@ -246,72 +244,53 @@ def nxt_kinds(src_kind: str, move: StandardCoord) -> list[str]:
 ###################
 # TRANSFORMATIONS #
 ###################
-def validate_nxt_kind(
-    current_block: StandardBlock, nxt_coords: StandardCoord, nxt_kind: str, hdm: bool
-) -> str:
+@lru_cache
+def validate_nxt_kind(move: StandardCoord, nxt_kind: str, hdm: bool) -> str:
     """Return next kind after assessing if it needs to be rotated or not."""
-
-    curr_coords, _ = current_block
-
     if hdm and "o" in nxt_kind:
         nxt_kind += "h"
-        direction = sum(
-            [p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))]
-        )
-
+        direction = sum(move)
         if direction < 0:
-            nxt_kind = rotate_pipe(nxt_kind)
-
+            return rotate_pipe(nxt_kind)
     return nxt_kind
 
 
-def handle_kind_after_hadamard(
-    current_block: StandardBlock, nxt_coords: StandardCoord, hdm: bool
-) -> str:
+def handle_kind_after_hadamard(curr_kind: StandardBlock, move: StandardCoord, hdm: bool) -> tuple[str | None, bool]:
     """Rotate hadamard if current kind is a hadamard."""
-
-    curr_coords, curr_kind = current_block
-
-    alt_curr_kind = None
     if "h" in curr_kind:
         hdm = False
-        direction = sum(
-            [p[1] - p[0] if p[0] != p[1] else 0 for p in list(zip(curr_coords, nxt_coords))]
-        )
-        if direction < 0:
-            pass
-        else:
-            alt_curr_kind = rotate_pipe(curr_kind)
-
-    return alt_curr_kind, hdm
+        direction = sum(move)
+        if direction > 0:
+            return rotate_pipe(curr_kind), hdm
+    return None, hdm
 
 
-def rotate_pipe(k: str) -> str:
+def rotate_pipe(kind: str) -> str:
     """Rotate a pipe around its length.
 
-    This function enables pipe rotation by using the exit marker in their kind
-    to create a rotational matrix, which is then used to rotate the original kind
-    using symbolic multiplication.
+    NB! Function might be a tad hard to understand. 1st step is to create a
+    rotation matrix using the exit marker in an arbitrary kind. 2nd step is
+    to rotate the incoming kind using symbolic multiplication.
 
     Args:
-        k: the kind of the pipe that needs rotation.
+        kind: the kind of the pipe that needs rotation.
 
     Returns:
-        rot_k: a kind with the rotation incorporated into the new name.
+        rotated_kind: a kind with the rotation incorporated into the new name.
 
     """
 
     h_flag = False
-    if "h" in k:
+    if "h" in kind:
         h_flag = True
-        k.replace("h", "")
+        kind.replace("h", "")
 
     # Build rotation matrix based on placement of "o" node
     idxs = [0, 1, 2]
-    idxs.remove(k.index("o"))
+    idxs.remove(kind.index("o"))
 
     new_matrix = {
-        k.index("o"): np.eye(3, dtype=int)[k.index("o")],
+        kind.index("o"): np.eye(3, dtype=int)[kind.index("o")],
         idxs[0]: np.eye(3, dtype=int)[idxs[1]],
         idxs[1]: np.eye(3, dtype=int)[idxs[0]],
     }
@@ -319,39 +298,14 @@ def rotate_pipe(k: str) -> str:
     rot_matrix = np.array([new_matrix[0], new_matrix[1], new_matrix[2]])
 
     # Rotate kind
-    rot_k = ""
+    rotated_kind = ""
     for r in rot_matrix:
         entry = ""
         for j, ele in enumerate(r):
-            entry += abs(int(ele)) * k[j]
-        rot_k += entry
+            entry += abs(int(ele)) * kind[j]
+        rotated_kind += entry
 
     if h_flag:
-        rot_k += "h"
+        rotated_kind += "h"
 
-    return rot_k
-
-
-def flip_hadamard(k: str) -> str:
-    """Flip a Hadamard for the opposite Hadamard with length on the same axis.
-
-    Args:
-        k: the kind of the Hadamard that needs inverting.
-
-    Returns:
-        k_2: the kind of the corresponding/inverted Hadamard.
-
-    """
-
-    # list of hadamard equivalences
-    equivs = {"zxoh": "xzoh", "xozh": "zoxh", "oxzh": "ozxh"}
-
-    # Match to equivalent block given direction
-    if k in equivs.keys():
-        new_k = equivs[k]
-    else:
-        inv_equivs = {v: k for k, v in equivs.items()}
-        new_k = inv_equivs[k]
-
-    # Return revised kind
-    return new_k
+    return rotated_kind
