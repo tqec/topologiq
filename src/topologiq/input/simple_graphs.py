@@ -84,26 +84,6 @@ def get_zx_type_fam(zx_type: str) -> list[str | None]:
     return fams[zx_type]
 
 
-def kind_to_zx_type(kind: str) -> str:
-    """Get the ZX type corresponding to a given block or pipe kind.
-
-    Args:
-        kind: the /kind of a given block.
-
-    Returns:
-        zx_type: the ZX type corresponding to the kind.
-
-    """
-
-    if kind == "ooo":
-        zx_type = "BOUNDARY"
-    elif "o" in kind:
-        zx_type = "HADAMARD" if "h" in kind else "SIMPLE"
-    else:
-        zx_type = min(set(kind), key=lambda c: kind.count(c)).capitalize()
-    return zx_type
-
-
 def break_single_spider_graph(simple_graph: SimpleDictGraph) -> SimpleDictGraph:
     """Break single spider graph into graph with min. num. spiders needed for lattice surgery.
 
