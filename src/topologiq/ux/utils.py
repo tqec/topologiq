@@ -1,25 +1,39 @@
-"""Quick utils to assist UX."""
+"""UX misc. utils.
 
-import json
-from pathlib import Path
+AI disclaimer:
+    category: Coding partner (see CONTRIBUTING.md for details).
+    model: Gemini, 3.0 Fast.
+    details: The AI assisted in architectural patterns, multi-framework type handling,
+        and boilerplate generation, while the domain logic and integration requirements
+        were directed by the human author.
 
-import pyzx as zx
-
-from topologiq.assets.pyzx_graphs import cnots
-
-
-def write_zx_to_json_file(zx_graph : zx.Graph, path_to_output_file: Path):
-    """Write a PyZX graph to a JSON file."""
-
-    json_data = zx_graph.to_json()
-    with open("zx_cnots.json", "w", encoding="utf-8") as f:
-        json.dump(json_data, f, indent=4)
+"""
 
 
-if __name__ == "__main__":
-    zx_cnots, _ = cnots()
-    zx.draw(zx_cnots)
-    zx.full_reduce(zx_cnots)
-    zx.draw(zx_cnots)
+GLUE_CODE = """import qiskit
+import qbraid
+import sys
 
-    #write_zx_to_json_file(zx_cnots)
+def run_user_code():
+{source_design}
+    return locals()
+
+try:
+    user_vars = run_user_code()
+    target = user_vars.get('{var_name}') or globals().get('{var_name}')
+    
+    if target is not None:
+        # Robust conversion using qbraid's high-level transpile
+        # This avoids the missing 'circuit_wrapper' name error
+        qasm_str = qbraid.transpiler.transpile(target, "qasm2")
+        
+        sys.stdout.write("---BEGIN_QASM---\\n")
+        sys.stdout.write(qasm_str)
+        sys.stdout.write("\\n---END_QASM---\\n")
+        sys.stdout.flush()
+    else:
+        print(f"ERROR: Variable '{{var_name}}' not found.", file=sys.stderr)
+except Exception as e:
+    print(f"ERROR: {{e}}", file=sys.stderr)
+    sys.stderr.flush()
+"""

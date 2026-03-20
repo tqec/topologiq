@@ -1,4 +1,9 @@
-"""PyZX graph and PyZX graph manager classes."""
+"""PyZX graph and PyZX graph manager classes.
+
+This module provides a unified interface for ingesting PyZX circuits from
+QASM as well as managing and producing PyZX graphs from them.
+
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ import networkx as nx
 import pyzx as zx
 from pyzx.circuit import Circuit
 
+from topologiq.core.graph_manager.graph_manager import runner
 from topologiq.input.utils import ZXColors, ZXTypes
 from topologiq.utils.classes import SimpleDictGraph, StandardBlock
 from topologiq.utils.misc import kind_to_zx_type
@@ -26,11 +32,45 @@ class ZXGraphManager:
         self.primary_key: str = primary_key
         self._collection: dict[str, AugmentedZXGraph] = {}
 
-    def set_primary(self, graph_key: str):
-        """Switch the key designating the primary augmented ZX graph."""
-        if graph_key not in self._collection:
-            raise ValueError(f"ERROR. Key {graph_key} not found in augmented ZX graph collection.")
-        self.primary_key = graph_key
+    def perform_lattice_surgery(
+        self,
+        use_primary: bool = False,
+        graph_key: str = "",
+        circuit_name: str = "",
+        use_reduced: bool = False,
+    ) -> tuple[
+        dict[int, StandardBlock] | None,
+        dict[tuple[int, int], list[str]] | None,
+    ]:
+        """Retrieve a graph and calls lattice surgery on it."""
+        aug_zx_graph = self.get_graph(self, use_primary, graph_key)
+        zx_graph = aug_zx_graph.zx_graph_reduced if use_reduced else aug_zx_graph.zx_graph
+        fig_data = zx.draw_matplotlib(zx_graph)
+        simple_graph = pyzx_g_to_simple_g(zx_graph)
+        if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:
+            _, _, blockgraph_cubes, blockgraph_pipes = runner(
+                simple_graph,
+                circuit_name,
+                fig_data=fig_data,
+            )
+        return blockgraph_cubes, blockgraph_pipes
+
+    def get_graph(
+        self,
+        use_primary: bool = False,
+        graph_key: str = "",
+    ) -> AugmentedZXGraph:
+        """Retrieve an augmented ZX graph from the collection.
+
+        Args:
+            use_primary: Flag to set key to primary key.
+            graph_key: Open key string to save intermediate/modified ZX graphs.
+
+        """
+        key = self.primary_key if use_primary else graph_key
+        if not key or key not in self._collection:
+            raise ValueError(f"ERROR. Key {key} not in augmented ZX graph collection.")
+        return self._collection[key]
 
     def add_graph(
         self,
@@ -116,22 +156,11 @@ class ZXGraphManager:
         self.add_graph(aug_zx_graph, graph_key=key)
         return self._collection[key]
 
-    def get_graph(
-        self,
-        use_primary: bool = False,
-        graph_key: str = "",
-    ) -> AugmentedZXGraph:
-        """Retrieve an augmented ZX graph from the collection.
-
-        Args:
-            use_primary: Flag to set key to primary key.
-            graph_key: Open key string to save intermediate/modified ZX graphs.
-
-        """
-        key = self.primary_key if use_primary else graph_key
-        if not key or key not in self._collection:
-            raise ValueError(f"ERROR. Key {key} not in augmented ZX graph collection.")
-        return self._collection[key]
+    def set_primary(self, graph_key: str):
+        """Switch the key designating the primary augmented ZX graph."""
+        if graph_key not in self._collection:
+            raise ValueError(f"ERROR. Key {graph_key} not found in augmented ZX graph collection.")
+        self.primary_key = graph_key
 
 
 ########################
@@ -235,6 +264,11 @@ class AugmentedZXGraph:
         # Fallback to tensor comparison with full graph (very slow)
         except Exception:
             return zx.compare_tensors(self.zx_graph, other.zx_graph, preserve_scalar=False)
+
+    def get_native_visualisation(self, use_reduced: bool = False):
+        """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""
+        fig_data = zx.draw_matplotlib(self.zx_graph_reduced if use_reduced else self.zx_graph, labels=True)
+        return fig_data
 
     def get_visual_data(self, use_reduced: bool = False):
         """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""

@@ -67,7 +67,12 @@ dev = [
 ]
 
 integration = [
+    "asteval>=1.0.8",
+    "pygments>=2.19.2",
+    "pyside6>=6.10.2",
     "tqec>=0.1.0",
+    "vedo>=2026.6.1",
+    "vtk>=9.6.0",
 ]
 
 all = [

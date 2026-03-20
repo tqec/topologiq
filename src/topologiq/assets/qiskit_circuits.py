@@ -6,7 +6,7 @@ from qiskit import qpy
 from qiskit.circuit import QuantumCircuit
 
 
-def ghz(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -> str:
+def ghz(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -> QuantumCircuit:
     """Create a GHZ circuit with n-qubits.
 
     Args:
@@ -45,3 +45,9 @@ def save_to_qpy(qc: QuantumCircuit, path_to_output: Path | None = None):
 
     with open(path_to_output, "wb") as f:
         qpy.dump(qc, f)
+
+def get_ghz():
+    qc = ghz(16, "GHZ")
+    return qc
+
+circuit = ghz(16, "GHZ")

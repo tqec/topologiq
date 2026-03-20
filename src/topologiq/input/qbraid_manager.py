@@ -1,4 +1,4 @@
-"""Topologiq Circuit Ingestion Module.
+"""Circuit ingestion module.
 
 This module provides a unified interface for ingesting quantum circuits from
 various frameworks (Qiskit, PyTKET, Qrisp) using the qBraid transpilation engine.
@@ -62,7 +62,7 @@ class CircuitManager:
     def add_custom_circuit(
         self, circuit: QPROGRAM, key: str = "input", is_primary: bool = True
     ) -> str:
-        """Add any other qBraid-supported circuit (Cirq, Braket, etc.)."""
+        """Add any qBraid-supported circuit (Qiskit, pytket, Qrisp, QASM)."""
         return self._process(circuit, key, is_primary)
 
     def add_circuit_from_file(
@@ -119,14 +119,12 @@ class AugmentedQBCircuit:
         """Access the cached QASM string."""
         return self._qasm
 
-    def draw(self, output: str = "text"):
+    def draw(self, output: str = "text") -> Any:
         """Render the circuit from the normalized QASM string."""
         try:
             # We draw from the string to use qBraid's internal QASM renderer
             # fold=-1 ensures a single horizontal layer for ASCII smoke tests.
             vis = circuit_drawer(self._qasm, output=output, fold=-1)
-            if output == "text":
-                print(vis)
             return vis
         except Exception as e:
             print(f"Drawing failed for {output}: {e}")

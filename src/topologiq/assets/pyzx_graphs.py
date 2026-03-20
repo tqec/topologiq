@@ -12,6 +12,7 @@ import matplotlib.figure
 import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
+from pyzx.utils import EdgeType, VertexType
 
 
 def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
@@ -26,9 +27,19 @@ def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figur
 
     """
 
-    pyzx_circuit = zx.Circuit(2)
-    pyzx_circuit.add_gate("CNOT", 1, 0)
-    pyzx_graph = pyzx_circuit.to_graph()
+    #pyzx_circuit = zx.Circuit(2)
+    #pyzx_circuit.add_gate("CNOT", 1, 0)
+    #pyzx_graph = pyzx_circuit.to_graph()
+
+    pyzx_graph = zx.Graph()
+    pyzx_graph.add_vertex(ty=VertexType.BOUNDARY, qubit=1, row=1)
+    pyzx_graph.add_vertex(ty=VertexType.X, qubit=1, row=1)
+    pyzx_graph.add_vertex(ty=VertexType.Z, qubit=1, row=1)
+    pyzx_graph.add_vertex(ty=VertexType.BOUNDARY, qubit=1, row=1)
+
+    pyzx_graph.add_edge((0,1))
+    pyzx_graph.add_edge((1,2),edgetype=EdgeType.HADAMARD)
+    pyzx_graph.add_edge((1,3))
 
     fig = None
     if draw_graph:

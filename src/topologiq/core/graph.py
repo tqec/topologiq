@@ -12,7 +12,7 @@ import networkx as nx
 import pyzx as zx
 from matplotlib import pyplot as plt
 
-from topologiq.core.spider_block import SpiderBlock, SpiderBlockRegistry
+from topologiq.core.blocks import SpiderBlock, SpiderBlockRegistry
 from topologiq.utils.classes import StandardCoord
 
 #########
