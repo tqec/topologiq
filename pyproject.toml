@@ -44,6 +44,7 @@ dependencies = [
     "pandas>=2.0,<2.4",
     "pillow>=11.2.1",
     "pip>=25.3",
+    "pyside6>=6.10.2",
     "pywin32==311 ; sys_platform == 'win32'",
     "pyzx>=0.10.0",
     "qbraid>=0.11.1",
@@ -69,10 +70,9 @@ dev = [
 integration = [
     "asteval>=1.0.8",
     "pygments>=2.19.2",
-    "pyside6>=6.10.2",
+    "pyopengl>=3.1.10",
     "tqec>=0.1.0",
-    "vedo>=2026.6.1",
-    "vtk>=9.6.0",
+    "vispy>=0.16.1",
 ]
 
 all = [

@@ -24,34 +24,36 @@ from PySide6.QtCore import QObject, Signal
 
 from topologiq.input.pyzx_manager import ZXGraphManager
 from topologiq.input.qbraid_manager import AugmentedQBCircuit, CircuitManager
-from topologiq.ux.utils import GLUE_CODE
+from topologiq.ux.utils.glue_code import GLUE_CODE
 
 
 class UXManager(QObject):
     """Data (Controller) and UI Orchestration (Manager) class."""
 
-    # SIGNALS: notify PySide6 UI when to update
-    status_changed = Signal(str)  # For the status bar / progress messages
-    processing_state_changed = Signal(bool)  # Disable buttons during heavy lifting
-    section_changed = Signal(str)  # Switch tabs
+    # UI State Signals
+    status_changed = Signal(str)
+    processing_state_changed = Signal(bool)
+    section_changed = Signal(str)
 
-    # Data signals for the visualizers
-    qb_circuit_ready = Signal(str, str)  # Raw QASM update and ASCII diagram
-    zx_input_ready = Signal(object)  # ZX visual data (matplotlib figure)
-    blockgraph_ready = Signal(object)  # TBD
-    zx_output_ready = Signal(dict)  # Visual data for Vedo
-    ready_for_equality_verification = Signal(bool)  # Green light for equivalence checks
-    equality_verification = Signal(bool)  # Green light for equivalence checks
+    # Global Data Signals
+    qb_circuit_ready = Signal(str, str)  # Raw QASM, ASCII Diagram
+    zx_input_ready = Signal(object)  # Now sends the NX graph for the Global Drawer
 
-    def __init__(self):
-        """Initialise with QB and ZX circuit managers and data store."""
+    # Compilation Result Signals
+    blockgraph_ready = Signal(dict, dict)  # Cubes, Pipes (dict format for BGraphCanvas)
+    zx_output_ready = Signal(object)  # The NX graph derived from the blockgraph
+
+    # Verification Signals
+    ready_for_equality_verification = Signal(bool)
+    equality_verification = Signal(bool)
+
+    def __init__(self):  # noqa: D107
         super().__init__()
-
-        # Internal Controllers
         self.circuit_manager = CircuitManager()
         self.zx_manager = ZXGraphManager()
+        self._active_proc: subprocess.Popen | None = None
+        self._process_count = 0
 
-        # Internal Data Store
         self._data_store: dict[str, Any] = {
             "circuit_raw": "",
             "augmented_qb_circuit": None,
@@ -61,19 +63,33 @@ class UXManager(QObject):
             "graphs_match": False,
         }
 
-        self.is_processing = False
+    @property
+    def is_processing(self) -> bool:  # noqa: D102
+        return self._process_count > 0
 
-    # METHODS: interface with Topologiq
+    def _set_processing(self, active: bool, message: str):
+        """Standardised reference counting for UI locking."""
+        if active:
+            self._process_count += 1
+        else:
+            self._process_count = max(0, self._process_count - 1)
+
+        self.processing_state_changed.emit(self.is_processing)
+        self.status_changed.emit(message)
+
     async def handle_load_source_circuit(
         self,
         source_design: str,
         mode: str,
-        var_name: str = "circuit",  # Defaulting to your test variable
+        var_name: str = "circuit",
         switch_to_transform: bool = False,
     ):
-        """Ingest code and convert into an augmented qBraid circuit via Subprocess."""
+        """Ingest code and convert into qBraid circuit via Subprocess sandbox."""
+        if self.is_processing and not switch_to_transform:
+            return
 
-        if self.is_processing:
+        if mode == "python" and not var_name:
+            self.status_changed.emit("ERROR: No variable name provided.")
             return
 
         self._set_processing(True, f"Ingesting {mode.upper()} source...")
@@ -82,195 +98,143 @@ class UXManager(QObject):
             self._data_store["circuit_raw"] = source_design
 
             if mode == "python":
-                # 1. Create a secure temporary script
                 with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp:
                     tmp_path = tmp.name
-
-                    # 2. Prepare the user's code with 4-space indentation
                     indented_source = "\n".join(
                         f"    {line}" for line in source_design.splitlines()
                     )
-
-                    # 3. Format the Glue Code (assuming GLUE_CODE is defined globally/imported)
                     final_script = GLUE_CODE.format(
                         source_design=indented_source, var_name=var_name
                     )
                     tmp.write(final_script)
 
                 try:
-                    # 4. Run the script in a separate OS process
-                    # We use asyncio.to_thread to keep the UI responsive during the wait
-                    proc = await asyncio.to_thread(
-                        subprocess.run,
+                    self._active_proc = subprocess.Popen(  # noqa: S603
                         [sys.executable, tmp_path],
-                        capture_output=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        timeout=5,
+                        shell=False,  # Explicitly disable shell to prevent command injection
+                        start_new_session=True,  # Prevents CTRL+C in terminal from killing the GUI
+                    )
+                    # Offload the blocking communicate call
+                    stdout, stderr = await asyncio.to_thread(
+                        self._active_proc.communicate, timeout=5
                     )
 
-                    # --- DEBUG BRIDGE: Essential for finding "Silent" failures ---
-                    print(f"\n--- SUBPROCESS STDOUT ---\n{proc.stdout}")
-                    print(f"--- SUBPROCESS STDERR ---\n{proc.stderr}")
+                    if self._active_proc.returncode != 0:
+                        raise RuntimeError(f"Python Error: {stderr.strip().splitlines()[-1]}")
 
-                    # 2. Check for System/OS level crashes first
-                    if proc.returncode != 0:
-                        # Extract the actual Python error from stderr
-                        error_msg = proc.stderr.strip().split('\n')[-1]
-                        raise RuntimeError(f"Python Runtime Error: {error_msg}")
-
-                    # 5. Parse the isolated output for the QASM markers
-                    if "---BEGIN_QASM---" in proc.stdout:
+                    if "---BEGIN_QASM---" in stdout:
                         qasm_data = (
-                            proc.stdout.split("---BEGIN_QASM---")[1]
-                            .split("---END_QASM---")[0]
-                            .strip()
+                            stdout.split("---BEGIN_QASM---")[1].split("---END_QASM---")[0].strip()
                         )
                         self.circuit_manager.add_custom_circuit(qasm_data)
-                    elif "ERROR:" in proc.stderr:
-                        # This catches the ERROR print we put in the GLUE_CODE
-                        specific_error = proc.stderr.split("ERROR:")[-1].strip()
-                        raise ValueError(f"Circuit Extraction Failed: {specific_error}")
                     else:
-                        raise LookupError(f"Variable '{var_name}' not found in your script.")
-
-                except subprocess.TimeoutExpired:
-                    raise RuntimeError("Script execution timed out (5s limit). Check for infinite loops!")
+                        raise LookupError(f"Variable '{var_name}' not found in script.")
 
                 finally:
-                    # Cleanup the temporary file
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
-
             else:
-                # QASM mode (Standard string ingestion)
                 self.circuit_manager.add_custom_circuit(source_design)
 
-            # --- COMMON PATH: Update Data Store and UI ---
+            # Success Path
             aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
             self._data_store["augmented_qb_circuit"] = aug_qb
-
-            # Notify UI (Ensure explicit string conversion for PySide6)
             self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
 
             if switch_to_transform:
                 await self.handle_qb_to_zx_transform(aug_qb)
             else:
-                self.section_changed.emit("DESIGN")
-                self.status_changed.emit("Circuit loaded via Air-Gapped Python.")
+                self.status_changed.emit("Circuit loaded.")
 
-        except subprocess.TimeoutExpired:
-            self.status_changed.emit("ERROR: Script timed out (Infinite loop?)")
         except Exception as e:
-            # Mirror the error to the terminal for easy copy-pasting
-            print(f"\n[MANAGER ERROR]: {e!s}\n")
-            self.status_changed.emit(f"ERROR: {e!s}")
-
+            self.status_changed.emit(f"ERROR: {e}")
         finally:
-            self.is_processing = False
-            self.processing_state_changed.emit(False)
+            self._set_processing(False, "Ready")
 
     async def handle_qb_to_zx_transform(self, aug_qb_circuit: AugmentedQBCircuit):
-        """Ingest an augmented qBraid circuit and prepare the initial augmented ZX Graph."""
-
-        # Do NOT do anything if something else is happening
-        if self.is_processing:
-            return
-
-        # Turn processing ON
-        self._set_processing(True, "Transpiling: qBraid -> PyZX...")
-
-        # QB -> ZX
+        """Transpile qBraid circuit to PyZX and update global drawer."""
+        self._set_processing(True, "Transpiling to ZX...")
         try:
-            # Convert and add to data store
-            aug_zx_in = self.zx_manager.add_graph_from_qasm(
-                qasm_str=aug_qb_circuit.qasm, use_primary=True
+            # Heavy transpilation in background thread
+            aug_zx_in = await asyncio.to_thread(
+                self.zx_manager.add_graph_from_qasm, qasm_str=aug_qb_circuit.qasm, use_primary=True
             )
             self._data_store["augmented_zx_graph_in"] = aug_zx_in
 
-            # 3. Notify UI
-            self.zx_input_ready.emit(aug_zx_in.get_native_visualisation())
-            self.section_changed.emit("TRANSFORM")
-            self.status_changed.emit("qBraid -> PyZX transpilation complete.")
+            self.section_changed.emit("DESIGN")
+            await asyncio.sleep(0.1)  # Buffer for UI tab switch
+
+            # Emit the NetworkX graph for the ZXCanvas
+            self.zx_input_ready.emit(aug_zx_in)
 
         except Exception as e:
-            self.status_changed.emit(f"Error: {e!s}")
-
+            self.status_changed.emit(f"Transpilation Error: {e}")
         finally:
-            self.is_processing = False
-            self.processing_state_changed.emit(False)
+            self._set_processing(False, "Ready")
 
-    async def handle_lattice_surgery(self):
-        """Execute the heavy 3D transformation logic."""
-
-        # Do NOT do anything if something else is happening
+    async def handle_lattice_surgery(self, use_reduced: bool = False):
+        """Execute 3D Lattice Surgery and generate verification graph."""
         if self.is_processing:
             return
-
-        # Turn processing ON
         self._set_processing(True, "Performing Lattice Surgery...")
 
         try:
-            # Simulate the surgery logic from your Controller
+            aug_zx_in = self._data_store.get("augmented_zx_graph_in")
+            if not aug_zx_in:
+                raise ValueError("No input ZX graph found.")
+
+            # 1. Surgery (Nodes/Edges for Blockgraph)
             cubes, pipes = await asyncio.to_thread(
-                self.zx_manager.perform_lattice_surgery, use_primary=True
+                aug_zx_in.get_blockgraph, use_reduced=use_reduced
             )
             self._data_store["lattice_surgery"] = (cubes, pipes)
+            self.blockgraph_ready.emit(cubes, pipes)
 
-            # Distill output and check match
-            zx_in = self.zx_manager.get_graph(use_primary=True)
+            # 2. Reverse Transpilation (Blocks -> ZX for verification)
             aug_zx_out = await asyncio.to_thread(
-                self.zx_manager.add_graph_from_blockgraph, cubes, pipes, other=zx_in
+                self.zx_manager.add_graph_from_blockgraph,
+                blockgraph_cubes=cubes,
+                blockgraph_pipes=pipes,
+                graph_key="output",
+                other=aug_zx_in,
             )
             self._data_store["augmented_zx_graph_out"] = aug_zx_out
 
-            # Notify UI
-            zx_out_visual_payload = {
-                "full": aug_zx_out.get_visual_data(use_reduced=False),
-                "reduced": aug_zx_out.get_visual_data(use_reduced=True),
-            }
-            self.blockgraph_ready.emit(zx_out_visual_payload)
-            self.zx_output_ready.emit(zx_out_visual_payload)
+            # Emit the NetworkX graph for the secondary visualizer in COMPILE
+            self.zx_output_ready.emit(aug_zx_out.nx_graph)
+
             self.ready_for_equality_verification.emit(True)
             self.status_changed.emit("Lattice surgery complete.")
 
         except Exception as e:
-            self.status_changed.emit(f"ERROR. Lattice surgery did not complete: {e!s}")
-
+            self.status_changed.emit(f"Surgery Error: {e}")
         finally:
-            self.is_processing = False
-            self.processing_state_changed.emit(False)
+            self._set_processing(False, "Ready")
 
     async def handle_equality_verification(
         self, graph_key_in: str = "input", graph_key_out: str = "output"
     ):
-        """Execute the heavy 3D transformation logic."""
-
-        # Change processing status without blocking other processing
-        self.status_changed.emit("Verifying equality in background...")
-
+        """Check if compiled blockgraph matches original design."""
+        self.status_changed.emit("Verifying equality...")
         try:
-            # Get input and output ZX as NX graphs
             aug_zx_in = self.zx_manager.get_graph(graph_key=graph_key_in)
             aug_zx_out = self.zx_manager.get_graph(graph_key=graph_key_out)
 
-            # Check equivalence
-            graphs_match = await asyncio.to_thread(aug_zx_in.check_equality, aug_zx_out)
-            self._data_store["graphs_match"] = graphs_match
-
-            # Notify UI
-            self.equality_verification.emit(graphs_match)
-            self.status_changed.emit("Equivalence check complete.")
-
+            match = await asyncio.to_thread(aug_zx_in.check_equality, aug_zx_out)
+            self._data_store["graphs_match"] = match
+            self.equality_verification.emit(match)
+            self.status_changed.emit("Verification complete.")
         except Exception as e:
-            self.status_changed.emit(f"ERROR. Equivalence checks errored out: {e!s}")
+            self.status_changed.emit(f"Verification Error: {e}")
 
-    # HELPERS
-    def _set_processing(self, active: bool, message: str):
-        """Set processing state and notify UI."""
-        self.is_processing = active
-        self.processing_state_changed.emit(active)
-        self.status_changed.emit(message)
+    def emergency_stop(self):  # noqa: D102
+        if self._active_proc and self._active_proc.poll() is None:
+            self._active_proc.kill()
+            self._active_proc = None
+            self.status_changed.emit("PROCESS TERMINATED")
 
-    def get_data(self, key: str) -> Any:
-        """Retrieve from data store."""
+    def get_data(self, key: str) -> Any:  # noqa: D102
         return self._data_store.get(key)

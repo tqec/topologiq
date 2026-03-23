@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from fractions import Fraction
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import networkx as nx
 import pyzx as zx
 from pyzx.circuit import Circuit
 
 from topologiq.core.graph_manager.graph_manager import runner
-from topologiq.input.utils import ZXColors, ZXTypes
+from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
 from topologiq.utils.classes import SimpleDictGraph, StandardBlock
 from topologiq.utils.misc import kind_to_zx_type
 
@@ -31,29 +31,6 @@ class ZXGraphManager:
         """Initialise class with incoming or default primary key and empty collection."""
         self.primary_key: str = primary_key
         self._collection: dict[str, AugmentedZXGraph] = {}
-
-    def perform_lattice_surgery(
-        self,
-        use_primary: bool = False,
-        graph_key: str = "",
-        circuit_name: str = "",
-        use_reduced: bool = False,
-    ) -> tuple[
-        dict[int, StandardBlock] | None,
-        dict[tuple[int, int], list[str]] | None,
-    ]:
-        """Retrieve a graph and calls lattice surgery on it."""
-        aug_zx_graph = self.get_graph(self, use_primary, graph_key)
-        zx_graph = aug_zx_graph.zx_graph_reduced if use_reduced else aug_zx_graph.zx_graph
-        fig_data = zx.draw_matplotlib(zx_graph)
-        simple_graph = pyzx_g_to_simple_g(zx_graph)
-        if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:
-            _, _, blockgraph_cubes, blockgraph_pipes = runner(
-                simple_graph,
-                circuit_name,
-                fig_data=fig_data,
-            )
-        return blockgraph_cubes, blockgraph_pipes
 
     def get_graph(
         self,
@@ -86,8 +63,6 @@ class ZXGraphManager:
         """
         if not graph_key:
             raise ValueError("ERROR. A key is needed to add an augmented ZX graph to collection.")
-        if "input" in self._collection and graph_key == "input":
-            raise ValueError("ERROR. Cannot overwrite augmented ZX graph collection's input graph.")
         self._collection[graph_key] = aug_zx_graph
 
     def add_graph_from_pyzx(
@@ -95,7 +70,7 @@ class ZXGraphManager:
         zx_graph: zx.Graph,
         use_primary: bool = False,
         graph_key: str = "",
-    ):
+    ) -> AugmentedZXGraph:
         """Add an augmented ZX graph to the collection from a QASM string or file.
 
         Args:
@@ -114,7 +89,7 @@ class ZXGraphManager:
         path_to_qasm_file: Path | None = None,
         use_primary: bool = False,
         graph_key: str = "",
-    ):
+    ) -> AugmentedZXGraph:
         """Add an augmented ZX graph to the collection from a QASM string or file.
 
         Args:
@@ -134,11 +109,11 @@ class ZXGraphManager:
     def add_graph_from_blockgraph(
         self,
         blockgraph_cubes: dict[int, StandardBlock],
-        blockgraph_pipes: dict[tuple[int, int], list[str]],
+        blockgraph_pipes: dict[tuple[int, int], list[str | tuple[int, int]]],
         use_primary: bool = False,
         graph_key: str = "",
         other: AugmentedZXGraph | None = None,
-    ):
+    ) -> AugmentedZXGraph:
         """Add an augmented ZX graph to the collection from a blockgraph.
 
         Args:
@@ -217,7 +192,7 @@ class AugmentedZXGraph:
     def from_blockgraph(
         cls,
         blockgraph_cubes: dict[int, StandardBlock],
-        blockgraph_pipes: dict[tuple[int, int], list[str]],
+        blockgraph_pipes: dict[tuple[int, int], list[str | tuple[int, int]]],
         other: AugmentedZXGraph | None = None,
     ) -> AugmentedZXGraph:
         """Create ZX graph from an blockgraph.
@@ -229,32 +204,67 @@ class AugmentedZXGraph:
             other: A separate ZX graph against which to compare.
 
         """
-
         zx_graph = zx.Graph()
         id_swaps = {}
 
-        for cube_id, (coords, kind) in blockgraph_cubes:
-            zx_type = ZXTypes(kind_to_zx_type(kind)).value
+        for cube_id, (coords, kind) in blockgraph_cubes.items():
+            zx_type = ZXTypes.from_str(kind_to_zx_type(kind))
 
             if other and cube_id in other.zx_graph.vertex_set():
                 qubit = other.zx_graph.vdata(cube_id, "qubit")
                 row = other.zx_graph.vdata(cube_id, "row")
-            else:
-                qubit, row = (None, None)
 
-            vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row)
+            vertex = zx_graph.add_vertex(
+                ty=zx_type, qubit=qubit if qubit else -1, row=row if row else -1
+            )
+
             zx_graph.set_vdata(vertex, "coords", coords)
-
             id_swaps[cube_id] = vertex
 
-        for (src_id, tgt_id), kind in blockgraph_pipes:
-            zx_type = ZXTypes(kind_to_zx_type(kind)).value
+        for (src_id, tgt_id), (kind, _) in blockgraph_pipes.items():
+            zx_type = ZXEdgeTypes.from_str(kind_to_zx_type(kind))
             zx_graph.add_edge((id_swaps[src_id], id_swaps[tgt_id]), edgetype=zx_type)
 
         # Set graph in class
         return cls(zx_graph)
 
-    def check_equality(self, other: AugmentedZXGraph):
+    def get_blockgraph(
+        self: AugmentedZXGraph,
+        circuit_name: str = "input",
+        use_reduced: bool = False,
+        final_vis=False,
+    ) -> tuple[
+        dict[int, StandardBlock] | None,
+        dict[tuple[int, int], list[str | tuple[int, int]]] | None,
+    ]:
+        """Perform algorithmic lattice surgery on ZX graph.
+
+        Args:
+            circuit_name: The name of the circuit.
+            use_reduced: Whether to use the full or reduced version of the ZX graph.
+            final_vis: Trigger simple visualisation of output blockgraph.
+
+        """
+
+        # Choose if to show visualisation of outcome or not
+        kwargs = {"vis_options": ("final" if final_vis else None, None)}
+
+        # Choose full or reduced ZX graph
+        zx_graph = self.zx_graph_reduced if use_reduced else self.zx_graph
+
+        # Move into Topologiq's native format
+        simple_graph = pyzx_g_to_simple_g(zx_graph)
+
+        # Perform lattice surgery
+        _, _, blockgraph_cubes, blockgraph_pipes = runner(
+            simple_graph,  # The simple_graph to be processed by Topologiq
+            circuit_name,  # Name of the circuit
+            **kwargs,
+        )
+
+        return blockgraph_cubes, blockgraph_pipes
+
+    def check_equality(self, other: AugmentedZXGraph) -> bool:
         """Check if two PyZX graphs are equivalent."""
         # Attempt to verify circuit equality (faster)
         try:
@@ -265,12 +275,14 @@ class AugmentedZXGraph:
         except Exception:
             return zx.compare_tensors(self.zx_graph, other.zx_graph, preserve_scalar=False)
 
-    def get_native_visualisation(self, use_reduced: bool = False):
+    def get_native_visualisation(self, use_reduced: bool = False) -> Any:
         """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""
-        fig_data = zx.draw_matplotlib(self.zx_graph_reduced if use_reduced else self.zx_graph, labels=True)
+        fig_data = zx.draw_matplotlib(
+            self.zx_graph_reduced if use_reduced else self.zx_graph, labels=True
+        )
         return fig_data
 
-    def get_visual_data(self, use_reduced: bool = False):
+    def get_visual_data(self, use_reduced: bool = False) -> nx.Graph:
         """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""
 
         # Work on copy ZX graph
@@ -285,6 +297,8 @@ class AugmentedZXGraph:
             t = zx_graph.type(v_id)
             phase = zx_graph.phase(v_id)
             phase_float = float(phase) if isinstance(phase, (Fraction, int, float)) else 0.0
+            qubit = zx_graph.qubit(v_id)
+            row = zx_graph.row(v_id)
 
             # Derivative info
             t_name = ZXTypes(t).name
@@ -292,7 +306,13 @@ class AugmentedZXGraph:
 
             # Create rich/verbose NX node
             zx_graph_as_nx.add_node(
-                v_id, type=t_name, color=color, phase=phase, phase_float=phase_float
+                v_id,
+                type=t_name,
+                qubit=qubit,
+                row=row,
+                color=color,
+                phase=phase,
+                phase_float=phase_float,
             )
 
         # Loop ZX edges -> NX edges
@@ -302,7 +322,7 @@ class AugmentedZXGraph:
             t = zx_graph.edge_type(e_id)
 
             # Derivative info
-            t_name = ZXTypes(t).name
+            t_name = ZXEdgeTypes(t).name
             color = ZXColors.lookup(t_name)
 
             # Create rich/verbose NX edge

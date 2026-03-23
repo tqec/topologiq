@@ -12,30 +12,35 @@ AI disclaimer:
 """
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
-
-from topologiq.ux.styles import PANE_HEADER_STYLE
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
 class BasePane(QWidget):
     """Base class for all UX sections.
 
-    Provides a standardised layout and info label for child classes
-    to inherit, ensuring a consistent 'look and feel' across the stack.
+    Provides a standardized layout and access to the UXManager
+    for signal/slot synchronization across the app.
     """
 
-    def __init__(self, name: str, parent=None):
-        """Initialise base pane.
-
-        Args:
-            name (str): The display name of the section.
-            parent (QWidget, optional): The parent widget. Defaults to None.
-
-        """
-
+    def __init__(self, manager, name: str, parent=None):
+        """Initialise pane with manager access."""
         super().__init__(parent)
+        self.manager = manager
+        self.pane_id = name
+
+        # 1. Standard Layout Configuration
         self.layout = QVBoxLayout(self)
-        self.info_label = QLabel(f"{name}")
-        self.info_label.setAlignment(Qt.AlignRight)
-        self.info_label.setStyleSheet(PANE_HEADER_STYLE)
-        self.layout.addWidget(self.info_label)
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(10)
+        self.layout.setAlignment(Qt.AlignTop)
+
+        # 2. Trigger the UI build (to be overridden by children)
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Override this in child classes to add widgets."""
+        pass
+
+    def update_visuals(self, *args, **kwargs):
+        """Standardise interface for the Manager to push data updates."""
+        pass

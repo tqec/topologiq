@@ -108,4 +108,4 @@ if __name__ == "__main__":
     zx.draw(aug_zx.zx_graph_reduced)
 
     # Run Topologiq
-    lattice_nodes, lattice_edges = run_topologiq(aug_zx.zx_graph_reduced, circuit_name)
+    lattice_nodes, lattice_edges = aug_zx.get_blockgraph(circuit_name=circuit_name, use_reduced=True, final_vis=True)

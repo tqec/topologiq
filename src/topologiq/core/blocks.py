@@ -108,10 +108,10 @@ class ZXBlock:
     @cached_property
     def get_face_colors(self) -> tuple[str, tuple[str, str, str]]:
         """Retrieve the ZXBlock's colours."""
-        return tuple([ZXColors.lookup(c) for c in self.kind[:3]])
+        return tuple([ZXColors.lookup(c) for c in self.kind[:3]]) * 2
 
     @cached_property
-    def cube_exits(self) -> tuple[bool, bool, bool, bool, bool, bool]:
+    def cube_exits(self) -> tuple[bool, bool, bool]:
         """Return the open axes of a ZXCube.
 
         The open axes of a ZXCube change according to its kind. For X and Y cubes,
@@ -129,7 +129,6 @@ class ZXBlock:
         x, y, z = self.basis()
         cube_exits = (x != self.zx_type, y != self.zx_type, z != self.zx_type) * 2
         return cube_exits
-
 
 #######
 # AUX #

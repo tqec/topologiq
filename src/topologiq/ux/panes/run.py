@@ -18,6 +18,7 @@ from topologiq.ux.base_pane import BasePane
 class RunPane(BasePane):
     """Final output and execution management."""
 
-    def __init__(self, parent=None):
+    def __init__(self, manager, parent=None):
         """Initialise RUN section."""
-        super().__init__("RUN", parent)
+        super().__init__(manager, "RUN", parent)
+        self.manager = manager

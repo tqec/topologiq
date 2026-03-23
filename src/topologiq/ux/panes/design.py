@@ -23,164 +23,158 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
 )
 
 from topologiq.ux.base_pane import BasePane
-from topologiq.ux.highlighter import PygmentsHighlighter
-from topologiq.ux.styles import TEXT_STYLE_CODE, TEXT_STYLE_DRAW_BTN, TEXT_STYLE_TRANSPILE_BTN
+from topologiq.ux.utils import styles
+from topologiq.ux.utils.highlighter import PygmentsHighlighter
 
 
 class DesignPane(BasePane):
-    """Circuit Design IDE for loading, editing, and transpiling quantum circuits."""
+    """Circuit Design IDE with Code/Visual toggle and ASCII validation."""
 
-    def __init__(self, parent=None):
-        """Initialise DESIGN pane."""
-        super().__init__("DESIGN", parent)
+    def __init__(self, manager, parent=None):  # noqa: D107
+        super().__init__(manager, "DESIGN", parent)
         self.current_file_path = None
+        self.highlighter = None
         self._tasks = set()
-        self._init_ui()
+        # We don't call setup_ui here because BasePane calls it.
 
-    def _init_ui(self):
-        self.top_splitter = QSplitter(Qt.Horizontal)
+    def setup_ui(self):
+        """Build the clean IDE layout."""
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
-        # Left Column: The Code Editor
+        # Main Container (Full width, no sidebar)
+        self.main_container = QFrame()
+        self.main_layout = QVBoxLayout(self.main_container)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(5)
+
+        # 1. Vertical Splitter: [Editor Section] over [Inspector Tabs]
+        self.v_splitter = QSplitter(Qt.Vertical)
+        self.v_splitter.setStyleSheet("QSplitter::handle { background: #222; height: 1px; }")
+
+        # --- TOP: Editor Section ---
         self.editor_container = QFrame()
-        self.editor_title = QLabel("SOURCE CODE: TEXT")
-        editor_layout = QVBoxLayout(self.editor_container)
-        editor_layout.addWidget(self.editor_title)
+        ed_layout = QVBoxLayout(self.editor_container)
+        ed_layout.setContentsMargins(0, 0, 0, 5)
 
+        self.editor_container = QFrame()
+        ed_layout = QVBoxLayout(self.editor_container)
+        ed_layout.setContentsMargins(0, 0, 0, 5)
+
+        # NEW: Header Bar instead of simple Label
+        self.header_bar = QFrame()
+        header_layout = QHBoxLayout(self.header_bar)
+        header_layout.setContentsMargins(0, 0, 0, 2)
+
+        # Load buttons moved here
+        btn_py = QPushButton("LOAD .PY")
+        btn_py.setStyleSheet(styles.PILL_BTN_PYZX + "border-radius: 1px; background: #333333;")
+        btn_py.clicked.connect(lambda: self._handle_open_file("python"))
+
+        btn_qasm = QPushButton("LOAD .QASM")
+        btn_qasm.setStyleSheet(styles.PILL_BTN_PYZX + "border-radius: 1px; background: #333333;")
+        btn_qasm.clicked.connect(lambda: self._handle_open_file("qasm"))
+
+        btn_save = QPushButton("SAVE")
+        btn_save.setStyleSheet(styles.PILL_BTN_PYZX + "border-radius: 1px;")
+        btn_save.clicked.connect(self._handle_save_file)
+
+        header_layout.addStretch()
+        header_layout.addWidget(btn_py)
+        header_layout.addWidget(btn_qasm)
+        header_layout.addWidget(btn_save)
+
+        # IDE / code editor
         self.code_editor = QPlainTextEdit()
-        self.code_editor.setPlaceholderText("Write code here or load a script or QASM file...")
-        self.code_editor.setStyleSheet(TEXT_STYLE_CODE)
+        self.code_editor.setPlaceholderText("Write Python or QASM...")
+        self.code_editor.setStyleSheet(styles.TEXT_STYLE_CODE)
         self.code_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.code_editor.selectionChanged.connect(self._handle_selection_sync)
-        editor_layout.addWidget(self.code_editor)
 
-        # Right Column: The ASCII Inspector
-        self.viewer_container = QFrame()
-        viewer_layout = QVBoxLayout(self.viewer_container)
-        viewer_layout.addWidget(QLabel("ASCII INSPECTOR"))
+        # The DRAW Button (Waterfall Bridge)
+        self.btn_draw_only = QPushButton("↓↓↓ DRAW ASCII ↓↓↓")
+        self.btn_draw_only.setStyleSheet(styles.ACTION_BTN + "margin: 5px 0; padding: 8px;")
+        self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
+
+        ed_layout.addWidget(self.header_bar)
+        ed_layout.addWidget(self.code_editor)
+        ed_layout.addWidget(self.btn_draw_only)
+
+        # --- BOTTOM: Inspector Tabs ---
+        self.inspector_tabs = QTabWidget()
+        self.inspector_tabs.setStyleSheet(
+            "QTabBar::tab { height: 25px; font-size: 10px; background: #1a1a1a; color: #666; padding: 0 15px; } "
+            "QTabBar::tab:selected { background: #2a2a2a; color: #f2f3fb; border-bottom: 1px dotted #ec0202; }"
+            "QTabWidget::pane { border: 1px solid #222; background: #050505; }"
+        )
 
         self.ascii_viewer = QPlainTextEdit()
         self.ascii_viewer.setReadOnly(True)
-        self.ascii_viewer.setPlaceholderText("If circuit validates, ASCII diagram will appear here...")
-        self.ascii_viewer.setStyleSheet(TEXT_STYLE_CODE)
-        self.ascii_viewer.setLineWrapMode(QPlainTextEdit.NoWrap)
-        viewer_layout.addWidget(self.ascii_viewer)
+        self.ascii_viewer.setStyleSheet(styles.TEXT_STYLE_CODE)
 
-        self.top_splitter.addWidget(self.editor_container)
-        self.top_splitter.addWidget(self.viewer_container)
-        self.layout.addWidget(self.top_splitter, 9)
+        self.terminal_output = QPlainTextEdit()
+        self.terminal_output.setReadOnly(True)
+        self.terminal_output.setStyleSheet(styles.TEXT_STYLE_CODE)
+        self.inspector_tabs.addTab(self.ascii_viewer, "ASCII DIAGRAM")
+        self.inspector_tabs.addTab(self.terminal_output, "TERMINAL / LOGS")
 
-        # Bottom Bar
-        self.bottom_bar = QFrame()
-        self.bottom_bar.setFixedHeight(50)
-        bottom_layout = QHBoxLayout(self.bottom_bar)
+        # Assemble Splitter
+        self.v_splitter.addWidget(self.editor_container)
+        self.v_splitter.addWidget(self.inspector_tabs)
+        self.v_splitter.setSizes([650, 350])
 
-        self.btn_load_py = QPushButton("Load PYTHON")
-        self.btn_load_py.clicked.connect(lambda: self._handle_open_file("python"))
+        # 2. Bottom Nav Bar (Loaders and Generator)
+        self.footer_bar = self._create_footer_bar()
 
-        self.btn_load_qasm = QPushButton("Load QASM")
-        self.btn_load_qasm.clicked.connect(lambda: self._handle_open_file("qasm"))
+        # Final Assembly
+        self.main_layout.addWidget(self.v_splitter)
+        self.main_layout.addWidget(self.footer_bar)
 
-        self.btn_save = QPushButton("Save")
-        save_menu = QMenu(self)
-        save_menu.addAction("Save", self._handle_save_file)
-        save_menu.addAction("Save As...", self._handle_save_as)
-        self.btn_save.setMenu(save_menu)
+        self.layout.addWidget(self.main_container)
 
-        self.btn_close = QPushButton("Close / Clear")
-        self.btn_close.setStyleSheet("color: #ff5555;")
-        self.btn_close.clicked.connect(self._handle_close_clear)
+    def _create_footer_bar(self):
+        bar = QFrame()
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(3, 0, 0, 0)
 
-        self.btn_draw = QPushButton("VALIDATE / DRAW CIRCUIT")
-        self.btn_draw.setStyleSheet(TEXT_STYLE_DRAW_BTN)
-        self.btn_draw.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
+        self.mode_label = QLabel("SOURCE: TEXT")
+        layout.addWidget(self.mode_label)
 
         self.var_input = QLineEdit("__circuit__")
-        self.var_input.setFixedWidth(140)
-        self.var_input.setToolTip("Highlight a variable in code to auto-populate this.")
+        self.var_input.setFixedWidth(120)
+        self.var_input.setStyleSheet(
+            "background: #111; color: #aaa; border: 1px solid #333; padding: 4px;"
+        )
 
-        self.btn_ingest = QPushButton("TRANSPILE CIRCUIT TO ZX")
-        self.btn_ingest.setStyleSheet(TEXT_STYLE_TRANSPILE_BTN)
-        self.btn_ingest.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
+        self.btn_to_zx = QPushButton("GENERATE ZX GRAPH →")
+        self.btn_to_zx.setStyleSheet(styles.ACTION_BTN)
+        self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
 
-        bottom_layout.addWidget(self.btn_load_py)
-        bottom_layout.addWidget(self.btn_load_qasm)
-        bottom_layout.addWidget(self.btn_save)
-        bottom_layout.addWidget(self.btn_close)
-        bottom_layout.addStretch()
-        bottom_layout.addWidget(QLabel("Variable to transpile:"))
-        bottom_layout.addWidget(self.var_input)
-        bottom_layout.addWidget(self.btn_draw)
-        bottom_layout.addSpacing(10)
-        bottom_layout.addWidget(self.btn_ingest)
-        self.layout.addWidget(self.bottom_bar, 1)
-
-    def _process_and_emit(self, switch_pane: bool):
-        """Unified method to send code and variable to the manager."""
-        code = self.code_editor.toPlainText()
-        title_text = self.editor_title.text().upper()
-
-        mode = "python" if "PYTHON" in title_text else "qasm" if "QASM" in title_text else "text"
-        target_var = self.var_input.text().strip() if mode == "python" else None
-
-        app = self.window()
-        if hasattr(app, "manager"):
-            # We pass switch_pane to the manager so it knows if we want to move to TRANSFORM
-            task = asyncio.ensure_future(
-                app.manager.handle_load_source_circuit(
-                    code, mode, var_name=target_var, switch_to_transform=switch_pane
-                )
-            )
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
-
-            msg = "Transpiling..." if switch_pane else "Drawing ASCII..."
-            self.window().statusBar().showMessage(msg, 2000)
+        layout.addStretch()
+        layout.addWidget(QLabel("Variable:"))
+        layout.addWidget(self.var_input)
+        layout.addWidget(self.btn_to_zx)
+        return bar
 
     def _handle_open_file(self, mode):
-        ext_filter = "Python (*.py)" if mode == "python" else "OpenQASM (*.qasm)"
-        path, _ = QFileDialog.getOpenFileName(self, f"Open {mode.upper()}", "", ext_filter)
-
+        ext = "Python (*.py)" if mode == "python" else "OpenQASM (*.qasm)"
+        path, _ = QFileDialog.getOpenFileName(self, f"Open {mode.upper()}", "", ext)
         if path:
-            self.code_editor.clear()
-            if hasattr(self, "highlighter"):
-                self.highlighter.setDocument(None)
-
-            self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
             self.current_file_path = Path(path)
             self.code_editor.setPlainText(self.current_file_path.read_text())
-            self.editor_title.setText(f"SOURCE CODE: {mode.upper()}")
+            self.mode_label.setText(f"SOURCE: {mode.upper()}")
 
-    def _handle_save_file(self):
-        if self.current_file_path:
-            try:
-                self.current_file_path.write_text(self.code_editor.toPlainText())
-                self.window().statusBar().showMessage(f"Saved: {self.current_file_path.name}", 3000)
-            except Exception as e:
-                self.window().statusBar().showMessage(f"Save Failed: {e}", 5000)
-        else:
-            self._handle_save_as()
-
-    def _handle_save_as(self):
-        """Save current editor content to a new file and update IDE mode."""
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Circuit As", "", "Python Script (*.py);;OpenQASM (*.qasm)"
-        )
-        if path:
-            self.current_file_path = Path(path)
-            # Write the file content
-            self.current_file_path.write_text(self.code_editor.toPlainText())
-
-            # Use the helper to sync the title and highlighter automatically
-            self._update_mode_from_path(self.current_file_path)
-            self.window().statusBar().showMessage(f"Saved As: {self.current_file_path.name}", 3000)
+            if self.highlighter:
+                self.highlighter.setDocument(None)
+            self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
 
     def _handle_selection_sync(self):
         cursor = self.code_editor.textCursor()
@@ -189,26 +183,43 @@ class DesignPane(BasePane):
             if text.isidentifier():
                 self.var_input.setText(text)
 
-    def _handle_close_clear(self):
-        self.code_editor.clear()
-        if hasattr(self, "highlighter"):
-            self.highlighter.setDocument(None)
-        self.current_file_path = None
-        self.editor_title.setText("SOURCE CODE: TEXT")
-        self.var_input.setText("__circuit__")
-        self.ascii_viewer.clear()
-        self.window().statusBar().showMessage("Session cleared", 2000)
+    def _handle_save_file(self):
+        """Save current editor content to disk."""
+        path = self.current_file_path
 
-    def _update_mode_from_path(self, path: Path):
-        """Standardizes how we switch the UI between Python, QASM, and Text."""
-        mode = "python" if path.suffix == ".py" else "qasm"
-        self.editor_title.setText(f"SOURCE CODE: {mode.upper()}")
+        # If no file is open, or if user wants a new location, trigger Save As
+        if not path:
+            mode = "python" if "PYTHON" in self.mode_label.text() else "qasm"
+            ext = "Python (*.py)" if mode == "python" else "OpenQASM (*.qasm)"
+            path_str, _ = QFileDialog.getSaveFileName(self, "Save File", "", ext)
+            if not path_str:
+                return
+            path = Path(path_str)
+            self.current_file_path = path
 
-        if hasattr(self, "highlighter"):
-            self.highlighter.setDocument(None)
-        self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
+        try:
+            path.write_text(self.code_editor.toPlainText())
+            self.window().status_bar.showMessage(f"Saved: {path.name}", 3000)
+        except Exception as e:
+            self.window().status_bar.showMessage(f"Save failed: {e}", 5000)
+
+    def _process_and_emit(self, switch_pane: bool):
+        code = self.code_editor.toPlainText()
+        mode = "python" if "PYTHON" in self.mode_label.text() else "qasm"
+        task = asyncio.ensure_future(
+            self.manager.handle_load_source_circuit(
+                code, mode, var_name=self.var_input.text(), switch_to_transform=switch_pane
+            )
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     @Slot(str, str)
-    def update_visuals(self, qasm, ascii_art):
-        """Update the ASCII viewer with output from the manager."""
+    def update_visuals(self, qasm, ascii_art):  # noqa: D102
         self.ascii_viewer.setPlainText(ascii_art)
+        # If qasm contains "ERROR" or "STDOUT", maybe auto-switch to Terminal tab
+        if "--- STDOUT ---" in ascii_art or "Error" in ascii_art:
+            self.terminal_output.setPlainText(ascii_art)
+            self.inspector_tabs.setCurrentIndex(1)  # Auto-focus Terminal on error
+        else:
+            self.inspector_tabs.setCurrentIndex(0)
