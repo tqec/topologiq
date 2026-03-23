@@ -11,7 +11,6 @@ AI disclaimer:
 
 """
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
@@ -27,12 +26,12 @@ class BasePane(QWidget):
         super().__init__(parent)
         self.manager = manager
         self.pane_id = name
+        self.setMinimumHeight(0)
 
         # 1. Standard Layout Configuration
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.setSpacing(10)
-        self.layout.setAlignment(Qt.AlignTop)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
         # 2. Trigger the UI build (to be overridden by children)
         self.setup_ui()

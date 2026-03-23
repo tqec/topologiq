@@ -19,6 +19,7 @@ from enum import Enum
 from functools import cached_property
 from typing import ClassVar
 
+from topologiq.input.utils import ZXColors
 from topologiq.utils.misc import kind_to_zx_type
 
 
@@ -130,6 +131,7 @@ class ZXBlock:
         cube_exits = (x != self.zx_type, y != self.zx_type, z != self.zx_type) * 2
         return cube_exits
 
+
 #######
 # AUX #
 #######
@@ -164,31 +166,3 @@ class Basis(Enum):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}.{self.value}"
-
-
-class ZXColors(str, Enum):
-    """Colour palette to standardise visualisations."""
-
-    X = "#d7a4a1"
-    Y = "#7fff00"
-    Z = "#b9cdff"
-    P = "#333333"
-    HADAMARD = "#ffff00"
-    SIMPLE = "#000000"
-
-    @classmethod
-    def lookup(cls, char: str) -> str:
-        """Get standardised HEX colours for an arbitrary ZXBlock.
-
-        Args:
-            char: A character, typically signifying a zx_type or basis.
-
-        Returns:
-            zx_color: A colour HEX corresponding to the character.
-
-        """
-
-        try:
-            return cls[char.upper()]
-        except (KeyError, AttributeError):
-            return cls.SIMPLE

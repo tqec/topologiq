@@ -12,7 +12,7 @@ class ZXTypes(int, Enum):
 
     @classmethod
     def from_str(cls, name: str) -> int:
-        """Convert a string like 'Z' or 'x' into the PyZX integer type."""
+        """Convert a string-based ZX vertex type into its PyZX integer type."""
         try:
             # Normalize to uppercase to match Enum keys
             return cls[name.upper()].value
@@ -27,7 +27,7 @@ class ZXEdgeTypes(int, Enum):
 
     @classmethod
     def from_str(cls, name: str) -> int:
-        """Convert a string like 'Z' or 'x' into the PyZX integer type."""
+        """Convert a string-based ZX edge type into its PyZX integer type."""
         try:
             # Normalize to uppercase to match Enum keys
             return cls[name.upper()].value
@@ -62,4 +62,3 @@ class ZXColors(str, Enum):
             return cls[char.upper()]
         except (KeyError, AttributeError):
             return cls.SIMPLE
-

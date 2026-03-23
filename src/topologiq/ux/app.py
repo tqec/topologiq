@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QStatusBar,
@@ -64,12 +65,11 @@ class TopologiqApp(QMainWindow):
         self.zx_drawer = QWidget()
         self.zx_drawer.setObjectName("ZXDrawer")
 
-        # This layout holds the Vertical Tab and the Main Canvas
         self.zx_drawer_layout = QHBoxLayout(self.zx_drawer)
         self.zx_drawer_layout.setContentsMargins(0, 0, 0, 0)
         self.zx_drawer_layout.setSpacing(0)
 
-        # A. THE VERTICAL TAB BAR (Left handle)
+        # A. THE VERTICAL TAB BAR (Left handle - DESIGN Mode)
         self.zx_tab_bar = QFrame()
         self.zx_tab_bar.setFixedWidth(25)
         self.zx_tab_bar.setStyleSheet("background: transparent; border-right: 1px solid #222;")
@@ -79,37 +79,51 @@ class TopologiqApp(QMainWindow):
         self.btn_toggle_ver = QPushButton("O\nP\nE\nN\n\nI\nD\nE")
         self.btn_toggle_ver.setCheckable(True)
         self.btn_toggle_ver.setFixedWidth(24)
-        self.btn_toggle_ver.setStyleSheet(styles.ACTION_BTN + "border-right: 0; border-radius: 0; border-bottom-left-radius: 14px; border-top-right-radius: 7px; padding: 20px 0;")
+        self.btn_toggle_ver.setStyleSheet(
+            styles.ACTION_BTN
+            + "border-right: 0; border-radius: 0; border-bottom-left-radius: 14px; border-top-right-radius: 7px; padding: 20px 0;"
+        )
         self.btn_toggle_ver.clicked.connect(self._toggle_zx_drawer)
 
         zx_tab_layout.addStretch()
         zx_tab_layout.addWidget(self.btn_toggle_ver)
         zx_tab_layout.addStretch()
 
-        # B. THE CANVAS & HORIZONTAL TOGGLE
-        # We need a vertical sub-container for the Canvas + the Bottom Toggle
+        # B. THE CANVAS & HORIZONTAL TOGGLE (COMPILE/RUN Mode)
         canvas_container = QWidget()
-        canvas_v_layout = QVBoxLayout(canvas_container)
-        canvas_v_layout.setContentsMargins(0, 0, 0, 0)
-        canvas_v_layout.setSpacing(0)
+        self.canvas_v_layout = QVBoxLayout(canvas_container)  # Reference for reordering
+        self.canvas_v_layout.setContentsMargins(0, 0, 0, 0)
+        self.canvas_v_layout.setSpacing(0)
 
         self.zx_canvas = ZXCanvas(self.manager)
 
-        self.drawer_toggle = QPushButton("Collapse ZX")
+        # Drawer Toggle Bar
+        self.toggle_bar_widget = QWidget()
+        self.toggle_bar = QHBoxLayout(self.toggle_bar_widget)
+        self.toggle_bar.setContentsMargins(0, 0, 10, 0)
+        self.toggle_bar_widget.setFixedHeight(24)
+
+        self.drawer_toggle = QPushButton("OPEN CANVAS")
         self.drawer_toggle.setCheckable(True)
-        self.drawer_toggle.setStyleSheet(styles.TOGGLE_BUTTON_STYLE)
+        self.drawer_toggle.setStyleSheet(
+            styles.ACTION_BTN + "border-bottom: 0; "
+            "border-radius: 0; "
+            "border-top-left-radius: 14px; "
+            "border-top-right-radius: 7px; "
+            "padding: 5px 20px;"
+            "min-width: 120px;"
+        )
         self.drawer_toggle.clicked.connect(self._toggle_zx_drawer)
 
-        self.toggle_bar_widget = QWidget()  # Wrapper to hide/show easily
-        self.toggle_bar = QHBoxLayout(self.toggle_bar_widget)
-        self.toggle_bar.addWidget(self.drawer_toggle)
+        # NEW: Right-align the toggle by adding stretch FIRST
         self.toggle_bar.addStretch()
-        self.toggle_bar.setContentsMargins(10, 0, 0, 5)
+        self.toggle_bar.addWidget(self.drawer_toggle)
 
-        canvas_v_layout.addWidget(self.zx_canvas)
-        canvas_v_layout.addWidget(self.toggle_bar_widget)
+        # NEW: Default to TOP placement for COMPILE/SIMULATE/RUN
+        self.canvas_v_layout.addWidget(self.toggle_bar_widget)
+        self.canvas_v_layout.addWidget(self.zx_canvas)
 
-        # Assemble the Drawer: [Vertical Tab] | [Canvas + Bottom Toggle]
+        # Assemble the Drawer
         self.zx_drawer_layout.addWidget(self.zx_tab_bar)
         self.zx_drawer_layout.addWidget(canvas_container)
 
@@ -124,6 +138,7 @@ class TopologiqApp(QMainWindow):
 
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.setHandleWidth(2)
+        self.main_splitter.setChildrenCollapsible(True)
 
         self.content_stack = QStackedWidget()
         self.main_splitter.addWidget(self.content_stack)
@@ -304,7 +319,7 @@ class TopologiqApp(QMainWindow):
         # 2. Geometry calculations
         h = self.height()
         w = self.width()
-        is_design = (section_name == "DESIGN")
+        is_design = section_name == "DESIGN"
 
         # 3. Apply Mode-Specific Layouts
         if is_design:
@@ -321,16 +336,29 @@ class TopologiqApp(QMainWindow):
             self.zx_tab_bar.show()
             self.toggle_bar_widget.hide()
 
+            # Move toggle bar to BOTTOM for DESIGN (if it were ever shown)
+            self.canvas_v_layout.removeWidget(self.toggle_bar_widget)
+            self.canvas_v_layout.insertWidget(0, self.toggle_bar_widget)
+
         else:
             # CLASSIC MODE: Top-down split
             self.main_splitter.setOrientation(Qt.Vertical)
+            self.content_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.content_stack.setMinimumHeight(0)
+            self.zx_drawer.setMinimumHeight(0)
+            self.main_splitter.setStretchFactor(0, 1)
+            self.main_splitter.setStretchFactor(1, 0)
 
             # Show the bottom toggle, hide the vertical tab
             self.zx_tab_bar.hide()
             self.toggle_bar_widget.show()
 
+            # Move toggle bar to TOP for other sections
+            self.canvas_v_layout.removeWidget(self.toggle_bar_widget)
+            self.canvas_v_layout.insertWidget(0, self.toggle_bar_widget)
+
             # Start open (30/70)
-            self.main_splitter.setSizes([int(h * 0.9), int(h * 0.1)])
+            self.main_splitter.setSizes([int(h) - 24, 24])
             self.drawer_toggle.setChecked(False)
             self.drawer_toggle.setText("OPEN CANVAS")
 
@@ -342,7 +370,6 @@ class TopologiqApp(QMainWindow):
             btn.setText(f"|  {name}  ⟩" if is_active else f"   {name}   ")
             btn.blockSignals(False)
 
-        self.status_bar.showMessage(f"Mode: {section_name}", 2000)
 
 
 async def main():

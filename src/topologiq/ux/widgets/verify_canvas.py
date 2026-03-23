@@ -10,54 +10,97 @@ AI disclaimer:
 """
 
 import numpy as np
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from vispy import scene
 from vispy.color import Color
 
 from topologiq.input.pyzx_manager import AugmentedZXGraph
-from topologiq.ux.utils import styles
 
 
-class VerifyCanvas(QWidget):
+class VerifyCanvas(QFrame):
     """Widget for verification of compilation."""
 
-    def __init__(self, parent=None):
-        """Initialise verification widget."""
+    def __init__(self, parent=None):  # noqa: D107
         super().__init__(parent)
-        self.current_aug_zx = None
-        self.is_reduced_view = True  # Default to Reduced
-        self.items = []
+        self.setFixedSize(280, 200)
+        self.setObjectName("VerifyPiP")
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        # 1. OUTER FRAME STYLE
+        self.setStyleSheet("""
+            QWidget#VerifyPiP {
+                background-color: #eef2f6;
+                border: 2px solid #444444;
+                border-top-left-radius: 21px;
+                border-bottom-right-radius: 7px;
+            }
+        """)
 
-        # Soft white / Light blue background
+        # 2. OUTER LAYOUT (The "Gasket" for rounded corners)
+        self.outer_layout = QVBoxLayout(self)
+        self.outer_layout.setContentsMargins(5, 5, 5, 5)
+
+        # 3. THE 3D CONTAINER (Prevents OpenGL bleed)
+        self.canvas_container = QWidget()
+        self.canvas_container.setStyleSheet("border: none; background: transparent;")
+        self.outer_layout.addWidget(self.canvas_container)
+
+        self.inner_layout = QVBoxLayout(self.canvas_container)
+        self.inner_layout.setContentsMargins(0, 0, 0, 0)
+
         self.canvas = scene.SceneCanvas(keys="interactive", show=False, bgcolor="#eef2f6")
-        self.layout.addWidget(self.canvas.native)
+        self.inner_layout.addWidget(self.canvas.native)
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = "turntable"
 
-        # Simplified HUD: Only Toggle and Save
-        self.hud = QFrame(self.canvas.native)
-        self.hud.setStyleSheet(
-            "background: rgba(200, 210, 230, 200); border-radius: 10px; border: 1px solid #ccc;"
-        )
-        self.hud.setFixedHeight(32)
+        # --- 4. FLOATING BUTTONS (Top-Right) ---
+        pill_style = """
+            QPushButton {
+                background: #e4e4e4;
+                color: #111;
+                border: 1px solid #ccc;
+                border-radius: 12px;
+                font-size: 8pt;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: #e0e4f5; }
+        """
 
-        hud_layout = QHBoxLayout(self.hud)
-        hud_layout.setContentsMargins(5, 0, 5, 0)
+        # Parented to 'self' so they aren't pushed by the 5px container margin
+        self.btn_save_zx = QPushButton("💾", self)
+        self.btn_save_zx.setFixedSize(32, 24)
+        self.btn_save_zx.setStyleSheet(pill_style)
 
-        self.btn_toggle_red = QPushButton("REDUCED")
+        self.btn_toggle_red = QPushButton("REDUCE", self)
         self.btn_toggle_red.setCheckable(True)
         self.btn_toggle_red.setChecked(True)
-        self.btn_toggle_red.setStyleSheet(styles.TOGGLE_BUTTON_STYLE)
-        self.btn_toggle_red.clicked.connect(self._toggle_reduction)
+        self.btn_toggle_red.setFixedSize(65, 24)
+        self.btn_toggle_red.setStyleSheet(pill_style)
 
-        self.btn_save_zx = QPushButton("SAVE")
-        self.btn_save_zx.setStyleSheet(styles.TOGGLE_BUTTON_STYLE)
+        # --- 5. STATUS PILL (Bottom-Left) ---
+        self.status_pill = QFrame(self)  # Parented to self
+        self.status_pill.setObjectName("StatusPill")
+        self.status_pill.setFixedSize(100, 20)
 
-        hud_layout.addWidget(self.btn_toggle_red)
-        hud_layout.addWidget(self.btn_save_zx)
+        # Ensure the label styling is still applied
+        self.status_pill.setStyleSheet("""
+            QFrame#StatusPill {
+                background: rgba(255, 255, 255, 200);
+                border-radius: 10px;
+                border: 1px solid #ccc;
+            }
+        """)
+
+        pill_layout = QHBoxLayout(self.status_pill)
+        pill_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.verify_badge = QLabel("UNVERIFIED")
+        self.verify_badge.setObjectName("StatusLabel")
+        self.verify_badge.setProperty("status", "unknown")
+        self.verify_badge.setAlignment(Qt.AlignCenter)
+        self.verify_badge.setStyleSheet("font-size: 7pt; font-weight: bold;")
+        pill_layout.addWidget(self.verify_badge)
 
     def manage_aug_zx(self, aug_zx_graph: AugmentedZXGraph):
         """Standardised entry point for the Global Drawer."""
@@ -152,7 +195,47 @@ class VerifyCanvas(QWidget):
             item.parent = None
         self.items = []
 
-    def resizeEvent(self, event):  # noqa: D102, N802
+    def update_verification_badge(self, success: bool):
+        """Toggle between Green (Verified) and Gray (Unknown)."""
+        if success:
+            self.verify_badge.setText("VERIFIED")
+            self.verify_badge.setProperty("status", "verified")
+        else:
+            # Fallback for False or None
+            self.verify_badge.setText("UNVERIFIED")
+            self.verify_badge.setProperty("status", "unknown")
+
+        # Force the style engine to refresh the background color
+        self.verify_badge.style().unpolish(self.verify_badge)
+        self.verify_badge.style().polish(self.verify_badge)
+        self.verify_badge.update()
+
+    def resizeEvent(self, event):  # noqa: N802
+        """Anchor all floating UI elements to their respective corners."""
         super().resizeEvent(event)
-        # Keep HUD anchored to top-right
-        self.hud.move(self.width() - self.hud.width() - 10, 10)
+
+        # 1. Geometry Constants
+        margin = 10
+        spacing = 6
+
+        # 2. Position REDUCE (Top-Right)
+        # X: Width - ButtonWidth - Margin
+        # Y: Margin
+        self.btn_toggle_red.move(self.width() - self.btn_toggle_red.width() - margin, margin)
+
+        # 3. Position SAVE (Top-Right, left of REDUCE)
+        # X: Width - BothButtonsWidth - Margin - Spacing
+        # Y: Margin
+        self.btn_save_zx.move(
+            self.width()
+            - self.btn_toggle_red.width()
+            - self.btn_save_zx.width()
+            - margin
+            - spacing,
+            margin,
+        )
+
+        # 4. Position STATUS PILL (Bottom-Left)
+        # X: Margin (Left side)
+        # Y: Total Height - Pill Height - Margin (Bottom side)
+        self.status_pill.move(margin, self.height() - self.status_pill.height() - margin)

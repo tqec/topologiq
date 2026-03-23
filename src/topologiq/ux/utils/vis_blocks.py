@@ -22,12 +22,19 @@ NODE_HEX_MAP = {
     "zzx": ["#b9cdff", "#b9cdff", "#d7a4a1"],
     "zxx": ["#b9cdff", "#d7a4a1", "#d7a4a1"],
     "zxz": ["#b9cdff", "#d7a4a1", "#b9cdff"],
-    "zxo": ["#b9cdff", "#d7a4a1", "gray"],
-    "xzo": ["#d7a4a1", "#b9cdff", "gray"],
-    "oxz": ["gray", "#d7a4a1", "#b9cdff"],
-    "ozx": ["gray", "#b9cdff", "#d7a4a1"],
-    "xoz": ["#d7a4a1", "gray", "#b9cdff"],
-    "zox": ["#b9cdff", "gray", "#d7a4a1"],
+    "zxo": ["#b9cdff", "#d7a4a1", "#777777"],
+    "xzo": ["#d7a4a1", "#b9cdff", "#777777"],
+    "oxz": ["#777777", "#d7a4a1", "#b9cdff"],
+    "ozx": ["#777777", "#b9cdff", "#d7a4a1"],
+    "xoz": ["#d7a4a1", "#777777", "#b9cdff"],
+    "zox": ["#b9cdff", "#777777", "#d7a4a1"],
+    "ooo": ["#777777", "#777777", "#777777"],
+    "yyy": ["#84dd67", "#84dd67", "#84dd67"],
+    "x": ["#d7a4a1"],
+    "y": ["#84dd67"],
+    "z": ["#b9cdff"],
+    "simple": ["#000000"],
+    "hadamard": ["#fbf65a"],
     # ... any others will default to gray in the getter
 }
 
@@ -90,7 +97,7 @@ def generate_block_data(coords, size, kind):  # noqa: D103
     vertices = vertices_data["position"] + np.array([x, y, z])
 
     clean_kind = kind.replace("h", "")
-    cols = NODE_HEX_MAP.get(clean_kind, ["gray", "gray", "gray"])
+    cols = NODE_HEX_MAP.get(clean_kind, ["#777777", "#777777", "#777777"])
 
     v_cols = np.zeros((24, 4))
 

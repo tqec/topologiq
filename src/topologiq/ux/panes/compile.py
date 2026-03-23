@@ -16,17 +16,9 @@ AI disclaimer:
 
 import asyncio
 
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSplitter,
-)
+from PySide6.QtCore import Slot
 
 from topologiq.ux.base_pane import BasePane
-from topologiq.ux.utils import styles
 from topologiq.ux.widgets.bgraph_canvas import BGraphCanvas
 from topologiq.ux.widgets.verify_canvas import VerifyCanvas
 
@@ -40,51 +32,18 @@ class CompilePane(BasePane):
         self._running_tasks = set()
 
     def setup_ui(self):
-        """Build the workstation layout."""
-        # 1. TOP ACTION BAR
-        self.action_bar = QFrame()
-        self.action_bar.setFixedHeight(60)
-        bar_layout = QHBoxLayout(self.action_bar)
+        """Build the workstation layout with floating verification."""
+        self.layout.setContentsMargins(0, 0, 0, 3)
+        self.layout.setSpacing(0)
 
-        self.btn_compile_full = QPushButton("COMPILE FULL")
-        self.btn_compile_red = QPushButton("COMPILE REDUCED")
-
-        for btn in [self.btn_compile_full, self.btn_compile_red]:
-            btn.setStyleSheet(styles.ACTION_BTN)
-            btn.setFixedSize(160, 36)
-
-        self.btn_compile_full.clicked.connect(lambda: self._run_surgery(use_reduced=False))
-        self.btn_compile_red.clicked.connect(lambda: self._run_surgery(use_reduced=True))
-
-        self.verify_badge = QLabel("UNVERIFIED")
-        self.verify_badge.setStyleSheet(styles.STATUS_BADGE_UNVERIFIED)
-        self.verify_badge.setFixedSize(180, 30)
-        self.verify_badge.setAlignment(Qt.AlignCenter)
-
-        bar_layout.addWidget(self.btn_compile_full)
-        bar_layout.addWidget(self.btn_compile_red)
-        bar_layout.addStretch()
-        bar_layout.addWidget(self.verify_badge)
-
-        self.layout.addWidget(self.action_bar)
-
-        # 2. CENTRAL WORKSTATION (Horizontal Splitter)
-        self.comp_splitter = QSplitter(Qt.Horizontal)
-        self.comp_splitter.setStyleSheet("QSplitter::handle { background: #444; width: 2px; }")
-
-        # LEFT: The 3D Blockgraph (The "Physical" Implementation)
+        # 1. Main 3D Workspace
         self.block_canvas = BGraphCanvas()
-        # Applying the Pastel Green aesthetic for TQEC compatibility
-        self.block_canvas.canvas.bgcolor = "#d4edda"
-        self.comp_splitter.addWidget(self.block_canvas)
 
-        # RIGHT: The Verification ZX (The Logical Proof)
-        self.output_canvas = VerifyCanvas()
-        self.comp_splitter.addWidget(self.output_canvas)
+        # 2. Floating Verification (Parented to block_canvas)
+        self.output_canvas = VerifyCanvas(parent=self.block_canvas)
 
-        # Set proportions: 70% Blockgraph, 30% Verification
-        self.comp_splitter.setSizes([700, 300])
-        self.layout.addWidget(self.comp_splitter)
+        # Add only the block_canvas to the layout
+        self.layout.addWidget(self.block_canvas)
 
     def _run_surgery(self, use_reduced: bool):
         """Trigger the heavy 3D transformation in the manager."""
@@ -93,7 +52,7 @@ class CompilePane(BasePane):
         task.add_done_callback(self._running_tasks.discard)
 
     @Slot(dict, dict)
-    def update_blockgraph(self, cubes: dict, pipes: dict):
+    def update_blockgraph(self, cubes: object, pipes: object):
         """Update blockgraph."""
         if cubes:
             self.block_canvas.render_blockgraph(cubes, pipes)
@@ -107,10 +66,5 @@ class CompilePane(BasePane):
 
     @Slot(bool)
     def show_verification_result(self, success: bool):
-        """Update the HUD badge based on equality check."""
-        if success:
-            self.verify_badge.setText("VERIFIED EQUIVALENT")
-            self.verify_badge.setStyleSheet(styles.STATUS_BADGE_VERIFIED)
-        else:
-            self.verify_badge.setText("VERIFICATION FAILED")
-            self.verify_badge.setStyleSheet(styles.STATUS_BADGE_FAILED)
+        """Delegate the badge update to the verification canvas."""
+        self.output_canvas.update_verification_badge(success)

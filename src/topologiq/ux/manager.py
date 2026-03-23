@@ -40,7 +40,7 @@ class UXManager(QObject):
     zx_input_ready = Signal(object)  # Now sends the NX graph for the Global Drawer
 
     # Compilation Result Signals
-    blockgraph_ready = Signal(dict, dict)  # Cubes, Pipes (dict format for BGraphCanvas)
+    blockgraph_ready = Signal(object, object)  # Cubes, Pipes (dict format for BGraphCanvas)
     zx_output_ready = Signal(object)  # The NX graph derived from the blockgraph
 
     # Verification Signals
@@ -179,13 +179,20 @@ class UXManager(QObject):
         """Execute 3D Lattice Surgery and generate verification graph."""
         if self.is_processing:
             return
+
+        # Pre-flight check: look for the graph in the data store
+        aug_zx_in = self._data_store.get("augmented_zx_graph_in")
+
+        if not aug_zx_in:
+            # Emit error and stay in DESIGN tab
+            self.status_changed.emit("LATTICE SURGERY ERROR: No input ZX graph found in store.")
+            return
+
+        # If we have a graph, start processing and switch pane
         self._set_processing(True, "Performing Lattice Surgery...")
+        self.section_changed.emit("COMPILE")
 
         try:
-            aug_zx_in = self._data_store.get("augmented_zx_graph_in")
-            if not aug_zx_in:
-                raise ValueError("No input ZX graph found.")
-
             # 1. Surgery (Nodes/Edges for Blockgraph)
             cubes, pipes = await asyncio.to_thread(
                 aug_zx_in.get_blockgraph, use_reduced=use_reduced
@@ -204,7 +211,7 @@ class UXManager(QObject):
             self._data_store["augmented_zx_graph_out"] = aug_zx_out
 
             # Emit the NetworkX graph for the secondary visualizer in COMPILE
-            self.zx_output_ready.emit(aug_zx_out.nx_graph)
+            self.zx_output_ready.emit(aug_zx_out)
 
             self.ready_for_equality_verification.emit(True)
             self.status_changed.emit("Lattice surgery complete.")
