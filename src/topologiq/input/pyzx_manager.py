@@ -71,7 +71,7 @@ class ZXGraphManager:
         use_primary: bool = False,
         graph_key: str = "",
     ) -> AugmentedZXGraph:
-        """Add an augmented ZX graph to the collection from a QASM string or file.
+        """Add an augmented ZX graph to the collection starting with a standard PyZX graph.
 
         Args:
             zx_graph: The PyZX graph.

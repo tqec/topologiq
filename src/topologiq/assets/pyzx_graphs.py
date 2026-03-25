@@ -226,3 +226,6 @@ def random_graph(
             return pyzx_graph, fig
 
     return None, None
+
+
+steane_pyzx, _ = steane_pyzx()

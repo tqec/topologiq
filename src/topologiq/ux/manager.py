@@ -14,17 +14,15 @@ AI disclaimer:
 """
 
 import asyncio
-import os
 import subprocess
-import sys
-import tempfile
 from typing import Any
 
+import pyzx as zx
+import qbraid
 from PySide6.QtCore import QObject, Signal
 
 from topologiq.input.pyzx_manager import ZXGraphManager
-from topologiq.input.qbraid_manager import AugmentedQBCircuit, CircuitManager
-from topologiq.ux.utils.glue_code import GLUE_CODE
+from topologiq.input.qbraid_manager import CircuitManager
 
 
 class UXManager(QObject):
@@ -84,94 +82,88 @@ class UXManager(QObject):
         var_name: str = "circuit",
         switch_to_transform: bool = False,
     ):
-        """Ingest code and convert into qBraid circuit via Subprocess sandbox."""
+        """In-process ingestion using exec for rapid MVP development."""
         if self.is_processing and not switch_to_transform:
             return
 
-        if mode == "python" and not var_name:
-            self.status_changed.emit("ERROR: No variable name provided.")
-            return
+        self._set_processing(True, f"Executing {mode.upper()} source...")
 
-        self._set_processing(True, f"Ingesting {mode.upper()} source...")
+        # Local state for this ingestion cycle
+        aug_zx_to_emit = None
+        is_native_pyzx = False
 
         try:
             self._data_store["circuit_raw"] = source_design
 
             if mode == "python":
-                with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp:
-                    tmp_path = tmp.name
-                    indented_source = "\n".join(
-                        f"    {line}" for line in source_design.splitlines()
-                    )
-                    final_script = GLUE_CODE.format(
-                        source_design=indented_source, var_name=var_name
-                    )
-                    tmp.write(final_script)
+                # 1. Prepare a fresh execution context
+                # We pre-inject zx and qbraid so the user doesn't strictly
+                # need to import them in the editor for the script to run.
+                context = {"__name__": "__main__", "zx": zx, "qbraid": qbraid}
 
-                try:
-                    self._active_proc = subprocess.Popen(  # noqa: S603
-                        [sys.executable, tmp_path],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        shell=False,  # Explicitly disable shell to prevent command injection
-                        start_new_session=True,  # Prevents CTRL+C in terminal from killing the GUI
-                    )
-                    # Offload the blocking communicate call
-                    stdout, stderr = await asyncio.to_thread(
-                        self._active_proc.communicate, timeout=5
-                    )
+                # 2. Execute user code in a thread to keep the UI responsive
+                def _execute():
+                    # We use exec for multi-line support
+                    exec(source_design, context)  # noqa: S102
+                    return context.get(var_name)
 
-                    if self._active_proc.returncode != 0:
-                        raise RuntimeError(f"Python Error: {stderr.strip().splitlines()[-1]}")
+                target = await asyncio.to_thread(_execute)
 
-                    if "---BEGIN_QASM---" in stdout:
-                        qasm_data = (
-                            stdout.split("---BEGIN_QASM---")[1].split("---END_QASM---")[0].strip()
-                        )
-                        self.circuit_manager.add_custom_circuit(qasm_data)
-                    else:
-                        raise LookupError(f"Variable '{var_name}' not found in script.")
+                if target is None:
+                    raise LookupError(f"Variable '{var_name}' not found in the script.")
 
-                finally:
-                    if os.path.exists(tmp_path):
-                        os.remove(tmp_path)
+                # 3. PATH A: NATIVE PyZX (In-Memory)
+                # We check the live object type directly
+                if isinstance(target, zx.graph.base.BaseGraph) or hasattr(target, "to_json"):
+                    is_native_pyzx = True
+                    self.status_changed.emit("Integrating live PyZX graph...")
+
+                    # Pass the LIVE object. It retains all metadata/NetworkX pointers.
+                    aug_zx_to_emit = self.zx_manager.add_graph_from_pyzx(target, use_primary=True)
+                    self._data_store["augmented_zx_graph_in"] = aug_zx_to_emit
+
+                    # Sync Design Pane text area with a QASM representation
+                    try:
+                        self.qb_circuit_ready.emit(zx.to_qasm(target), "[Native PyZX Graph]")
+                    except Exception:
+                        self.qb_circuit_ready.emit("// Topology-only graph", "[Native PyZX Graph]")
+
+                # 4. PATH B: qBraid Fallback
+                else:
+                    # Transpile the live object (Qiskit, Cirq, etc.) via qBraid
+                    qasm_str = qbraid.transpiler.transpile(target, "qasm2")
+                    self.circuit_manager.add_custom_circuit(qasm_str)
+
             else:
+                # Direct QASM string ingestion (non-python mode)
                 self.circuit_manager.add_custom_circuit(source_design)
 
-            # Success Path
-            aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
-            self._data_store["augmented_qb_circuit"] = aug_qb
-            self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
+            # --- 5. qBraid Path Finalization ---
+            if not is_native_pyzx:
+                aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
+                self._data_store["augmented_qb_circuit"] = aug_qb
+                self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
 
-            if switch_to_transform:
-                await self.handle_qb_to_zx_transform(aug_qb)
+                if switch_to_transform:
+                    # Transpile our internal qBraid circuit to ZX
+                    aug_zx_to_emit = await asyncio.to_thread(
+                        self.zx_manager.add_graph_from_qasm, qasm_str=aug_qb.qasm, use_primary=True
+                    )
+                    self._data_store["augmented_zx_graph_in"] = aug_zx_to_emit
+
+            # --- 6. ATOMIC UI SWITCH ---
+            # We only transition to the Canvas if all steps above succeeded
+            if switch_to_transform and aug_zx_to_emit:
+                self.section_changed.emit("DESIGN")  # Ensure the correct tab is active
+                await asyncio.sleep(0.1)  # UI stability buffer
+                self.zx_input_ready.emit(aug_zx_to_emit)
+                self.status_changed.emit("Graph ingested and visualized successfully.")
             else:
-                self.status_changed.emit("Circuit loaded.")
+                self.status_changed.emit("Code executed successfully.")
 
         except Exception as e:
-            self.status_changed.emit(f"ERROR: {e}")
-        finally:
-            self._set_processing(False, "Ready")
-
-    async def handle_qb_to_zx_transform(self, aug_qb_circuit: AugmentedQBCircuit):
-        """Transpile qBraid circuit to PyZX and update global drawer."""
-        self._set_processing(True, "Transpiling to ZX...")
-        try:
-            # Heavy transpilation in background thread
-            aug_zx_in = await asyncio.to_thread(
-                self.zx_manager.add_graph_from_qasm, qasm_str=aug_qb_circuit.qasm, use_primary=True
-            )
-            self._data_store["augmented_zx_graph_in"] = aug_zx_in
-
-            self.section_changed.emit("DESIGN")
-            await asyncio.sleep(0.1)  # Buffer for UI tab switch
-
-            # Emit the NetworkX graph for the ZXCanvas
-            self.zx_input_ready.emit(aug_zx_in)
-
-        except Exception as e:
-            self.status_changed.emit(f"Transpilation Error: {e}")
+            # Catch logic errors, syntax errors, or type errors
+            self.status_changed.emit(f"Execution Error: {e!s}")
         finally:
             self._set_processing(False, "Ready")
 

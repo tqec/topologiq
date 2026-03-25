@@ -9,10 +9,18 @@ AI disclaimer:
 
 """
 
-
-GLUE_CODE = """import qiskit
-import qbraid
+GLUE_CODE = """
 import sys
+import json
+import traceback
+
+try:
+    import pyzx as zx
+    # The most reliable way to check for ANY PyZX graph
+    from pyzx.graph.base import BaseGraph
+except ImportError:
+    zx = None
+    BaseGraph = None
 
 def run_user_code():
 {source_design}
@@ -21,19 +29,32 @@ def run_user_code():
 try:
     user_vars = run_user_code()
     target = user_vars.get('{var_name}') or globals().get('{var_name}')
-    
+
     if target is not None:
-        # Robust conversion using qbraid's high-level transpile
-        # This avoids the missing 'circuit_wrapper' name error
-        qasm_str = qbraid.transpiler.transpile(target, "qasm2")
-        
-        sys.stdout.write("---BEGIN_QASM---\\n")
-        sys.stdout.write(qasm_str)
-        sys.stdout.write("\\n---END_QASM---\\n")
+        # DEBUG: Tell the manager what we found
+        sys.stderr.write(f"DEBUG: Found target type: {{type(target)}}\\n")
+
+        # PATH A: Direct PyZX Handling
+        # We check for BaseGraph OR the presence of the to_json method
+        if (BaseGraph and isinstance(target, BaseGraph)) or hasattr(target, 'to_json'):
+            sys.stderr.write("DEBUG: Path A (PyZX) selected\\n")
+            sys.stdout.write("---BEGIN_PYZX_JSON---\\n")
+            sys.stdout.write(target.to_json())
+            sys.stdout.write("\\n---END_PYZX_JSON---\\n")
+
+        # PATH B: Standard qBraid fallback
+        else:
+            sys.stderr.write("DEBUG: Path B (qBraid) selected\\n")
+            import qbraid
+            qasm_str = qbraid.transpiler.transpile(target, "qasm2")
+            sys.stdout.write("---BEGIN_QASM---\\n")
+            sys.stdout.write(qasm_str)
+            sys.stdout.write("\\n---END_QASM---\\n")
+
         sys.stdout.flush()
     else:
-        print(f"ERROR: Variable '{{var_name}}' not found.", file=sys.stderr)
-except Exception as e:
-    print(f"ERROR: {{e}}", file=sys.stderr)
+        sys.stderr.write(f"DEBUG: Variable '{{var_name}}' was None or not found.\\n")
+except Exception:
+    sys.stderr.write(traceback.format_exc())
     sys.stderr.flush()
 """
