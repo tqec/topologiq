@@ -124,6 +124,10 @@ class BGraphCanvas(QWidget):  # noqa: D101
                 yell_len = 0.1 * adj_len
                 col_len = 0.45 * adj_len
 
+                # 1. Calculate the normalized direction vector
+                # This tells us which way the pipe is actually "pointing"
+                direction = (v_pos - u_pos) / dist
+
                 offsets = [-(yell_len / 2 + col_len / 2), 0, (yell_len / 2 + col_len / 2)]
                 sizes = [col_len, yell_len, col_len]
                 kinds = [kind, "hadamard", rotate_pipe_kind(kind)]
@@ -132,8 +136,9 @@ class BGraphCanvas(QWidget):  # noqa: D101
                     p_size = [1.0, 1.0, 1.0]
                     p_size[render_orient] = float(s)
 
-                    p_pos = midpoint.copy()
-                    p_pos[render_orient] += off
+                    # 2. Apply offset along the actual direction vector,
+                    # not just the coordinate axis.
+                    p_pos = midpoint + (direction * off)
 
                     lookup_k = "xxz" if k == "hadamard" else k
                     v, f, c, e = generate_block_data(p_pos, p_size, lookup_k)
@@ -146,7 +151,6 @@ class BGraphCanvas(QWidget):  # noqa: D101
                     all_c.append(c)
                     all_e.append(e + v_offset)
                     v_offset += len(v)
-
         # --- 3. Final Assembly ---
         if not all_v:
             return
