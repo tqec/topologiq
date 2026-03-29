@@ -25,7 +25,7 @@ NAV_BUTTON_STYLE = """
         border: none;
         padding: 0px 15px;
         font-family: 'Courier New', monospace;
-        font-size: 14px;
+        font-size: 18px;
         outline: none;
     }
     QPushButton:hover {
@@ -65,14 +65,83 @@ TOGGLE_BUTTON_STYLE = """
 """
 STATUS_LABEL_STYLE = "color: #007acc; font-family: monospace; font-size: 10px;"
 TEXT_STYLE_TRANSPILE_COMPILE = "background-color: #007acc; font-weight: bold; color: white;"
-ACTION_BTN = "color: #ff0000; background-color: #1e0000; border: 1px solid ridge inset; border-color: #343434; border-radius: 3px; padding: 3px 7px;"
+ACTION_BTN = "color: #000; background-color: #ffff77; border: 1px solid ridge inset; border-color: #666; border-radius: 3px; padding: 3px 7px;"
 GHOST_COLOR = "#333"
+x = "#ffff77"
+COMMAND_RAIL_STYLE = "background-color: #1a1a1a; border-right: 1px solid #333;"
+# The IDE tab (Left side) sticks to its right edge
+LEFT_TAB_STYLE = """
+    QPushButton {
+        background-color: #f1c40f; color: #000; font-weight: bold; font-size: 11px;
+        border: 2px solid #000;
+        border-right: none; /* Stick to IDE */
+        border-radius: 8px 0px 0px 8px;
+        padding: 5px 0px;
+    }
+    QPushButton:hover { background-color: #f3d147; }
+"""
+STYLE_CLOSE_BTN = """
+    QPushButton {
+        border: 1px solid #666;
+        border-radius: 0px;
+        font-weight: bold;
+        padding: 3px 7px;
+    }
+    QPushButton:hover { background: #ff3333; }
+"""
+
+# The Canvas tab (Right side) sticks to its left edge
+RIGHT_TAB_STYLE = """
+    QPushButton {
+        background-color: #f1c40f; color: #000; font-weight: bold; font-size: 11px;
+        border: 2px solid #000;
+        border-left: none; /* Stick to Canvas */
+        border-radius: 0px 8px 8px 0px;
+        padding: 5px 0px;
+    }
+    QPushButton:hover { background-color: #f3d147; }
+"""
+CENTER_TAB_STYLE = """
+    QPushButton {
+        background-color: #f1c40f;
+        color: #000;
+        font-weight: bold;
+        font-size: 11px;
+        border: 2px solid #000;
+        border-radius: 4px;
+        padding: 5px 0px;
+    }
+    QPushButton:hover { background-color: #f3d147; }
+"""
+# IDE Button: Rounded on the left, flat on the right (points to IDE)
+IDE_PILL_STYLE = """
+    QPushButton {
+        background-color: #f1c40f; color: #000; font-weight: bold; font-size: 11px;
+        border: 2px solid #666;
+        border-radius: 12px 0px 0px 12px;
+    }
+    QPushButton:hover { background-color: #f3d147; }
+"""
+
+# Canvas Button: Flat on the left, rounded on the right (points to Canvas)
+CANVAS_PILL_STYLE = """
+    QPushButton {
+        background-color: #f1c40f; color: #000; font-weight: bold; font-size: 11px;
+        border: 2px solid #666;
+        border-radius: 0px 12px 12px 0px;
+    }
+    QPushButton:hover { background-color: #f3d147; }
+"""
 
 # DESIGN PANE
-TEXT_STYLE_CODE = "font-family: 'Courier New', monospace; background-color: #0f0f0f; color: #dcdcdc; border: 1px solid #333;"
+TEXT_STYLE_CODE = "font-family: 'Courier New', monospace; background-color: #0f0f0f; color: #dcdcdc; border: 1px solid #666;"
 HUD_FRAME_STYLE = "background: rgba(30, 30, 30, 200); border-radius: 6px; border: 1px solid #444;"
-HUD_BUTTON_STYLE = "color: #bbb; border: none; padding: 4px 8px; font-size: 10px; font-weight: bold;"
-HUD_ACTION_BUTTON_STYLE = "background: #2ecc71; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold;"
+HUD_BUTTON_STYLE = (
+    "color: #bbb; border: none; padding: 4px 8px; font-size: 10px; font-weight: bold;"
+)
+HUD_ACTION_BUTTON_STYLE = (
+    "background: #2ecc71; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold;"
+)
 HUD_ROUND_BUTTON_STYLE = "background: rgba(50, 50, 50, 200); color: white; border-radius: 17px; font-size: 16px; border: 1px solid #666;"
 
 # TRANSFORM PANE
@@ -87,11 +156,9 @@ PRIMARY_ACTION_STYLE = (
 )
 
 PILL_BTN_BASE = (
-    "padding: 4px 12px; border-radius: 12px; font-size: 10px; font-weight: bold; border: 1px solid;"
+    "padding: 4px 12px; font-size: 10px; font-weight: bold; border: 1px solid;"
 )
 
 # Variants
-PILL_BTN_PYZX = f"{PILL_BTN_BASE} background-color: #1a1a2e; border-color: #3e3e5e; color: #aaccff;"
+PILL_BTN_PYZX = f"{PILL_BTN_BASE} background-color: #1a1a2e; border-color: #666; color: #aaccff;"
 PILL_BTN_REDUCE = f"{PILL_BTN_BASE} background-color: #222; border-color: #444; color: #aaa;"
-
-

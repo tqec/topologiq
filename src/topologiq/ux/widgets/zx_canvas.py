@@ -15,13 +15,14 @@ import asyncio
 from pathlib import Path
 
 import numpy as np
+import pyzx as zx
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -30,34 +31,57 @@ from vispy.color import Color
 
 from topologiq.input.pyzx_manager import AugmentedZXGraph
 from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
-from topologiq.ux.utils import styles  # noqa: F401
+from topologiq.ux.utils import styles
+from topologiq.ux.utils.aux import create_split_controls
 
 
 class ZXCanvas(QWidget):  # noqa: D101
+    toggle_requested = Signal(str)
+
     def __init__(self, manager, parent=None):  # noqa: D107
         super().__init__(parent)
         self.manager = manager
-
         self.current_aug_zx = None
         self.items = []
-        self._tasks = set()  # Added: Task tracking
-        self.is_reduced_view = False  # Added: View state
+        self._tasks = set()
+        self.is_reduced_view = False
         self.last_points = []
 
-        # Main Layout
+        # 1. Main Container Style
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
-        self.setMinimumHeight(0)
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(0)
+        self.setStyleSheet("ZXCanvas { background: #1a1a1a; }")
 
-        # 1. VISPY CANVAS
-        self.canvas_color = "#d9d9d9"
+        # 2. The Styled Frame Wrapper
+        self.canvas_frame = QFrame()
+        self.canvas_frame.setObjectName("MainCanvasFrame")
+        self.canvas_frame.setStyleSheet("""
+            #MainCanvasFrame {
+                border: 2px solid #999;
+                background: #a3a3a3;
+            }
+        """)
+
+        # 3. VisPy Integration
         self.canvas = scene.SceneCanvas(
-            keys="interactive", show=True, bgcolor=self.canvas_color, config={"depth_size": 24}
+            keys="interactive",
+            show=True,
+            bgcolor="#bcffc6",
+            config={"depth_size": 24},
         )
-        self.layout.addWidget(self.canvas.native)
+
+        # Ensure the native widget itself doesn't have a background/border conflict
+        self.canvas.native.setStyleSheet("border: none; background: transparent;")
+
+        frame_layout = QVBoxLayout(self.canvas_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.addWidget(self.canvas.native)
+
+        self.layout.addWidget(self.canvas_frame)
+
         self.view = self.canvas.central_widget.add_view()
-        self.view.camera = "panzoom"  # Changed to panzoom for better 2D ZX interaction
+        self.view.camera = "panzoom"
 
         self._setup_hud_anchors()
 
@@ -94,46 +118,49 @@ class ZXCanvas(QWidget):  # noqa: D101
         """Restores the four-corner HUD layout from the original TransformPane."""
 
         # --- TOP LEFT: Title ---
-        self.info_label = QLabel("INPUT ZX", self.canvas.native)
+        # Parented to canvas_frame to stay inside the border
+        self.info_label = QLabel("INPUT ZX", self.canvas_frame)
         self.info_label.setStyleSheet(
             "color: #111; font-weight: bold; font-size: 11px; background: transparent;"
         )
 
         # --- TOP RIGHT: Unified File/View Bar ---
-        self.top_right_hud = QFrame(self.canvas.native)
+        self.top_right_hud = QFrame(self.canvas_frame)
         self.top_right_hud.setStyleSheet("""
-            QFrame { background: rgba(210, 210, 210, 220); border-radius: 15px; border: 1px solid #bbb; }
+            QFrame { background: transparent; border: none; }
             QPushButton {
-                background: transparent; color: #111; font-size: 9px; font-weight: bold;
-                padding: 5px 12px; border: none;
+                background: #f2f3fb; color: #333; font-size: 9px; font-weight: bold;
+                padding: 5px 12px; border: 1px solid #666;
             }
-            QPushButton:hover { background: rgba(0,0,0,15); border-radius: 13px; }
-            QPushButton:checked { background: #2d5a27; color: white; border-radius: 13px; }
+            QPushButton:hover { background: rgba(0,0,0,15); }
+            QPushButton:checked { background: #2d5a27; color: white;}
         """)
         tr_layout = QHBoxLayout(self.top_right_hud)
         tr_layout.setContentsMargins(5, 2, 5, 2)
         tr_layout.setSpacing(0)
 
-        self.btn_load = QPushButton("LOAD QASM")
-        self.btn_save = QPushButton("SAVE QASM")
-        self.btn_reduce = QPushButton("REDUCED")
-        self.btn_reduce.setCheckable(True)
+        self.btn_load_qasm = QPushButton("LOAD QASM")
+        self.btn_load_json = QPushButton("LOAD JSON")
+        self.btn_save_json = QPushButton("SAVE JSON")
 
-        for btn in [self.btn_load, self.btn_save, self.btn_reduce]:
+        for btn in [self.btn_load_qasm, self.btn_load_json, self.btn_save_json]:
             tr_layout.addWidget(btn)
 
-        # Signal connections using the async task runner to prevent GC warnings
-        self.btn_load.clicked.connect(lambda: self._handle_load_request())
-        self.btn_reduce.toggled.connect(self._toggle_reduction)
+        # Signal connections
+        self.btn_load_qasm.clicked.connect(lambda: self._handle_load_request())
+        self.btn_load_json.clicked.connect(lambda: self._handle_json_io("LOAD"))
+        self.btn_save_json.clicked.connect(lambda: self._handle_json_io("SAVE"))
 
         # --- BOTTOM RIGHT: Transformation Controls ---
-        self.bottom_right_hud = QFrame(self.canvas.native)
+        self.bottom_right_hud = QFrame(self.canvas_frame)
         self.bottom_right_hud.setStyleSheet("background: transparent;")
         br_layout = QHBoxLayout(self.bottom_right_hud)
         br_layout.setContentsMargins(0, 0, 0, 0)
 
         self.btn_full = self._make_action_btn("COMPILE FULL")
         self.btn_reduced_compile = self._make_action_btn("COMPILE REDUCED")
+        self.btn_full.setStyleSheet(styles.PILL_BTN_PYZX + "background: #333;")
+        self.btn_reduced_compile.setStyleSheet(styles.PILL_BTN_PYZX + "background: #333;")
 
         br_layout.addWidget(self.btn_full)
         br_layout.addWidget(self.btn_reduced_compile)
@@ -142,17 +169,26 @@ class ZXCanvas(QWidget):  # noqa: D101
         self.btn_full.clicked.connect(lambda: self._trigger_surgery(False))
         self.btn_reduced_compile.clicked.connect(lambda: self._trigger_surgery(True))
 
-        # --- BOTTOM LEFT: Navigation (Round Reset Button) ---
-        self.btn_reset_cam = QPushButton("⟲", self.canvas.native)
-        self.btn_reset_cam.setFixedSize(36, 36)
-        self.btn_reset_cam.setStyleSheet("""
-            QPushButton {
-                background: #111; color: #eee; border-radius: 18px;
-                font-size: 16px; font-weight: bold; border: 2px solid #444;
-            }
-            QPushButton:hover { background: #333; }
-        """)
+        # --- BOTTOM LEFT: Layout Toggles + Navigation ---
+        # 1. Triplet Buttons Cluster via Utility
+        self.toggle_buttons = create_split_controls(
+            self.canvas_frame, ["CLOSE CANVAS", "40/60"], self.toggle_requested.emit
+        )
+
+        # 2. Navigation (Round Reset Button)
+        self.btn_reset_cam = QPushButton("⟲", self.canvas_frame)
+        self.btn_reset_cam.setFixedSize(30, 30)
+        self.btn_reset_cam.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_cam.setStyleSheet(
+            styles.STYLE_CLOSE_BTN
+            + "QPushButton { background: #333; border: 1px solid black; border-radius: 15px; font-size: 16px; }"
+            "QPushButton:hover { background: #777; }"
+        )
         self.btn_reset_cam.clicked.connect(self._reset_camera_view)
+
+        # Initial size adjustment to ensure tr_layout and others have valid widths for first resizeEvent
+        self.top_right_hud.adjustSize()
+        self.bottom_right_hud.adjustSize()
 
     def _make_action_btn(self, text):
         """Create the dark action buttons."""
@@ -263,8 +299,8 @@ class ZXCanvas(QWidget):  # noqa: D101
             text=node_labels,
             pos=pos,
             font_size=dynamic_font_size,
-            anchor_x='left',
-            anchor_y='top',
+            anchor_x="left",
+            anchor_y="top",
             bold=True,
             parent=self.view.scene,
         )
@@ -284,6 +320,54 @@ class ZXCanvas(QWidget):  # noqa: D101
 
         self.view.camera.rect = (x_min, y_min, x_max - x_min, y_max - y_min)
         self.canvas.update()
+
+    def _handle_json_io(self, mode: str):
+        """Unified handler for loading and saving PyZX Graph JSON."""
+        ext = "PyZX Graph as JSON (*.json)"
+
+        if mode == "SAVE":
+            if not self.current_aug_zx:
+                self.manager.status_changed.emit("Nothing to save.")
+                return
+
+            path_str, _ = QFileDialog.getSaveFileName(self, "Save Graph JSON", "", ext)
+            if path_str:
+                try:
+                    # Fix: Ensure .json extension is present
+                    path = Path(path_str)
+                    if path.suffix.lower() != ".json":
+                        path = path.with_suffix(".json")
+
+                    # Get the currently active graph based on toggle state
+                    g = (
+                        self.current_aug_zx.zx_graph_reduced
+                        if self.is_reduced_view
+                        else self.current_aug_zx.zx_graph
+                    )
+
+                    # Save PyZX JSON string
+                    path.write_text(g.to_json())
+                    self.manager.status_changed.emit(f"Graph saved: {path.name}")
+                except Exception as e:
+                    self.manager.status_changed.emit(f"Save Error: {e}")
+
+        elif mode == "LOAD":
+            path, _ = QFileDialog.getOpenFileName(self, "Open Graph JSON", "", ext)
+            if path:
+                try:
+                    json_data = Path(path).read_text()
+                    # PyZX creates a new graph object from the string
+                    new_graph = zx.Graph.from_json(json_data)
+
+                    # Wrap it in your AugmentedZXGraph structure
+                    # We assume a fresh import is both the main and reduced graph for now
+
+                    new_aug_zx = AugmentedZXGraph(zx_graph=new_graph)
+
+                    self.manage_aug_zx(new_aug_zx)
+                    self.manager.status_changed.emit(f"Graph loaded: {Path(path).name}")
+                except Exception as e:
+                    self.manager.status_changed.emit(f"Load Error: {e}")
 
     def _trigger_surgery(self, use_reduced: bool):
         """Initiate lattice surgery via the manager."""
@@ -357,16 +441,30 @@ class ZXCanvas(QWidget):  # noqa: D101
     def resizeEvent(self, event):  # noqa: N802
         """Keep HUD elements anchored during window resizing."""
         super().resizeEvent(event)
-        w, h = self.width(), self.height()
+        # Use the frame's internal dimensions for HUD positioning
+        fw = self.canvas_frame.width()
+        fh = self.canvas_frame.height()
+        m = 15  # Uniform margin constant
 
-        # Re-anchor Top Right
-        self.info_label.move(15, 12)
-        self.top_right_hud.adjustSize()
-        self.top_right_hud.move(w - self.top_right_hud.width() - 15, 10)
+        # Top Left
+        self.info_label.move(m, m)
 
-        # Re-anchor Bottom Right
-        self.bottom_right_hud.adjustSize()
-        self.bottom_right_hud.move(w - self.bottom_right_hud.width() - 15, h - 45)
+        # Top Right
+        tr_w = self.top_right_hud.width()
+        self.top_right_hud.move(fw - tr_w - m, m)
 
-        # Re-anchor Bottom Left
-        self.btn_reset_cam.move(15, h - 51)
+        # Bottom Left Cluster
+        tb_w = self.toggle_buttons.width()
+        tb_h = self.toggle_buttons.height()
+        # Align bottom-up: Frame Height - Widget Height - Margin
+        self.toggle_buttons.move(m, fh - tb_h - m)
+
+        # Reset Camera (relative to toggle cluster)
+        reset_x = m + tb_w + 10
+        # Centering the 30px reset button vertically against the 24px toggles
+        self.btn_reset_cam.move(reset_x, fh - 30 - m + 3)
+
+        # Bottom Right
+        br_w = self.bottom_right_hud.width()
+        br_h = self.bottom_right_hud.height()
+        self.bottom_right_hud.move(fw - br_w - m, fh - br_h - m)

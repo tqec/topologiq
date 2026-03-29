@@ -1,7 +1,7 @@
-"""Layout for the RUN (in hardware) section.
+"""Layout for the STATS section.
 
-Displays future hardware compatibility status and, for the time being,
-extracts circuit intended for running in actual QPU.
+Displays summary statistics for the different circuits, graphs,
+and blockgraphs across panes.
 
 AI disclaimer:
     category: Coding partner (see CONTRIBUTING.md for details).
@@ -15,10 +15,10 @@ AI disclaimer:
 from topologiq.ux.base_pane import BasePane
 
 
-class RunPane(BasePane):
+class StatsPane(BasePane):
     """Final output and execution management."""
 
     def __init__(self, manager, parent=None):
-        """Initialise RUN section."""
-        super().__init__(manager, "RUN", parent)
+        """Initialise STATS section."""
+        super().__init__(manager, "STATS", parent)
         self.manager = manager

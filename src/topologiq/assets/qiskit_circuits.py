@@ -46,4 +46,7 @@ def save_to_qpy(qc: QuantumCircuit, path_to_output: Path | None = None):
     with open(path_to_output, "wb") as f:
         qpy.dump(qc, f)
 
-circuit = ghz(16, "GHZ")
+
+if __name__ == "__main__":
+    circuit = ghz(16, "GHZ")
+

@@ -71,6 +71,8 @@ integration = [
     "asteval>=1.0.8",
     "pygments>=2.19.2",
     "pyopengl>=3.1.10",
+    "pytket>=2.16.0",
+    "qrisp>=0.7.17",
     "tqec>=0.1.0",
     "vispy>=0.16.1",
 ]

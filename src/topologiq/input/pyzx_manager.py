@@ -149,6 +149,7 @@ class AugmentedZXGraph:
         self.zx_graph = zx_graph if zx_graph else zx.Graph()
         self.zx_graph_reduced = self.zx_graph.copy()
         zx.full_reduce(self.zx_graph_reduced)
+        zx.to_rg(self.zx_graph_reduced)
 
     @classmethod
     def from_qasm(
@@ -185,6 +186,7 @@ class AugmentedZXGraph:
         # Remove lonely spiders
         if remove_lonely_resets:
             zx_graph = cls._rm_lonely_resets(zx_graph)
+            zx_graph = cls._rm_post_measurement_spiders(zx_graph)
 
         return cls(zx_graph)
 
@@ -347,7 +349,7 @@ class AugmentedZXGraph:
 
         Args:
             zx_graph: A PyZX graph with lonely spiders in the first "row"
-                (which results from loading QASM files using reset for initialisation).
+                (happens when loading QASM files using reset for initialisation).
 
         Returns:
             zx_graph: The updated ZX graph.
@@ -364,6 +366,38 @@ class AugmentedZXGraph:
                     if neigh_neigh_ids[0] == in_id:
                         lonely_spider_ids.extend([in_id, neigh_ids[0]])
         zx_graph.remove_vertices(lonely_spider_ids)
+
+        return zx_graph
+
+    @staticmethod
+    def _rm_post_measurement_spiders(zx_graph: zx.Graph) -> zx.Graph:
+        """Remove spiders that come immediately after a measured spider.
+
+        Args:
+            zx_graph: A PyZX graph with spiders after measured spiders.
+                (happens when loading QASM files).
+
+        Returns:
+            zx_graph: The updated ZX graph.
+
+        """
+        measure_spiders_id = [
+            spider_id
+            for spider_id in zx_graph.vertices()
+            if isinstance(zx_graph.phase(spider_id), zx.symbolic.Poly)
+        ]
+
+        post_measurement_spiders = []
+        for spider_id in measure_spiders_id:
+            post_measurement_spiders.extend(
+                [
+                    neigh_id
+                    for neigh_id in zx_graph.neighbors(spider_id)
+                    if zx_graph.row(neigh_id) > zx_graph.row(spider_id)
+                ]
+            )
+
+        zx_graph.remove_vertices(post_measurement_spiders)
 
         return zx_graph
 

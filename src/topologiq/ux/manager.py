@@ -114,7 +114,7 @@ class UXManager(QObject):
 
                 # 3. PATH A: NATIVE PyZX (In-Memory)
                 # We check the live object type directly
-                if isinstance(target, zx.graph.base.BaseGraph) or hasattr(target, "to_json"):
+                if isinstance(target, zx.graph.base.BaseGraph):
                     is_native_pyzx = True
                     self.status_changed.emit("Integrating live PyZX graph...")
 
