@@ -67,7 +67,7 @@ if __name__ == "__main__":
     kwargs = {
         "weights": VALUE_FUNCTION_HYPERPARAMS,
         "first_id_strategy": "first_spider",
-        "seed": None,
+        "seed": 42,
         "vis_options": ("final", None),
         "max_attempts": 1,
         "stop_on_first_success": True,
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # General description of circuit
     qubit_n = 5
-    depth = 15
+    depth = 10
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
 
     # Get a valid random PyZX circuit graph

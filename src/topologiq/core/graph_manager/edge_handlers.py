@@ -16,6 +16,7 @@ from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
 from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
 from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 from topologiq.utils.classes import (
     Colors,
     CubeBeams,
@@ -35,6 +36,7 @@ def handle_std_edge(
     nx_g: nx.Graph, # TODO-ANG: replace with ang
     taken: list[StandardCoord], # TODO-ANG: drop
     edge_paths: dict, # TODO-ANG: drop
+    ang: AugmentedNxGraph,
     circuit_name: str = "circuit",
     init_step: int = 3,
     fig_data: matplotlib.figure.Figure | None = None,
@@ -421,6 +423,7 @@ def _assemble_critical_beams(
 def add_twin(
     circuit_name,
     nx_g, # TODO-ANG: adapt to use ang
+    ang: AugmentedNxGraph,
     queue,
     visited,
     edge_paths, # TODO-ANG: drop
@@ -477,6 +480,7 @@ def add_twin(
                 nx_g,
                 taken,
                 edge_paths,
+                ang,
                 circuit_name=circuit_name,
                 init_step=step,
                 fig_data=fig_data,

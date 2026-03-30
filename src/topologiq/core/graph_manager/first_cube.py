@@ -29,7 +29,7 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
 
     # Terminate if graph is empty
     if ang.number_of_nodes() == 0:
-        raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
+        raise ValueError("ERROR: ang.nodes() empty. Graph appears empty.")
 
     # ID of first non-boundary node
     if first_id_strategy == "first_spider":
@@ -107,7 +107,7 @@ def get_first_cube(
     first_cube: tuple[int | None, str | None] = (None, None),
     first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
-) -> tuple[int, str]:
+) -> tuple[int, CubeKind]:
     """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
@@ -135,19 +135,19 @@ def get_first_cube(
 
     if not first_kind:
         deterministic = False if first_id_strategy == "centrality_random" else True
-        tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id)) # nx_g.nodes[first_id].get("type_fam")
+        tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id))
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
 
-    return first_id, first_kind.name.lower()
+    return first_id, first_kind
 
 
 def place_first_cube(
     nx_g: nx.Graph, # TODO-ANG: replace with ang
     taken: list[StandardCoord],
-    first_cube: StandardBlock,
+    first_cube: tuple[int, str],
     log_stats_id: int | None = None,
     debug: int = 0,
-) -> tuple[list[StandardCoord], nx.Graph]:
+) -> tuple[nx.Graph, list[StandardCoord]]:
     """Place the first cube in the 3D space.
 
     Args:

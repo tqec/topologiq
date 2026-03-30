@@ -36,7 +36,9 @@ from topologiq.core.graph_manager.utils import (
     rm_temp_files,
     validity_checks,
 )
+from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
@@ -224,6 +226,7 @@ def graph_manager_bfs(
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
         lat_edges: The pipes of the final space-time diagram produced by Topologiq.
+        ang: The AugmentedNxGraph which contains the construction, relating the ZX-graph to the BG-graph.
 
     """
 
@@ -233,7 +236,7 @@ def graph_manager_bfs(
     zx_spiders_num, zx_edges_num = (len(simple_graph["nodes"]), len(simple_graph["edges"]))
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
-    ang = AugmentedNxGraph.from_simple_graph(simple_graph)
+    ang: AugmentedNxGraph = AugmentedNxGraph.from_simple_graph(simple_graph)
     nx_g = prep_3d_g(simple_graph)
 
     # First spider/cube
@@ -246,6 +249,7 @@ def graph_manager_bfs(
 
     # BFS management
     queue, visited, taken, edge_paths, run_success = init_bfs(first_cube)
+    all_beams = dict()
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
@@ -253,12 +257,15 @@ def graph_manager_bfs(
 
     # 2. Validity checks
     # Health check depating point
-    if not validity_checks(simple_graph, first_cube):
-        return nx_g, edge_paths, lat_nodes, lat_edges
+    node, cube_kind = first_cube
+    if not validity_checks(simple_graph, (node, cube_kind.name.lower())):
+        return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    nx_g, taken = place_first_cube(nx_g, taken, first_cube)
+    cube = ang.realise_node(node, cube_kind, Spacetime.ORIGIN)
+    all_beams[cube] = check_exits(Spacetime.ORIGIN, cube_kind.name.lower(), [Spacetime.ORIGIN], [Spacetime.ORIGIN])
+    nx_g, taken = place_first_cube(nx_g, taken, (node, cube_kind.name.lower()))
 
     # 4. Graph manager BFS
     # Group parameters for readability
@@ -269,6 +276,7 @@ def graph_manager_bfs(
     try:
         # TODO-ANG: Replace nx_g with ang. Drop taken, edge_paths
         edge_paths, taken, run_success, trackers, _ = do_bfs(
+            ang,
             nx_g,
             queue,
             visited,
@@ -316,6 +324,7 @@ def graph_manager_bfs(
 # BFS #
 #######
 def do_bfs(
+    ang: AugmentedNxGraph,
     nx_g: nx.Graph, # TODO-ANG: replace with AugmentedNxGraph
     queue: deque,
     visited: set,
@@ -329,6 +338,7 @@ def do_bfs(
     """Undertake a BFS search of a ZX graph.
 
     Args:
+        ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         queue: The main BFS queue.
         visited: The main BFS set of visited sites.
@@ -371,7 +381,7 @@ def do_bfs(
         src_id: int = queue.popleft()
 
         # Iterate over neighbours of current source
-        for tgt_id in cast(list[int], nx_g.neighbors(src_id)): # TODO-ANG: replace with ang.get_neighbours(..)
+        for tgt_id in ang.get_node_neighbours(src_id):
             # Handle cubes that need to be placed for the first time
             if tgt_id not in visited:
                 # Start iteration timer
@@ -393,6 +403,7 @@ def do_bfs(
                         nx_g,       # TODO-ANG: replace with ang
                         taken,      # TODO-ANG: drop
                         edge_paths, # TODO-ANG: drop
+                        ang,
                         circuit_name=circuit_name,
                         init_step=step,
                         fig_data=fig_data,
@@ -435,6 +446,7 @@ def do_bfs(
                             ) = add_twin(
                                 circuit_name,
                                 nx_g,
+                                ang,
                                 queue,
                                 visited,
                                 edge_paths,
@@ -508,6 +520,7 @@ def do_bfs(
                             add_twin(
                                 circuit_name,
                                 nx_g,
+                                ang,
                                 queue,
                                 visited,
                                 edge_paths,

@@ -17,7 +17,7 @@ from topologiq.dzw.common.path import Path
 from logging import getLogger
 
 from topologiq.utils.classes import SimpleDictGraph
-from topologiq.utils.utils_pathfinder import get_manhattan
+from topologiq.core.pathfinder.utils import get_manhattan
 
 console = getLogger(__name__)
 
@@ -186,7 +186,9 @@ class AugmentedNxGraph(nx.Graph):
     def get_edges_unrealised(self, node: NodeId):
         return self.get_degree(node) - self.get_edges_realised(node)
 
-    def get_node_neighbours(self, node: NodeId, transition: LayerTransitionType = LayerTransitionType.EVERY):
+    def get_node_neighbours(self,
+        node: NodeId, transition: LayerTransitionType = LayerTransitionType.EVERY
+    ) -> Iterable[NodeId]:
         if transition == LayerTransitionType.EVERY:
             filtering = lambda other : True
         elif transition == LayerTransitionType.LOWER:

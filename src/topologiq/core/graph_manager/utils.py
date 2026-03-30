@@ -26,7 +26,7 @@ from topologiq.utils.classes import (
 #################
 # HEALTH CHECKS #
 #################
-def validity_checks(simple_graph: SimpleDictGraph, first_cube: StandardBlock) -> bool:
+def validity_checks(simple_graph: SimpleDictGraph, first_cube: tuple[int, str]) -> bool:
     """Check validity of key non-optional BFS parameters.
 
     Args:

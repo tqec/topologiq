@@ -1,26 +1,29 @@
+import numpy as np
+
 from topologiq.utils.classes import StandardCoord
+from topologiq.core.pathfinder.utils import get_manhattan
 
 class Spacetime:
-    ORIGIN = StandardCoord(0, 0, 0)
+    ORIGIN = (0, 0, 0)
 
-    XP = StandardCoord(+1, 0, 0)
-    XM = StandardCoord(-1, 0, 0)
-    YP = StandardCoord(0, +1, 0)
-    YM = StandardCoord(0, -1, 0)
-    ZP = StandardCoord(0, 0, +1)
-    ZM = StandardCoord(0, 0, -1)
+    XP = (+1, 0, 0)
+    XM = (-1, 0, 0)
+    YP = (0, +1, 0)
+    YM = (0, -1, 0)
+    ZP = (0, 0, +1)
+    ZM = (0, 0, -1)
 
-    XYZ = StandardCoord(0, 0, 0)
-    XY  = StandardCoord(0, 0, 1)
-    XZ  = StandardCoord(0, 1, 0)
-    YZ  = StandardCoord(1, 0, 0)
+    XYZ = (0, 0, 0)
+    XY  = (0, 0, 1)
+    XZ  = (0, 1, 0)
+    YZ  = (1, 0, 0)
 
     STEPS = [ XP ,YP, ZP, XM, YM, ZM ]
     PLANES = [ XY, XZ, YZ ]
 
     @staticmethod
     def contains(reach: StandardCoord, step: StandardCoord) -> bool:
-        return reach.dot(step) == 0
+        return np.dot(reach, step) == 0
 
     @staticmethod
     def get_direction(source: StandardCoord, target: StandardCoord) -> StandardCoord:
@@ -33,7 +36,7 @@ class Spacetime:
 
         line_of_sight = StandardCoord.from_list( [ difference * delta for difference, delta in zip(differences, deltas) ] )
 
-        if Spacetime.ORIGIN.get_manhattan_distance(line_of_sight) != 1:
+        if get_manhattan(Spacetime.ORIGIN, line_of_sight) != 1:
             raise Exception(f"Erroneous computation of line of sight [{source}/{target} = {line_of_sight}].")
 
         return line_of_sight
@@ -44,7 +47,7 @@ class Spacetime:
 
     @staticmethod
     def get_orthogonal_plane(plane: StandardCoord, line_of_intersection: StandardCoord) -> StandardCoord:
-        if plane.dot(line_of_intersection) != 0:
+        if np.dot(plane, line_of_intersection) != 0:
             raise ValueError(f"Line of intersection {line_of_intersection} does not lie in plane {plane}.")
 
         reach = plane
@@ -60,6 +63,6 @@ class Spacetime:
     def get_constellation(position: StandardCoord, restriction: StandardCoord = None) -> list[StandardCoord]:
         constellation = []
         for step in Spacetime.STEPS:
-            if restriction is None or restriction.dot(step) == 0:
+            if restriction is None or np.dot(restriction, step) == 0:
                 constellation.append(position + step)
         return constellation
