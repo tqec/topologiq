@@ -61,6 +61,26 @@ class UXManager(QObject):
             "graphs_match": False,
         }
 
+    def clear_session(self):
+        """Hard reset of sub-managers and session data store."""
+        # 1. Atomic Re-instantiation
+        # This replaces the need for .clear() methods in the sub-classes
+        self.circuit_manager = CircuitManager()
+        self.zx_manager = ZXGraphManager()
+
+        # 2. Re-initialize the Data Store
+        self._data_store = {
+            "circuit_raw": "",
+            "augmented_qb_circuit": None,
+            "augmented_zx_graph_in": None,
+            "lattice_surgery": (),
+            "augmented_zx_graph_out": None,
+            "graphs_match": False,
+        }
+
+        # 3. Inform the UI to flush its views
+        self.status_changed.emit("Session data fully reset.")
+
     @property
     def is_processing(self) -> bool:  # noqa: D102
         return self._process_count > 0
@@ -86,6 +106,7 @@ class UXManager(QObject):
         if self.is_processing and not switch_to_transform:
             return
 
+        self.clear_session()
         self._set_processing(True, f"Executing {mode.upper()} source...")
 
         # Local state for this ingestion cycle
@@ -214,7 +235,7 @@ class UXManager(QObject):
             self._set_processing(False, "Ready")
 
     async def handle_equality_verification(
-        self, graph_key_in: str = "input", graph_key_out: str = "output"
+        self, graph_key_in: str = "primary", graph_key_out: str = "output"
     ):
         """Check if compiled blockgraph matches original design."""
         self.status_changed.emit("Verifying equality...")

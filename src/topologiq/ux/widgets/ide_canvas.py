@@ -152,7 +152,7 @@ class CircuitIDE(QWidget):
 
         self.mode_label = QLabel("SOURCE: TEXT")
 
-        self.var_input = QLineEdit("__circuit__")
+        self.var_input = QLineEdit("circuit")
         self.var_input.setFixedWidth(120)
         self.var_input.setStyleSheet("border: 1px solid #666;")
         self.btn_to_zx = QPushButton("GENERATE ZX GRAPH →")

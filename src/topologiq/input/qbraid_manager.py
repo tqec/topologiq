@@ -27,7 +27,7 @@ from qiskit import qpy
 class CircuitManager:
     """Manage and automatically save circuits as QASM artifacts."""
 
-    def __init__(self, primary_key: str = "input"):
+    def __init__(self, primary_key: str = "primary"):
         """Initialise class with dual Augmented qBraid and QASM circuit collections."""
         self.primary_key = primary_key
         self._collection: dict[str, AugmentedQBCircuit] = {}
@@ -47,26 +47,22 @@ class CircuitManager:
 
         return aug_qb.qasm
 
-    def add_qiskit_circuit(self, circuit: Any, key: str = "input", is_primary: bool = True) -> str:
+    def add_qiskit_circuit(self, circuit: Any, key: str = "primary", is_primary: bool = True) -> str:
         """Add Qiskit circuit, save .qasm file, and return the qasm_str."""
         return self._process(circuit, key, is_primary)
 
-    def add_pytket_circuit(self, circuit: Any, key: str = "input", is_primary: bool = True) -> str:
+    def add_pytket_circuit(self, circuit: Any, key: str = "primary", is_primary: bool = True) -> str:
         """Add PyTKET circuit, save .qasm file, and return the qasm_str."""
         return self._process(circuit, key, is_primary)
 
-    def add_qrisp_circuit(self, circuit: Any, key: str = "input", is_primary: bool = True) -> str:
-        """Add Qrisp circuit, save .qasm file, and return the qasm_str."""
-        return self._process(circuit, key, is_primary)
-
     def add_custom_circuit(
-        self, circuit: QPROGRAM, key: str = "input", is_primary: bool = True
+        self, circuit: QPROGRAM, key: str = "primary", is_primary: bool = True
     ) -> str:
         """Add any qBraid-supported circuit (Qiskit, pytket, Qrisp, QASM)."""
         return self._process(circuit, key, is_primary)
 
     def add_circuit_from_file(
-        self, path: str | Path, key: str = "input", is_primary: bool = True
+        self, path: str | Path, key: str = "primary", is_primary: bool = True
     ) -> str:
         """Load from file, save .qasm artifact, and return the qasm_str."""
 

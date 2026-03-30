@@ -27,7 +27,7 @@ from topologiq.utils.misc import kind_to_zx_type
 class ZXGraphManager:
     """Registry class to keep augmented ZX graphs organised."""
 
-    def __init__(self, primary_key: str = "input"):
+    def __init__(self, primary_key: str = "primary"):
         """Initialise class with incoming or default primary key and empty collection."""
         self.primary_key: str = primary_key
         self._collection: dict[str, AugmentedZXGraph] = {}
@@ -232,7 +232,7 @@ class AugmentedZXGraph:
 
     def get_blockgraph(
         self: AugmentedZXGraph,
-        circuit_name: str = "input",
+        circuit_name: str = "primary",
         use_reduced: bool = False,
         final_vis=False,
     ) -> tuple[
