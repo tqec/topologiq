@@ -53,7 +53,7 @@ class AugmentedNxGraph(nx.Graph):
     KEY_BG_PIPE_TYPE = 'bg_pipe_type'
     KEY_BG_CUBE_BEAMS = 'bg_cube_beams'
 
-    def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]], edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]]):
+    def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]] = None, edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]] = None):
         # Separate ZX-graph and BG-graph
         super(AugmentedNxGraph, self).__init__()
         self.__bg_graph = nx.Graph()
@@ -69,18 +69,20 @@ class AugmentedNxGraph(nx.Graph):
         # Keeps track of the coordinates in 3D that are occupied by some cube
         self.occupied: set[StandardCoord] = set()
 
-        for node, node_type in nodes:
-            self.add_node(node)
-            self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE] = node_type
-            self.nodes[node][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] = 0
-            self.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] = None
+        if nodes is not None:
+            for node, node_type in nodes:
+                self.add_node(node)
+                self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE] = node_type
+                self.nodes[node][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] = 0
+                self.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] = None
 
-        for edge, edge_type in edges:
-            source = min(edge)
-            target = max(edge)
-            self.add_edge(source, target)
-            self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE_TYPE] = edge_type
-            self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = None
+        if edges is not None:
+            for edge, edge_type in edges:
+                source = min(edge)
+                target = max(edge)
+                self.add_edge(source, target)
+                self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE_TYPE] = edge_type
+                self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = None
 
         self.__next_cube_id = self.number_of_nodes()
 
