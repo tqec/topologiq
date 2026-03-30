@@ -237,6 +237,9 @@ def graph_manager_bfs(
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
     ang: AugmentedNxGraph = AugmentedNxGraph.from_simple_graph(simple_graph)
+    print(f"AugmentedNxGraph : {ang.number_of_nodes()} nodes, {ang.number_of_edges()} edges.")
+    for node in ang.nodes():
+        print(f"> {node} : {ang.get_node_type(node)}")
     nx_g = prep_3d_g(simple_graph)
 
     # First spider/cube
@@ -379,6 +382,7 @@ def do_bfs(
 
         # Get first cube from queue
         src_id: int = queue.popleft()
+        print(f"> src_id: {src_id}")
 
         # Iterate over neighbours of current source
         for tgt_id in ang.get_node_neighbours(src_id):
@@ -420,44 +424,44 @@ def do_bfs(
                         std_edges_processed += 1
                         num_edges_processed += 1
 
-                        # Check move didn't cause problems elsewhere
-                        # TODO-ANG: replace nx_g with ang, drop taken
-                        priority_ids = check_need_for_twins(
-                            nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
-                        )
-
-                        # Add twin cubes if problems detected
-                        if priority_ids:
-                            if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-                                print(
-                                    Colors.BLUE,
-                                    "==> Adding twin nodes for IDs:" + Colors.RESET,
-                                    priority_ids,
-                                )
-                            # TODO-ANG: adapt all this to use ang
-                            (
-                                nx_g,
-                                queue,
-                                visited,
-                                twins,
-                                taken,
-                                priority_ids,
-                                hold_for_edge_removal,
-                            ) = add_twin(
-                                circuit_name,
-                                nx_g,
-                                ang,
-                                queue,
-                                visited,
-                                edge_paths,
-                                taken,
-                                fig_data,
-                                twins,
-                                priority_ids,
-                                src_id,
-                                **kwargs,
-                            )
-                            repeat_current_src = True
+                        # # Check move didn't cause problems elsewhere
+                        # # TODO-ANG: replace nx_g with ang, drop taken
+                        # priority_ids = check_need_for_twins(
+                        #     nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
+                        # )
+                        #
+                        # # Add twin cubes if problems detected
+                        # if priority_ids:
+                        #     if kwargs["log_stats_id"] or kwargs["debug"] > 0:
+                        #         print(
+                        #             Colors.BLUE,
+                        #             "==> Adding twin nodes for IDs:" + Colors.RESET,
+                        #             priority_ids,
+                        #         )
+                        #     # TODO-ANG: adapt all this to use ang
+                        #     (
+                        #         nx_g,
+                        #         queue,
+                        #         visited,
+                        #         twins,
+                        #         taken,
+                        #         priority_ids,
+                        #         hold_for_edge_removal,
+                        #     ) = add_twin(
+                        #         circuit_name,
+                        #         nx_g,
+                        #         ang,
+                        #         queue,
+                        #         visited,
+                        #         edge_paths,
+                        #         taken,
+                        #         fig_data,
+                        #         twins,
+                        #         priority_ids,
+                        #         src_id,
+                        #         **kwargs,
+                        #     )
+                        #     repeat_current_src = True
 
                         break
 
@@ -500,39 +504,39 @@ def do_bfs(
                     cross_edges_processed += 1
                     num_edges_processed += 1
 
-                    # Check move didn't cause problems elsewhere
-                    # TODO-ANG: adapt this to use ang
-                    priority_ids = check_need_for_twins(
-                        nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
-                    )
-
-                    # Add twin cubes if problems detected
-                    if priority_ids:
-                        if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-                            print(
-                                Colors.BLUE,
-                                "==> Adding twin nodes for IDs:" + Colors.RESET,
-                                priority_ids,
-                            )
-
-                        # TODO-ANG: adapt this to use ang
-                        nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal = (
-                            add_twin(
-                                circuit_name,
-                                nx_g,
-                                ang,
-                                queue,
-                                visited,
-                                edge_paths,
-                                taken,
-                                fig_data,
-                                twins,
-                                priority_ids,
-                                src_id,
-                                **kwargs,
-                            )
-                        )
-                        repeat_current_src = True
+                    # # Check move didn't cause problems elsewhere
+                    # # TODO-ANG: adapt this to use ang
+                    # priority_ids = check_need_for_twins(
+                    #     nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
+                    # )
+                    #
+                    # # Add twin cubes if problems detected
+                    # if priority_ids:
+                    #     if kwargs["log_stats_id"] or kwargs["debug"] > 0:
+                    #         print(
+                    #             Colors.BLUE,
+                    #             "==> Adding twin nodes for IDs:" + Colors.RESET,
+                    #             priority_ids,
+                    #         )
+                    #
+                    #     # TODO-ANG: adapt this to use ang
+                    #     nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal = (
+                    #         add_twin(
+                    #             circuit_name,
+                    #             nx_g,
+                    #             ang,
+                    #             queue,
+                    #             visited,
+                    #             edge_paths,
+                    #             taken,
+                    #             fig_data,
+                    #             twins,
+                    #             priority_ids,
+                    #             src_id,
+                    #             **kwargs,
+                    #         )
+                    #     )
+                    #     repeat_current_src = True
 
                 else:
                     run_success = False
