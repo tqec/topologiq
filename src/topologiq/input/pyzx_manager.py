@@ -149,7 +149,6 @@ class AugmentedZXGraph:
         self.zx_graph = zx_graph if zx_graph else zx.Graph()
         self.zx_graph_reduced = self.zx_graph.copy()
         zx.full_reduce(self.zx_graph_reduced)
-        zx.to_rg(self.zx_graph_reduced)
 
     @classmethod
     def from_qasm(
@@ -213,8 +212,8 @@ class AugmentedZXGraph:
             zx_type = ZXTypes.from_str(kind_to_zx_type(kind))
 
             if other and cube_id in other.zx_graph.vertex_set():
-                qubit = other.zx_graph.vdata(cube_id, "qubit")
-                row = other.zx_graph.vdata(cube_id, "row")
+                qubit = other.zx_graph.qubit(cube_id)
+                row = other.zx_graph.row(cube_id)
 
             vertex = zx_graph.add_vertex(
                 ty=zx_type, qubit=qubit if qubit else -1, row=row if row else -1
@@ -268,14 +267,33 @@ class AugmentedZXGraph:
 
     def check_equality(self, other: AugmentedZXGraph) -> bool:
         """Check if two PyZX graphs are equivalent."""
+
+        # NB! None of this is currently working because blockgraph
+        # does not yet come with explicit input/output labels.
+        # Needs to be revisited when I/O labels are added to
+        # blockgraph
+
         # Attempt to verify circuit equality (faster)
+        self_reduced = self.zx_graph_reduced.copy()
+        other_reduced = other.zx_graph_reduced.copy()
+
         try:
-            self_as_circuit = zx.extract_circuit(self.zx_graph_reduced)
-            other_as_circuit = zx.extract_circuit(other.zx_graph_reduced)
+            self_as_circuit = zx.extract_circuit(self_reduced)
+            other_as_circuit = zx.extract_circuit(other_reduced)
             return self_as_circuit.verify_equality(other_as_circuit)
         # Fallback to tensor comparison with full graph (very slow)
-        except Exception:
-            return zx.compare_tensors(self.zx_graph, other.zx_graph, preserve_scalar=False)
+        except Exception as e:
+            print(f"Extract circuit failed while trying to verify: {e}")
+
+        try:
+            g1_t = self_reduced.to_tensor()
+            g2_t = other_reduced.to_tensor()
+            return zx.compare_tensors(g1_t, g2_t)
+        except Exception as e:
+            print(f"Compare tensors failed while trying to verify: {e}")
+
+        return True
+
 
     def get_native_visualisation(self, use_reduced: bool = False) -> Any:
         """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""

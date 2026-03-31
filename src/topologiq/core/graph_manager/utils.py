@@ -134,42 +134,41 @@ def enforce_max_four_legs_per_spider(nx_g: nx.Graph) -> nx.Graph:
         ]
 
         # Exit loop when no nodes with more than 4 edges
-        if nodes_with_more_than_four_edges:
-            # Pick a high degree node
-            node_to_sanitise = random.choice(nodes_with_more_than_four_edges)
-            orig_node_type = nx_g.nodes[node_to_sanitise]["type"]
+        if not nodes_with_more_than_four_edges:
+            break
 
-            # Add a twin
-            max_id += 1
-            twin_node_id = max_id
-            nx_g.add_node(
-                twin_node_id,
-                type=orig_node_type,
-                type_fam=get_zx_type_fam(orig_node_type),
-                kind=None,
-                coords=None,
-                beams=None,
-                completed=0,
-            )
-            nx_g.add_edge(node_to_sanitise, twin_node_id, type="SIMPLE")
+        node_to_sanitise = random.choice(nodes_with_more_than_four_edges)
+        orig_node_type = nx_g.nodes[node_to_sanitise]["type"]
 
-            # Distributed edges across twins
-            neighs = [n for n in list(nx_g.neighbors(node_to_sanitise)) if n != twin_node_id]
-            degree_to_shuffle = get_node_degree(nx_g, node_to_sanitise) // 2
-            random.shuffle(neighs)
+        # Add a twin
+        max_id += 1
+        twin_node_id = max_id
+        nx_g.add_node(
+            twin_node_id,
+            type=orig_node_type,
+            type_fam=get_zx_type_fam(orig_node_type),
+            kind=None,
+            coords=None,
+            beams=None,
+            completed=0,
+        )
+        nx_g.add_edge(node_to_sanitise, twin_node_id, type="SIMPLE")
 
-            shuffle_c = 0
-            for neigh in neighs:
-                if shuffle_c >= degree_to_shuffle or get_node_degree(nx_g, node_to_sanitise) <= 4:
-                    break
-                if nx_g.has_edge(node_to_sanitise, neigh) and not nx_g.has_edge(
-                    twin_node_id, neigh
-                ):
-                    edge_data = nx_g.get_edge_data(node_to_sanitise, neigh)
-                    edge_type = edge_data.get("type", None)
-                    nx_g.add_edge(twin_node_id, neigh, type=edge_type)
-                    nx_g.remove_edge(node_to_sanitise, neigh)
-                    shuffle_c += 1
+        # Distributed edges across twins
+        neighs = [n for n in list(nx_g.neighbors(node_to_sanitise)) if n != twin_node_id]
+        degree_to_shuffle = get_node_degree(nx_g, node_to_sanitise) // 2
+        random.shuffle(neighs)
+
+        shuffle_c = 0
+        for neigh in neighs:
+            if shuffle_c >= degree_to_shuffle or get_node_degree(nx_g, node_to_sanitise) <= 4:
+                break
+            if nx_g.has_edge(node_to_sanitise, neigh) and not nx_g.has_edge(twin_node_id, neigh):
+                edge_data = nx_g.get_edge_data(node_to_sanitise, neigh)
+                edge_type = edge_data.get("type", None)
+                nx_g.add_edge(twin_node_id, neigh, type=edge_type)
+                nx_g.remove_edge(node_to_sanitise, neigh)
+                shuffle_c += 1
 
     return nx_g
 

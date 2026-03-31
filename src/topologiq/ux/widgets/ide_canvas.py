@@ -213,13 +213,19 @@ class CircuitIDE(QWidget):
 
     def _process_and_emit(self, switch_pane: bool):
         code = self.code_editor.toPlainText()
-        # Determine mode based on your mode_label text
         mode = "python" if "PYTHON" in self.mode_label.text().upper() else "qasm"
 
-        # Use the manager method we see in manager.py
+        # 1. Get the Key (Circuit Name)
+        circuit_key = self.var_input.text().strip()
+        if not circuit_key:
+            circuit_key = "untitled_circuit"
+            self.var_input.setText(circuit_key)
+
+        # 2. Trigger the Manager
+        # Note: handle_load_source_circuit handles the background surgery trigger now
         task = asyncio.ensure_future(
             self.manager.handle_load_source_circuit(
-                code, mode, var_name=self.var_input.text(), switch_to_transform=switch_pane
+                source_design=code, mode=mode, var_name=circuit_key, switch_to_transform=switch_pane
             )
         )
         self._tasks.add(task)

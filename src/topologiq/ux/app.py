@@ -132,20 +132,49 @@ class TopologiqApp(QMainWindow):
         self.status_bar.addPermanentWidget(self.status_msg_label)
 
     def _connect_signals(self):
+        # UI State
         self.manager.status_changed.connect(self.status_msg_label.setText)
         self.manager.section_changed.connect(self._switch_tab)
-        self.manager.processing_state_changed.connect(
-            lambda proc: [
-                [b.setDisabled(proc) for b in self.nav_buttons.values()],
-                self.progress_bar.setVisible(proc),
-            ]
-        )
-        # Global Bridges
+
+        # Use the new named method instead of the lambda
+        self.manager.processing_state_changed.connect(self._handle_processing_ui)
+
+        # Data Pipelines (Retrievers)
         self.manager.zx_input_ready.connect(self.panes["DESIGN"].handle_zx_input)
         self.manager.qb_circuit_ready.connect(self.panes["DESIGN"].update_visuals)
+
+        # Key-Based Notifications
         self.manager.blockgraph_ready.connect(self.panes["COMPILE"].update_blockgraph)
         self.manager.zx_output_ready.connect(self.panes["COMPILE"].update_output)
-        self.manager.equality_verification.connect(self.panes["COMPILE"].show_verification_result)
+
+        # Aligning naming with manager.py: 'verification_ready'
+        self.manager.verification_ready.connect(self.panes["COMPILE"].show_verification_result)
+
+        # Pane switchers
+        design_pane = self.panes["DESIGN"]
+        design_pane.zx_canvas.compile_requested.connect(self._bridge_to_compile)
+
+    def _bridge_to_compile(self, graph_key: str):
+        """Bridge the request from Canvas to Compile Pane."""
+        # 1. Switch the Tab
+        self._switch_tab("COMPILE")
+
+        # 2. Tell the CompilePane to 'Force Focus' on this key
+        # (Even if the surgery is still running, the pane will now know which one to track)
+        self.panes["COMPILE"].set_focus_key(graph_key)
+
+    def _handle_processing_ui(self, is_active: bool):
+        """Unified UI response to background processing."""
+        # 1. Toggle Navigation (Prevent tab-switching during heavy tasks if desired)
+        for btn in self.nav_buttons.values():
+            btn.setDisabled(is_active)
+
+        # 2. Toggle Progress Bar (The 'Indeterminate' Spinner)
+        self.progress_bar.setVisible(is_active)
+
+        # 3. Update the Status Label if we just finished
+        if not is_active:
+            self.status_msg_label.setText("Ready")
 
     def closeEvent(self, event):  # noqa: D102, N802
         self.running = False

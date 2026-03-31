@@ -21,7 +21,7 @@ import pyzx as zx
 import qbraid
 from PySide6.QtCore import QObject, Signal
 
-from topologiq.input.pyzx_manager import ZXGraphManager
+from topologiq.input.pyzx_manager import AugmentedZXGraph, ZXGraphManager
 from topologiq.input.qbraid_manager import CircuitManager
 
 
@@ -35,51 +35,61 @@ class UXManager(QObject):
 
     # Global Data Signals
     qb_circuit_ready = Signal(str, str)  # Raw QASM, ASCII Diagram
-    zx_input_ready = Signal(object)  # Now sends the NX graph for the Global Drawer
+    zx_input_ready = Signal(object)  # Carries AugmentedZXGraph
 
     # Compilation Result Signals
-    blockgraph_ready = Signal(object, object)  # Cubes, Pipes (dict format for BGraphCanvas)
-    zx_output_ready = Signal(object)  # The NX graph derived from the blockgraph
+    blockgraph_ready = Signal(str)  # Carries graph key
+    zx_output_ready = Signal(str)  # Carries graph key
 
     # Verification Signals
-    ready_for_equality_verification = Signal(bool)
-    equality_verification = Signal(bool)
+    verification_ready = Signal(str, bool)  # Carries graph key and result
 
-    def __init__(self):  # noqa: D107
+    def __init__(self):
+        """Initialise UX manager."""
         super().__init__()
+
+        # Init circuit and ZX graph managers
         self.circuit_manager = CircuitManager()
-        self.zx_manager = ZXGraphManager()
+        self.zx_manager_in = ZXGraphManager()
+        self.zx_manager_out = ZXGraphManager()
+
+        # Init data store
+        self._data_store = self._init_store()
+
+        # Init process tracker
+        self._background_tasks = set()
+        self._session_id = 0
         self._active_proc: subprocess.Popen | None = None
         self._process_count = 0
 
-        self._data_store: dict[str, Any] = {
+    def _init_store(self):
+        """Standardized empty store structure."""
+        return {
+            "augmented_zx_graph_in": {},  # {key: AugZX}
+            "lattice_surgery": {},  # {key: (cubes, pipes)}
+            "augmented_zx_graph_out": {},  # {key: AugZX}
+            "graphs_match": {},  # {key: bool}
             "circuit_raw": "",
-            "augmented_qb_circuit": None,
-            "augmented_zx_graph_in": None,
-            "lattice_surgery": (),
-            "augmented_zx_graph_out": None,
-            "graphs_match": False,
         }
 
     def clear_session(self):
-        """Hard reset of sub-managers and session data store."""
-        # 1. Atomic Re-instantiation
-        # This replaces the need for .clear() methods in the sub-classes
+        """Reset sub-managers and data store."""
+
+        # Re-init circuit and ZX graph managers
         self.circuit_manager = CircuitManager()
-        self.zx_manager = ZXGraphManager()
+        self.zx_manager_in = ZXGraphManager()
+        self.zx_manager_out = ZXGraphManager()
 
-        # 2. Re-initialize the Data Store
-        self._data_store = {
-            "circuit_raw": "",
-            "augmented_qb_circuit": None,
-            "augmented_zx_graph_in": None,
-            "lattice_surgery": (),
-            "augmented_zx_graph_out": None,
-            "graphs_match": False,
-        }
+        # Re-init data store
+        self._data_store = self._init_store()
 
-        # 3. Inform the UI to flush its views
-        self.status_changed.emit("Session data fully reset.")
+        # Re-init session
+        self._session_id += 1
+        self._active_proc = None
+        self._process_count = 0
+
+        # Update UX message
+        self.status_changed.emit(f"New input => new session (ID: {self._session_id})")
 
     @property
     def is_processing(self) -> bool:  # noqa: D102
@@ -103,7 +113,9 @@ class UXManager(QObject):
         switch_to_transform: bool = False,
     ):
         """In-process ingestion using exec for rapid MVP development."""
+        print(f"DEBUG: Load Request Received. Processing Count: {self._process_count}")
         if self.is_processing and not switch_to_transform:
+            print("DEBUG: LOAD BLOCKED - Manager is busy.")
             return
 
         self.clear_session()
@@ -140,8 +152,7 @@ class UXManager(QObject):
                     self.status_changed.emit("Integrating live PyZX graph...")
 
                     # Pass the LIVE object. It retains all metadata/NetworkX pointers.
-                    aug_zx_to_emit = self.zx_manager.add_graph_from_pyzx(target, use_primary=True)
-                    self._data_store["augmented_zx_graph_in"] = aug_zx_to_emit
+                    aug_zx_to_emit = self.zx_manager_in.add_graph_from_pyzx(target, graph_key=var_name)
 
                     # Sync Design Pane text area with a QASM representation
                     try:
@@ -165,22 +176,38 @@ class UXManager(QObject):
                 self._data_store["augmented_qb_circuit"] = aug_qb
                 self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
 
-                if switch_to_transform:
-                    # Transpile our internal qBraid circuit to ZX
-                    aug_zx_to_emit = await asyncio.to_thread(
-                        self.zx_manager.add_graph_from_qasm, qasm_str=aug_qb.qasm, use_primary=True
-                    )
-                    self._data_store["augmented_zx_graph_in"] = aug_zx_to_emit
+                # We ALWAYS generate the ZX graph now so we can run surgery
+                aug_zx_to_emit = await asyncio.to_thread(
+                    self.zx_manager_in.add_graph_from_qasm, qasm_str=aug_qb.qasm, graph_key=var_name
+                )
 
             # --- 6. ATOMIC UI SWITCH ---
             # We only transition to the Canvas if all steps above succeeded
-            if switch_to_transform and aug_zx_to_emit:
-                self.section_changed.emit("DESIGN")  # Ensure the correct tab is active
-                await asyncio.sleep(0.1)  # UI stability buffer
-                self.zx_input_ready.emit(aug_zx_to_emit)
-                self.status_changed.emit("Graph ingested and visualized successfully.")
+            if aug_zx_to_emit:
+                # 1. Update the Keyed Store
+                self._data_store["augmented_zx_graph_in"][var_name] = aug_zx_to_emit
+
+                # 2. Trigger Surgery with GC Protection
+                task = asyncio.create_task(self.handle_silent_surgery(var_name, aug_zx_to_emit))
+
+                # Store the reference
+                self._background_tasks.add(task)
+
+                # Ensure the task cleans itself up from the set when done
+                task.add_done_callback(self._background_tasks.discard)
+
+                # 3. Handle UI Transition
+                if switch_to_transform:
+                    self.section_changed.emit("DESIGN")
+                    await asyncio.sleep(0.1)
+                    self.zx_input_ready.emit(aug_zx_to_emit)
+                    self.status_changed.emit(f"Ingested '{var_name}' and moved to Design.")
+                else:
+                    self.status_changed.emit(
+                        f"Ingested '{var_name}'. Surgery running in background."
+                    )
             else:
-                self.status_changed.emit("Code executed successfully.")
+                self.status_changed.emit("Code executed, but no ZX graph was produced.")
 
         except Exception as e:
             # Catch logic errors, syntax errors, or type errors
@@ -188,67 +215,52 @@ class UXManager(QObject):
         finally:
             self._set_processing(False, "Ready")
 
-    async def handle_lattice_surgery(self, use_reduced: bool = False):
-        """Execute 3D Lattice Surgery and generate verification graph."""
-        if self.is_processing:
-            return
+    async def handle_silent_surgery(self, graph_key: str, aug_zx_in: AugmentedZXGraph):
+        """Handle surgery -> transpile -> verify pipeline in silence."""
 
-        # Pre-flight check: look for the graph in the data store
-        aug_zx_in = self._data_store.get("augmented_zx_graph_in")
-
-        if not aug_zx_in:
-            # Emit error and stay in DESIGN tab
-            self.status_changed.emit("LATTICE SURGERY ERROR: No input ZX graph found in store.")
-            return
-
-        # If we have a graph, start processing and switch pane
-        self._set_processing(True, "Performing Lattice Surgery...")
-        self.section_changed.emit("COMPILE")
+        # Retrieve session ID and turn processing on
+        local_session = self._session_id
+        self._set_processing(True, f"Compiling {graph_key}...")
 
         try:
-            # 1. Surgery (Nodes/Edges for Blockgraph)
-            cubes, pipes = await asyncio.to_thread(
-                aug_zx_in.get_blockgraph, use_reduced=use_reduced
-            )
-            self._data_store["lattice_surgery"] = (cubes, pipes)
-            self.blockgraph_ready.emit(cubes, pipes)
+            # 1. Store Input
+            self._data_store["augmented_zx_graph_in"][graph_key] = aug_zx_in
 
-            # 2. Reverse Transpilation (Blocks -> ZX for verification)
+            # 2. Surgery (Full version only)
+            cubes, pipes = await asyncio.to_thread(aug_zx_in.get_blockgraph)
+
+            # SESSION GUARD: Check if we are still in the same session before writing
+            if local_session != self._session_id:
+                return
+
+            self._data_store["lattice_surgery"][graph_key] = (cubes, pipes)
+            self.blockgraph_ready.emit(graph_key)
+
+            # 3. Reverse Transpilation (Output Graph)
             aug_zx_out = await asyncio.to_thread(
-                self.zx_manager.add_graph_from_blockgraph,
+                self.zx_manager_out.add_graph_from_blockgraph,
                 blockgraph_cubes=cubes,
                 blockgraph_pipes=pipes,
-                graph_key="output",
+                graph_key=f"{graph_key}",
                 other=aug_zx_in,
             )
-            self._data_store["augmented_zx_graph_out"] = aug_zx_out
 
-            # Emit the NetworkX graph for the secondary visualizer in COMPILE
-            self.zx_output_ready.emit(aug_zx_out)
+            if local_session != self._session_id:
+                return
+            self._data_store["augmented_zx_graph_out"][graph_key] = aug_zx_out
+            self.zx_output_ready.emit(graph_key)
 
-            self.ready_for_equality_verification.emit(True)
-            self.status_changed.emit("Lattice surgery complete.")
+            # 4. Equality Check
+            print(f"DEBUG: about to undertake equality check of {aug_zx_in.zx_graph_reduced} and {aug_zx_out.zx_graph_reduced}")
+            match = await asyncio.to_thread(aug_zx_in.check_equality, aug_zx_out)
+            self._data_store["graphs_match"][graph_key] = match
+            print(f"DEBUG: match emitted to store is: {graph_key} , {match}")
+            self.verification_ready.emit(graph_key, match)
 
         except Exception as e:
-            self.status_changed.emit(f"Surgery Error: {e}")
+            self.status_changed.emit(f"Pipeline Error [{graph_key}]: {e}")
         finally:
             self._set_processing(False, "Ready")
-
-    async def handle_equality_verification(
-        self, graph_key_in: str = "primary", graph_key_out: str = "output"
-    ):
-        """Check if compiled blockgraph matches original design."""
-        self.status_changed.emit("Verifying equality...")
-        try:
-            aug_zx_in = self.zx_manager.get_graph(graph_key=graph_key_in)
-            aug_zx_out = self.zx_manager.get_graph(graph_key=graph_key_out)
-
-            match = await asyncio.to_thread(aug_zx_in.check_equality, aug_zx_out)
-            self._data_store["graphs_match"] = match
-            self.equality_verification.emit(match)
-            self.status_changed.emit("Verification complete.")
-        except Exception as e:
-            self.status_changed.emit(f"Verification Error: {e}")
 
     def emergency_stop(self):  # noqa: D102
         if self._active_proc and self._active_proc.poll() is None:
