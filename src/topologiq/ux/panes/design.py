@@ -38,9 +38,20 @@ class DesignPane(BasePane):
 
         # 1. Simplified Horizontal Splitter
         self.main_splitter = QSplitter(Qt.Horizontal)
-        self.main_splitter.setHandleWidth(4)  # Slightly wider handle for easier grabbing
-        self.main_splitter.setStyleSheet("QSplitter::handle { background: #1a1a1a; }")
-
+        self.main_splitter.setObjectName("DesignMainSplitter")
+        self.main_splitter.setHandleWidth(4)
+        self.main_splitter.setStyleSheet("""
+            QSplitter#DesignMainSplitter::handle {
+                border-left: 1px solid #333;
+                margin: 7px 0;
+            }
+            QSplitter#DesignMainSplitter::handle:hover {
+                background-color: #4d8dc1;
+            }
+            QSplitter#DesignMainSplitter::handle:pressed {
+                background-color:#1e92df;
+            }
+        """)
         # 2. Instantiate components
         self.ide = CircuitIDE(self.manager)
         self.zx_canvas = ZXCanvas(self.manager)

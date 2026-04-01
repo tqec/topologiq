@@ -65,7 +65,14 @@ TOGGLE_BUTTON_STYLE = """
 """
 STATUS_LABEL_STYLE = "color: #007acc; font-family: monospace; font-size: 10px;"
 TEXT_STYLE_TRANSPILE_COMPILE = "background-color: #007acc; font-weight: bold; color: white;"
-ACTION_BTN = "color: #000; background-color: #ffff77; border: 1px solid ridge inset; border-color: #666; border-radius: 3px; padding: 3px 7px;"
+
+BTN_BASE = (
+    "border: 1px solid ridge inset; border-color: #999; padding: 3px 7px;  border-radius: 3px;"
+)
+CLOSE_BTN = f"{BTN_BASE} background-color: #ddd; color: #000;"
+ACTION_BTN = f"{BTN_BASE} color: #fff; background-color: #2a2a2a;"
+
+
 GHOST_COLOR = "#333"
 x = "#ffff77"
 COMMAND_RAIL_STYLE = "background-color: #1a1a1a; border-right: 1px solid #333;"
@@ -134,7 +141,7 @@ CANVAS_PILL_STYLE = """
 """
 
 # DESIGN PANE
-TEXT_STYLE_CODE = "font-family: 'Courier New', monospace; background-color: #0f0f0f; color: #dcdcdc; border: 1px solid #666;"
+TEXT_STYLE_CODE = "font-family: 'Courier New', monospace; background-color: #0f0f0f; color: #dcdcdc; border: 1px solid #999; font-size: 12px;"
 HUD_FRAME_STYLE = "background: rgba(30, 30, 30, 200); border-radius: 6px; border: 1px solid #444;"
 HUD_BUTTON_STYLE = (
     "color: #bbb; border: none; padding: 4px 8px; font-size: 10px; font-weight: bold;"
@@ -152,13 +159,13 @@ STATUS_BADGE_UNVERIFIED = "padding: 2px 10px; background: #992222; border-radius
 STATUS_BADGE_VERIFIED = "background: #1a3d1a; color: #99ff99; border-radius: 10px; font-size: 10px;"
 CONTROL_BAR_STYLE = "background-color: #1a1a1a; border-top: 1px solid #333;"
 PRIMARY_ACTION_STYLE = (
-    "background-color: #2e5a2e; color: white; font-weight: bold; padding: 5px 15px;"
+    "background-color: #1fffb4; color: black; border: 1px solid white; font-weight: bold; padding: 5px 15px;"
 )
-
+x = "#1fffb4"
 PILL_BTN_BASE = (
-    "padding: 4px 12px; font-size: 10px; font-weight: bold; border: 1px solid;"
+    "padding: 4px 12px; font-size: 10px; font-weight: bold; border: 1px solid; border-radius: 0px;"
 )
 
 # Variants
-PILL_BTN_PYZX = f"{PILL_BTN_BASE} background-color: #1a1a2e; border-color: #666; color: #aaccff;"
+PILL_BTN_PYZX = f"{PILL_BTN_BASE} background-color: #333; border-color: #666; color: #aaccff;"
 PILL_BTN_REDUCE = f"{PILL_BTN_BASE} background-color: #222; border-color: #444; color: #aaa;"

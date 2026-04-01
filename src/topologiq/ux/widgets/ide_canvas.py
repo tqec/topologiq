@@ -57,7 +57,23 @@ class CircuitIDE(QWidget):
 
         # 1. Vertical Splitter: Editor / Inspector
         self.v_splitter = QSplitter(Qt.Vertical)
-        self.v_splitter.setStyleSheet("QSplitter::handle { background: #222; height: 1px; }")
+        self.v_splitter.setObjectName("IDEVerticalSplitter")
+        # Target only the vertical handle for a TOP border
+        self.v_splitter.setStyleSheet("""
+            QSplitter#IDEVerticalSplitter::handle {
+                height: 4px;
+                border-top: 1px solid #333;
+                padding-bottom: 3px;
+            }
+            QSplitter#IDEVerticalSplitter::handle:hover {
+                height: 1px;
+                border-top: 4px solid #4d8dc1;
+            }
+            QSplitter#IDEVerticalSplitter::handle:pressed {
+                height: 1px;
+                border-top: 4px solid #1e92df;
+            }
+        """)
 
         # --- TOP: Editor ---
         self.editor_container = QFrame()
@@ -66,25 +82,39 @@ class CircuitIDE(QWidget):
 
         self.header_bar = self._create_header_bar()
         self.code_editor = QPlainTextEdit()
-        self.code_editor.setPlaceholderText("Write Python or QASM...")
+        self.code_editor.setPlaceholderText("Load Python or QASM file...")
         self.code_editor.setStyleSheet(styles.TEXT_STYLE_CODE)
         self.code_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.code_editor.selectionChanged.connect(self._handle_selection_sync)
 
+        self.var_row = QFrame()
+        var_layout = QHBoxLayout(self.var_row)
+
+        var_label = QLabel("Target circuit:")
+        var_label.setStyleSheet("color: #999; font-size: 10px; font-weight: bold;")
+
+        self.var_input = QLineEdit("circuit")
+        self.var_input.setFixedWidth(150)
+        self.var_input.setStyleSheet(
+            "background: #121212; color: #fbff00; border: 1px solid #444; font-weight: bold;"
+        )  # Highlighted yellow text
+
         self.btn_draw_only = QPushButton("↓↓↓ DRAW ASCII ↓↓↓")
-        self.btn_draw_only.setStyleSheet(
-            styles.PILL_BTN_PYZX + "border-radius: 0px; background: #333;"
-        )
         self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
+
+        var_layout.addWidget(var_label)
+        var_layout.addWidget(self.var_input)
+        var_layout.addStretch()
+        var_layout.addWidget(self.btn_draw_only)
 
         ed_layout.addWidget(self.header_bar)
         ed_layout.addWidget(self.code_editor)
-        ed_layout.addWidget(self.btn_draw_only)
+        ed_layout.addWidget(self.var_row)
 
         # --- BOTTOM: Inspector ---
         self.inspector_tabs = QTabWidget()
         self.inspector_tabs.setStyleSheet(
-            "QTabBar::tab { height: 25px; font-size: 10px; background: #1a1a1a; color: #666; padding: 0 15px; } "
+            "QTabBar::tab { height: 25px; font-size: 10px; background: #1a1a1a; color: #999; padding: 0 15px; } "
             "QTabBar::tab:selected { background: #2a2a2a; color: #f2f3fb; border-bottom: 1px dotted #ec0202; }"
             "QTabWidget::pane { border: 1px solid #222; background: #050505; }"
         )
@@ -113,35 +143,30 @@ class CircuitIDE(QWidget):
 
     def _create_header_bar(self):
         bar = QFrame()
-        bar.setFixedHeight(30)
-        bar.setStyleSheet("background: #1a1a1a; border-bottom: 1px solid #333;")
+        bar.setStyleSheet("background: #222;")
 
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(0, 0, 5, 0)
-        layout.setSpacing(1)  # Tight spacing for the red button cluster
+        layout.setContentsMargins(0, 0, 0, 0)  # Left margin for title/file buttons
+        layout.setSpacing(5)
 
-        # 1. The Layout Toggle Triplet
-        self.toggle_buttons = create_split_controls(
-            self, ["CLOSE IDE", "40/60"], self.toggle_requested.emit
-        )
-        layout.addWidget(self.toggle_buttons)
+        # 1. NEW LEFT: File Actions (Moved from right)
+        self.btn_load = QPushButton("📁")
+        self.btn_save = QPushButton("💾")
 
-        # 2. Spacer and File Actions
-        layout.addSpacing(10)  # Gap between toggles and file buttons
-        layout.addStretch()
-
-        self.btn_load_py = QPushButton("LOAD .PY")
-        self.btn_load_qasm = QPushButton("LOAD .QASM")
-        self.btn_save = QPushButton("SAVE")
-
-        self.btn_load_py.clicked.connect(lambda: self._handle_open_file("python"))
-        self.btn_load_qasm.clicked.connect(lambda: self._handle_open_file("qasm"))
+        for btn in [self.btn_load, self.btn_save]:
+            btn.setStyleSheet(styles.ACTION_BTN + "font-size: 21px;")
+            layout.addWidget(btn)
+        self.btn_load.clicked.connect(self._handle_open_file)
         self.btn_save.clicked.connect(self._handle_save_file)
 
-        for btn in [self.btn_load_py, self.btn_load_qasm, self.btn_save]:
-            btn.setFixedSize(85, 22)
-            btn.setStyleSheet(styles.PILL_BTN_PYZX + "background: #333;")
-            layout.addWidget(btn)
+        layout.addStretch()
+
+        # 2. NEW RIGHT: Layout Controls (The "Windows" Cluster)
+        # Updated to use "X" instead of "CLOSE IDE"
+        self.toggle_buttons = create_split_controls(
+            self, ["◫", "□", "✕"], self.toggle_requested.emit
+        )
+        layout.addWidget(self.toggle_buttons)
 
         return bar
 
@@ -150,26 +175,30 @@ class CircuitIDE(QWidget):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(3, 0, 0, 0)
 
+        # Label no longer shown, but legacy requirement or buttons will not know type of content
         self.mode_label = QLabel("SOURCE: TEXT")
 
-        self.var_input = QLineEdit("circuit")
-        self.var_input.setFixedWidth(120)
-        self.var_input.setStyleSheet("border: 1px solid #666;")
+        # ZX graph generation
         self.btn_to_zx = QPushButton("GENERATE ZX GRAPH →")
-        self.btn_to_zx.setStyleSheet(styles.PILL_BTN_PYZX + "background: #333; font-size: 14px;")
+        self.btn_to_zx.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
         self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
 
         layout.addStretch()
-        layout.addWidget(QLabel("Circuit name:"))
-        layout.addWidget(self.var_input)
         layout.addWidget(self.btn_to_zx)
         return bar
 
-    def _handle_open_file(self, mode):
-        ext = "Python (*.py)" if mode == "python" else "OpenQASM (*.qasm)"
-        path, _ = QFileDialog.getOpenFileName(self, f"Open {mode.upper()}", "", ext)
+    def _handle_open_file(self):
+        """Unified loader: Determines mode by extension (.py or .qasm)."""
+        file_filter = "Quantum Source (*.py *.qasm);;Python (*.py);;OpenQASM (*.qasm)"
+        path, _ = QFileDialog.getOpenFileName(self, "Open Circuit Source", "", file_filter)
+
         if path:
             self.current_file_path = Path(path)
+            ext = self.current_file_path.suffix.lower()
+
+            # Map extension to mode
+            mode = "python" if ext == ".py" else "qasm"
+
             self.code_editor.setPlainText(self.current_file_path.read_text())
             self.mode_label.setText(f"SOURCE: {mode.upper()}")
 

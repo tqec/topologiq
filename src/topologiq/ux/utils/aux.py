@@ -12,8 +12,6 @@ AI disclaimer:
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton
 
-from topologiq.ux.utils import styles
-
 
 def create_split_controls(parent, labels, signal_to_emit):
     """Create a cluster of three buttons for layout control.
@@ -33,13 +31,10 @@ def create_split_controls(parent, labels, signal_to_emit):
         btn = QPushButton(txt)
         btn.setFixedHeight(24)
         btn.setCursor(Qt.PointingHandCursor)
-        btn.setStyleSheet(
-            styles.ACTION_BTN
-            + """
+        btn.setStyleSheet("""
             QPushButton {
                 padding-left: 10px;
                 padding-right: 10px;
-                min-width: 40px;
             }
         """
         )
@@ -64,18 +59,29 @@ def handle_splitter_toggle(splitter, total_width, side, mode):
     if total_width <= 0:
         return
 
-    if "/" in mode or "RESET" in mode:
-        ratio = int(mode.split("/")[0]) / 100
+    # 1. The 40/60 Split (Middle Button)
+    if mode == "◫" or "40/60" in mode:
+        ratio = 0.4
         left_w = int(total_width * ratio)
         splitter.setSizes([left_w, total_width - left_w])
         return
 
-    if side == "LEFT":
-        # "CLOSE IDE" -> Hide Left (0, W) | "OPEN IDE" -> Hide Right (W, 0)
-        new_sizes = [0, total_width] if "CLOSE" in mode else [total_width, 0]
-        splitter.setSizes(new_sizes)
+    # 2. Minimize / Collapse (Left Button "✕")
+    if mode == "✕":
+        if side == "LEFT":
+            # Collapse IDE -> [0, Total]
+            splitter.setSizes([0, total_width])
+        else:
+            # Collapse Canvas -> [Total, 0]
+            splitter.setSizes([total_width, 0])
+        return
 
-    elif side == "RIGHT":
-        # "CLOSE CANVAS" -> Hide Right (W, 0) | "OPEN CANVAS" -> Hide Left (0, W)
-        new_sizes = [total_width, 0] if "CLOSE" in mode else [0, total_width]
-        splitter.setSizes(new_sizes)
+    # 3. Maximize / Full Width (Right Button "□")
+    if mode == "□":  # Keeping 'X' logic for backward compatibility
+        if side == "LEFT":
+            # Maximize IDE -> [Total, 0]
+            splitter.setSizes([total_width, 0])
+        else:
+            # Maximize Canvas -> [0, Total]
+            splitter.setSizes([0, total_width])
+        return

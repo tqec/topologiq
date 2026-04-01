@@ -63,7 +63,7 @@ class ZXCanvas(QWidget):  # noqa: D101
         self.canvas_frame.setObjectName("MainCanvasFrame")
         self.canvas_frame.setStyleSheet("""
         #MainCanvasFrame {
-        border: 2px solid #999;
+        border: 1px solid #999;
         background: #a3a3a3;
         }
         """)
@@ -72,7 +72,7 @@ class ZXCanvas(QWidget):  # noqa: D101
         self.canvas = scene.SceneCanvas(
             keys="interactive",
             show=True,
-            bgcolor="#bcffc6",
+            bgcolor="#909090",
             config={"depth_size": 24},
         )
 
@@ -216,7 +216,9 @@ class ZXCanvas(QWidget):  # noqa: D101
         temp_zx = self.current_aug_zx.zx_graph.copy()
         self.manager.status_changed.emit(f"Applying {opt_name}...")
 
-        if opt_name == "Spider Fusion":
+        if opt_name == "Full Reduce":
+                zx.full_reduce(temp_zx)
+        elif opt_name == "Spider Fusion":
             zx.spider_simp(temp_zx)
         elif opt_name == "To RG":
             zx.to_rg(temp_zx)
@@ -328,92 +330,86 @@ class ZXCanvas(QWidget):  # noqa: D101
 
     def _setup_hud_anchors(self):
         """Initialise all HUD components parented to the styled canvas_frame."""
-        # Top Left: Registry + Lens
+        # Top-Left: Registry Selection + File/Opt/Registry Actions
         self._setup_graph_controls()
 
-        # Top Right: Actions & Optimization
-        self._setup_action_bar()
+        # Top-Right: Layout Controls (Split, Maximize, Close)
+        self._setup_layout_controls()
 
-        # Bottom Left: Navigation
+        # Bottom-Left: Camera Reset ONLY
         self._setup_navigation_controls()
 
         # Prep sizes for the first resizeEvent
         self.graph_control_hud.adjustSize()
-        self.top_right_hud.adjustSize()
+        self.layout_control_hud.adjustSize()
 
     def _setup_graph_controls(self):
-        """Top-Left HUD: Styled to match the Consolidated Action Bar."""
+        """Top-Left HUD: Registry selection and Icon-driven actions."""
         self.graph_control_hud = QFrame(self.canvas_frame)
 
-        # Style variables matching the Top-Right HUD
-        bg_color = "#2a2a2a"
-        hover_color = "#3a3a3a"
-        border_color = "#555"
-        text_color = "#eee"
-
-        self.graph_control_hud.setStyleSheet(f"""
-            QFrame {{ background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }}
-            QComboBox {{ background: {bg_color}; color: {text_color}; border: 1px solid {border_color}; padding: 4px; font-size: 10px; font-weight: bold; min-width: 140px; border-radius: 3px; }}
-            QComboBox:hover {{ border-color: #777; background: {hover_color}; }}
-            QComboBox::drop-down {{ border: none; width: 0px; }}
-            #PillFrame {{ background: #181818; border: 1px solid #333; }}
-            QPushButton {{ background: transparent; color: #777; font-size: 9px; font-weight: bold; border: none; padding: 4px; min-width: 45px; }}
-
-            QPushButton:checked {{ color: #fff; background: {hover_color}; }}
-            QPushButton#btn_red:checked {{ background: #2d5a27; color: #fff; }}
+        # Shared styling for the HUD bar and its buttons
+        self.graph_control_hud.setStyleSheet("""
+            QFrame { background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }
+            QComboBox {
+                background: #2a2a2a; color: #eee; border: 1px solid #555;
+                padding: 4px; font-size: 10px; font-weight: bold;
+                min-width: 120px; border-radius: 3px;
+            }
+            QPushButton {
+                background: transparent; color: #aaa; border: none;
+                font-size: 16px; padding: 2px 8px;
+            }
+            QPushButton:hover { color: #fff; background: #444; border-radius: 3px; }
+            QPushButton::menu-indicator { image: none; }
         """)
 
         layout = QHBoxLayout(self.graph_control_hud)
         layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
 
         # 1. Registry Dropdown
         self.combo_registry = QComboBox()
         self._update_registry_list()
-
-        # CRITICAL: Force the dropdown list (view) to match the QMenu style
-        self.combo_registry.view().setStyleSheet(f"""
-        QAbstractItemView {{
-        background-color: {bg_color};
-        border: 1px solid {border_color};
-        selection-background-color: {hover_color};
-        selection-color: #fff;
-        outline: none;
-        }}
-        QAbstractItemView::item {{
-        padding: 4px 10px;
-        color: {text_color};
-        font-size: 10px;
-        }}
-        """)
-
         self.combo_registry.currentTextChanged.connect(self._handle_registry_change)
         layout.addWidget(self.combo_registry)
 
-        # 2. Dual-State Pill
-        self.pill_frame = QFrame()
-        self.pill_frame.setObjectName("PillFrame")
-        pill_layout = QHBoxLayout(self.pill_frame)
-        pill_layout.setContentsMargins(2, 2, 2, 2)
-        pill_layout.setSpacing(2)
+        # 2. FILE ACTIONS (Icon: 📂)
+        self.btn_files = QPushButton("📂")
+        file_menu = QMenu(self)
+        file_menu.addAction("Load QASM", self._handle_load_request)
+        file_menu.addAction("Load JSON", lambda: self._handle_json_io("LOAD"))
+        file_menu.addSeparator()
+        file_menu.addAction("Save JSON", lambda: self._handle_json_io("SAVE"))
+        self.btn_files.setMenu(file_menu)
+        layout.addWidget(self.btn_files)
 
-        self.btn_view_full = QPushButton("FULL")
-        self.btn_view_red = QPushButton("REDUCED")
-        self.btn_view_red.setObjectName("btn_red")
+        # 3. OPTIMISE (Icon: ⚡)
+        self.btn_opt = QPushButton("⚡")
+        opt_menu = QMenu(self)
+        opt_menu.addAction("Full Reduce", lambda: self._handle_optimization_request("Full Reduce"))
+        opt_menu.addSeparator()
+        opt_menu.addAction(
+            "Spider Fusion", lambda: self._handle_optimization_request("Spider Fusion")
+        )
+        opt_menu.addAction("To RG Form", lambda: self._handle_optimization_request("To RG"))
+        self.btn_opt.setMenu(opt_menu)
+        layout.addWidget(self.btn_opt)
 
-        for btn in [self.btn_view_full, self.btn_view_red]:
-            btn.setCheckable(True)
-            btn.setAutoExclusive(True)
-            pill_layout.addWidget(btn)
+        # 4. REGISTRY COMMIT (Icon: 💾)
+        self.btn_commit = QPushButton("💾")
+        self.btn_commit.clicked.connect(self._commit_to_registry)
+        layout.addWidget(self.btn_commit)
 
-        self.btn_view_full.setChecked(not self.is_reduced_view)
-        self.btn_view_red.setChecked(self.is_reduced_view)
-
-        self.btn_view_full.clicked.connect(lambda: self._set_view_mode(False))
-        self.btn_view_red.clicked.connect(lambda: self._set_view_mode(True))
-
-        layout.addWidget(self.pill_frame)
-        self.graph_control_hud.adjustSize()
+    def _setup_layout_controls(self):
+        """Top-Right HUD: VS Code Style Layout Controls."""
+        # Using the same helper we used for the IDE
+        self.layout_control_hud = create_split_controls(
+            self.canvas_frame, ["◫", "□", "✕"], self.toggle_requested.emit
+        )
+        self.layout_control_hud.setStyleSheet(
+            self.layout_control_hud.styleSheet()
+            + "QFrame { background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }"
+        )
 
     def _set_view_mode(self, reduced: bool):
         """Toggle between full and reduced versions of the CURRENT graph."""
@@ -585,26 +581,22 @@ class ZXCanvas(QWidget):  # noqa: D101
             self.view.camera.rect = (-5, -5, 10, 10)
 
     def resizeEvent(self, event):  # noqa: N802
-        """Keep HUD elements anchored during window resizing."""
-
-        if not hasattr(self, "top_right_hud"):
+        """Keep HUD elements anchored and cleanly spaced."""
+        if not hasattr(self, "layout_control_hud"):
             return
 
         super().resizeEvent(event)
         fw, fh = self.canvas_frame.width(), self.canvas_frame.height()
-        m = 15
+        m = 15  # Margin
 
         # Top Corners
         self.graph_control_hud.move(m, m)
-        self.top_right_hud.move(fw - self.top_right_hud.width() - m, m)
+        self.layout_control_hud.move(fw - self.layout_control_hud.width() - m, m)
 
-        # Bottom Left
-        tb_h = self.toggle_buttons.height()
-        self.toggle_buttons.move(m, fh - tb_h - m)
+        # Bottom Left (Reset Cam stands alone now)
+        self.btn_reset_cam.move(m, fh - self.btn_reset_cam.height() - m)
 
-        # Reset Cam stays relative to toggles
-        self.btn_reset_cam.move(m + self.toggle_buttons.width() + 10, fh - 30 - m + 3)
-
+        # Bottom Right
         self.btn_faux_compile.move(
             fw - self.btn_faux_compile.width() - m, fh - self.btn_faux_compile.height() - m
         )
@@ -639,8 +631,8 @@ class ZXCanvas(QWidget):  # noqa: D101
 
         # 1. Define the shared Style Variable
         menu_style = """
-            QMenu { background-color: #2a2a2a; border: 1px solid #555; border-radius: 3px; padding: 2px; }
-            QMenu::item { background-color: transparent; color: #eee; font-size: 10px; padding: 4px 20px 4px 10px; border-radius: 2px; }
+            QMenu { background-color: #2a2a2a; border: 1px solid #555; border-radius: 3px; padding: 1px; }
+            QMenu::item { background-color: transparent; color: #eee; font-size: 10px; padding: 4px 20px 4px 10px; border-radius: 1px; }
             QMenu::item:selected { background-color: #3a3a3a; color: #fff; }
             QMenu::separator { height: 1px; background: #444; margin: 4px 8px; }
         """
@@ -691,12 +683,6 @@ class ZXCanvas(QWidget):  # noqa: D101
 
     def _setup_navigation_controls(self):
         """Bottom-Left HUD: Layout toggles and camera resets."""
-
-        # 1. Triplet Buttons Cluster via Utility
-        self.toggle_buttons = create_split_controls(
-            self.canvas_frame, ["CLOSE CANVAS", "40/60"], self.toggle_requested.emit
-        )
-
         # 2. Camera Reset (The Round Button)
         self.btn_reset_cam = QPushButton("⟲", self.canvas_frame)
         self.btn_reset_cam.setFixedSize(30, 30)
@@ -710,18 +696,7 @@ class ZXCanvas(QWidget):  # noqa: D101
         # NEW: Bottom-Right "Faux Compile" Button
         self.btn_faux_compile = QPushButton("COMPILE CURRENT →", self.canvas_frame)
         self.btn_faux_compile.setFixedSize(160, 32)
-        self.btn_faux_compile.setStyleSheet("""
-            QPushButton {
-                background: #2d5a27;
-                color: #fff;
-                border: 1px solid #3e7a36;
-                border-radius: 16px;
-                font-weight: bold;
-                font-size: 11px;
-            }
-            QPushButton:hover { background: #366d2f; }
-            QPushButton:pressed { background: #1e3d1a; }
-        """)
+        self.btn_faux_compile.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
         self.btn_faux_compile.clicked.connect(self._handle_faux_compile_click)
 
     def on_mouse_press(self, event):  # noqa: D102
