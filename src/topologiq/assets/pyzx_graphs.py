@@ -228,4 +228,8 @@ def random_graph(
     return None, None
 
 
-steane_pyzx, _ = steane_pyzx()
+if __name__ == "__main__":
+    cnot, _ = cnot()
+    cnots, _ = cnots()
+    simple_mess, _ = simple_mess()
+    steane, _ = steane_pyzx()

@@ -165,7 +165,11 @@ class BGraphCanvas(QWidget):  # noqa: D101
 
                 offsets = [-(yell_len / 2 + col_len / 2), 0, (yell_len / 2 + col_len / 2)]
                 sizes = [col_len, yell_len, col_len]
-                kinds = [kind, "hadamard", rotate_pipe_kind(kind)]
+
+                rotated_kind = rotate_pipe_kind(kind)
+                start_kind = kind if sum(direction) > 0 else rotated_kind
+                end_kind = rotated_kind if sum(direction) > 0 else kind
+                kinds = [start_kind, "hadamard", end_kind]
 
                 for off, s, k in zip(offsets, sizes, kinds):
                     p_size = [1.0, 1.0, 1.0]
