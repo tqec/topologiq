@@ -31,6 +31,9 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
     if ang.number_of_nodes() == 0:
         raise ValueError("ERROR: ang.nodes() empty. Graph appears empty.")
 
+    first_id: int
+    central_nodes: list[int]
+
     # ID of first non-boundary node
     if first_id_strategy == "first_spider":
         # Sort all IDS in graph excluding boundaries
@@ -44,33 +47,33 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
         # Append ID determined as central by several centrality measures to a single array
         central_nodes = []
 
-        degree_centrality = nx.degree_centrality(ang.zx_graph)
+        degree_centrality = nx.degree_centrality(ang)
         central_nodes.append(sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0])
 
-        closeness_centrality = nx.closeness_centrality(ang.zx_graph)
+        closeness_centrality = nx.closeness_centrality(ang)
         central_nodes.append(
             sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0]
         )
 
-        info_centrality = nx.current_flow_closeness_centrality(ang.zx_graph, weight=None, solver="lu")
+        info_centrality = nx.current_flow_closeness_centrality(ang, weight=None, solver="lu")
         central_nodes.append(sorted(info_centrality, key=info_centrality.get, reverse=True)[0])
 
-        betweenness_centrality = nx.betweenness_centrality(ang.zx_graph, normalized=True, endpoints=True)
+        betweenness_centrality = nx.betweenness_centrality(ang, normalized=True, endpoints=True)
         central_nodes.append(
             sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0]
         )
 
-        harmonic_centrality = nx.harmonic_centrality(ang.zx_graph, nbunch=None, distance=None, sources=None)
+        harmonic_centrality = nx.harmonic_centrality(ang, nbunch=None, distance=None, sources=None)
         central_nodes.append(
             sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0]
         )
 
         laplacian = nx.laplacian_centrality(
-            ang.zx_graph, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
+            ang, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
         )
         central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
 
-        eigen_centrality = nx.eigenvector_centrality_numpy(ang.zx_graph)
+        eigen_centrality = nx.eigenvector_centrality_numpy(ang)
         central_nodes.append(sorted(eigen_centrality, key=eigen_centrality.get, reverse=True)[0])
 
         # Choose most common
@@ -80,8 +83,8 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
     elif first_id_strategy == "centrality_random":
         # Loose build a list of central spiders
         max_degree = -1
-        central_nodes: list[int] = []
-        node_degrees = ang.zx_graph.degree
+        central_nodes = []
+        node_degrees = ang.degree
 
         if isinstance(node_degrees, int):
             raise ValueError("ERROR: ang.zx_graph.degree returned int. Cannot determine first ID.")
@@ -94,7 +97,7 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
                 central_nodes.append(node)
 
         # Randomly pick a spider from list of central spiders
-        first_id: int = random.choice(central_nodes)
+        first_id = random.choice(central_nodes)
 
     else:
         raise ValueError("ERROR @ get_first_id. Invalid selection strategy.")
@@ -107,7 +110,7 @@ def get_first_cube(
     first_cube: tuple[int | None, str | None] = (None, None),
     first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
-) -> tuple[int, CubeKind]:
+) -> tuple[int, str]:
     """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
@@ -137,6 +140,7 @@ def get_first_cube(
         deterministic = False if first_id_strategy == "centrality_random" else True
         tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id))
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
+        first_kind = first_kind.name.lower()
 
     return first_id, first_kind
 

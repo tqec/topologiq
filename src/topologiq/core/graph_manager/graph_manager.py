@@ -38,6 +38,7 @@ from topologiq.core.graph_manager.utils import (
 )
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_bg import CubeKind
 from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
@@ -237,9 +238,7 @@ def graph_manager_bfs(
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
     ang: AugmentedNxGraph = AugmentedNxGraph.from_simple_graph(simple_graph)
-    print(f"AugmentedNxGraph : {ang.number_of_nodes()} nodes, {ang.number_of_edges()} edges.")
-    for node in ang.nodes():
-        print(f"> {node} : {ang.get_node_type(node)}")
+    ang.print_summary()
     nx_g = prep_3d_g(simple_graph)
 
     # First spider/cube
@@ -261,14 +260,14 @@ def graph_manager_bfs(
     # 2. Validity checks
     # Health check depating point
     node, cube_kind = first_cube
-    if not validity_checks(simple_graph, (node, cube_kind.name.lower())):
+    if not validity_checks(simple_graph, (node, cube_kind)):
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    cube = ang.realise_node(node, cube_kind, Spacetime.ORIGIN)
-    all_beams[cube] = check_exits(Spacetime.ORIGIN, cube_kind.name.lower(), [Spacetime.ORIGIN], [Spacetime.ORIGIN])
-    nx_g, taken = place_first_cube(nx_g, taken, (node, cube_kind.name.lower()))
+    cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
+    all_beams[cube] = check_exits(Spacetime.ORIGIN, cube_kind, [Spacetime.ORIGIN], [Spacetime.ORIGIN])
+    nx_g, taken = place_first_cube(nx_g, taken, (node, cube_kind))
 
     # 4. Graph manager BFS
     # Group parameters for readability
@@ -490,6 +489,7 @@ def do_bfs(
                     nx_g,
                     taken,
                     edge_paths,
+                    ang,
                     circuit_name=circuit_name,
                     fig_data=fig_data,
                     **kwargs,

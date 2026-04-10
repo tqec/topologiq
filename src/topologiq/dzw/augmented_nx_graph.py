@@ -56,7 +56,7 @@ class AugmentedNxGraph(nx.Graph):
     def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]] | None = None, edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]] | None = None):
         # Separate ZX-graph and BG-graph
         super(AugmentedNxGraph, self).__init__()
-        self.__bg_graph = nx.Graph()
+        self.__bg_graph: nx.Graph = nx.Graph()
 
         # Keeps track of which nodes appear on which qubit-line or layer of the ZX-graph
         self.__zx_qubits: dict[QubitId, list[NodeId]] = defaultdict(list)

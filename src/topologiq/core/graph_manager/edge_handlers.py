@@ -94,9 +94,9 @@ def handle_std_edge(
     edge_success = False
 
     if nxt_neigh_coords is None:
-        # Geat target information
-        nxt_neigh_node_data = nx_g.nodes[tgt_id]
-        nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
+    # if not ang.is_node_realised(tgt_id):
+        # Get target information
+        nxt_neigh_zx_type = ang.get_node_type(tgt_id).name
 
         # Get edge information
         zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
@@ -122,7 +122,7 @@ def handle_std_edge(
         # Assemble a preliminary dictionary of viable paths
         # Note. A smart subset of clean paths
         viable_paths = []
-        tgt_degree = int(get_node_degree(nx_g, tgt_id))
+        tgt_degree = int(ang.get_degree(tgt_id))
         for clean_path in clean_paths:
             # Extract key path information
             tgt_coords, tgt_kind = clean_path[-1]
@@ -213,7 +213,7 @@ def handle_std_edge(
         if winner_path:
             # TODO-ANG: adapt to use ang, drop taken, edge_paths
             nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
+                ang, nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
             )
 
         # Update user
@@ -245,6 +245,7 @@ def handle_cross_edge(
     nx_g: nx.Graph, # TODO-ANG: replace with ang
     taken: list[StandardCoord], # TODO-ANG: drop
     edge_paths: dict, # TODO-ANG: drop
+    ang: AugmentedNxGraph,
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
     **kwargs,
@@ -347,6 +348,7 @@ def handle_cross_edge(
                 # Write to edge_paths if an edge is found
                 # TODO-ANG: adapt this to use ang
                 nx_g, taken, edge_paths, edge_success = update_edge_paths(
+                    ang,
                     nx_g,
                     edge_paths,
                     None,

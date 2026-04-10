@@ -13,6 +13,7 @@ from pathlib import Path
 import networkx as nx
 
 from topologiq.core.pathfinder.spatial import get_taken_coords
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
@@ -234,6 +235,7 @@ def get_node_degree(g: nx.Graph, node: int) -> int:
 
 
 def update_edge_paths(
+    ang: AugmentedNxGraph,
     nx_g: nx.Graph,
     edge_paths: dict,
     winner_path_standard_pass: PathBetweenNodes | None,
