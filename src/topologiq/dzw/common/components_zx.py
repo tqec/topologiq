@@ -2,6 +2,7 @@ from enum import Enum
 import pyzx as zx
 
 NodeId = int
+EdgeId = tuple[NodeId, NodeId]
 
 class NodeType(Enum):
     O = 0 # Boundary

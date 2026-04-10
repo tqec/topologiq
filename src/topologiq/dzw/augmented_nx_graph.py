@@ -10,7 +10,7 @@ from topologiq.utils.classes import StandardCoord
 from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.helpers.blockgraph import BlockGraphHelper
 
-from topologiq.dzw.common.components_zx import NodeId, NodeType, EdgeType
+from topologiq.dzw.common.components_zx import NodeId, NodeType, EdgeId, EdgeType
 from topologiq.dzw.common.components_bg import CubeId, CubeKind
 from topologiq.dzw.common.path import Path
 
@@ -53,7 +53,7 @@ class AugmentedNxGraph(nx.Graph):
     KEY_BG_PIPE_TYPE = 'bg_pipe_type'
     KEY_BG_CUBE_BEAMS = 'bg_cube_beams'
 
-    def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]] = None, edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]] = None):
+    def __init__(self, nodes: Iterable[tuple[NodeId, NodeType]] | None = None, edges: Iterable[tuple[tuple[NodeId, NodeId], EdgeType]] | None = None):
         # Separate ZX-graph and BG-graph
         super(AugmentedNxGraph, self).__init__()
         self.__bg_graph = nx.Graph()
@@ -63,8 +63,8 @@ class AugmentedNxGraph(nx.Graph):
         self.__zx_layers: dict[LayerId, list[NodeId]] = defaultdict(list)
 
         # Tracks the order in which nodes and edges from the ZX graph were realised into the Blockgraph
-        self.__zx_node_realisation_order = []
-        self.__zx_edge_realisation_order = []
+        self.__zx_node_realisation_order: list[NodeId] = []
+        self.__zx_edge_realisation_order: list[EdgeId] = []
 
         # Keeps track of the coordinates in 3D that are occupied by some cube
         self.occupied: set[StandardCoord] = set()
@@ -91,24 +91,34 @@ class AugmentedNxGraph(nx.Graph):
         if self.number_of_nodes() > 0:
             _, max_degree = max(self.degree, key=lambda entry: entry[1])
             if max_degree > 4:
-                raise NotImplemented("Enforcement of no-more-than-four-legs condition not implemented.")
+                raise NotImplementedError("Enforcement of no-more-than-four-legs condition not implemented.")
 
     @staticmethod
     def from_pyzx_graph(zx_graph: zx.graph.base.BaseGraph):
-        nodes = zip( zx_graph.vertices(), [ NodeType.convert(zx_graph.type(node)) for node in zx_graph.vertices() ] )
-        edges = zip( zx_graph.edges(), [ EdgeType.convert(zx_graph.edge_type(edge)) for edge in zx_graph.edges() ] )
+        converted_node_ids: dict[NodeId, NodeId] = dict()
+        nodes: list[tuple[NodeId, NodeType]] = []
+        for node in zx_graph.vertices():
+            node_id = len(converted_node_ids)
+            converted_node_ids[node] = node_id
+            nodes.append( (node_id, NodeType.convert(zx_graph.type(node))) )
+
+        edges: list[tuple[EdgeId, EdgeType]] = []
+        for edge in zx_graph.edges():
+            source = converted_node_ids[min(edge)]
+            target = converted_node_ids[max(edge)]
+            edges.append( ( (source,target) , EdgeType.convert(zx_graph.edge_type(edge))) )
 
         ang = AugmentedNxGraph(nodes, edges)
 
         # Add qubit and layer information
-        for node in zx_graph.vertices():
-            node_qubit = zx_graph.qubit(node)
-            ang.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
-            ang.__zx_qubits[node_qubit].append(node)
+        for node, node_id in converted_node_ids.items():
+            node_qubit = int(zx_graph.qubit(node))
+            ang.nodes[node_id][AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
+            ang.__zx_qubits[node_qubit].append(node_id)
 
-            node_layer = zx_graph.row(node)
-            ang.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
-            ang.__zx_layers[node_layer].append(node)
+            node_layer = int(zx_graph.row(node))
+            ang.nodes[node_id][AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
+            ang.__zx_layers[node_layer].append(node_id)
 
         return ang
 
@@ -293,7 +303,7 @@ class AugmentedNxGraph(nx.Graph):
     def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
         return self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] is not None
 
-    def realise_edge(self, source: NodeId, target: NodeId, proposed_path: Path, alternative_paths: list[Path] = None):
+    def realise_edge(self, source: NodeId, target: NodeId, proposed_path: Path, alternative_paths: list[Path] | None = None):
         if not self.is_node_realised(source):
             raise Exception(f"{source} is not placed; cannot connect with a path.")
 
@@ -499,6 +509,46 @@ class AugmentedNxGraph(nx.Graph):
             console.debug(f"> Proposed path is Hadamard-inconsistent with its purported edge [{edge_type}].")
 
         return hadamard_consistent
+
+    def log_summary(self):
+        for node_type in [NodeType.O, NodeType.X, NodeType.Y, NodeType.Z]:
+            content = ""
+            for node in self.nodes:
+                if node_type == self.get_node_type(node):
+                    content += f"{node} "
+            console.info(f"Nodes {node_type.name} : {content}")
+
+        content = ""
+        for edge in self.edges:
+            content += f"{edge} "
+        console.info(f"Edges   : {content}")
+
+        for layer in self.get_layers():
+            console.info(f"Layer {layer}  : {self.get_layer(layer)}")
+
+        for qubit in self.get_qubits():
+            nodes = filter(lambda nd: qubit == self.get_qubit(nd), self.nodes)
+            console.info(f"Qubit {qubit}  : {list(nodes)}")
+
+    def print_summary(self):
+        for node_type in [NodeType.O, NodeType.X, NodeType.Y, NodeType.Z]:
+            content = ""
+            for node in self.nodes:
+                if node_type == self.get_node_type(node):
+                    content += f"{node} "
+            print(f"Nodes {node_type.name}: {content}")
+
+        content = ""
+        for edge in self.edges:
+            content += f"{edge} "
+        print(f"Edges  : {content}")
+
+        for layer in self.get_layers():
+            print(f"Layer {layer}  : {self.get_layer(layer)}")
+
+        for qubit in self.get_qubits():
+            nodes = filter(lambda nd: qubit == self.get_qubit(nd), self.nodes)
+            print(f"Qubit {qubit}  : {list(nodes)}")
 
     def __identify_cube_at_position(self, position: StandardCoord) -> int:
         for cube in self.get_cubes():
