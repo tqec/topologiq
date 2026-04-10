@@ -48,7 +48,7 @@ class VerifyCanvas(QFrame):
         self.inner_layout.setContentsMargins(0, 0, 0, 0)
 
         # VisPy Canvas
-        self.canvas = scene.SceneCanvas(keys="interactive", show=False, bgcolor="#f8f9fa")
+        self.canvas = scene.SceneCanvas(keys="interactive", show=False, bgcolor="#909090")
         self.inner_layout.addWidget(self.canvas.native)
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = "turntable"

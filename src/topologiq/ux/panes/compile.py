@@ -14,9 +14,10 @@ AI disclaimer:
 
 """
 
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import QLabel, QSplitter, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtWidgets import QFrame, QLabel, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
+from topologiq.ux.utils.aux import handle_splitter_toggle
 from topologiq.ux.widgets.bgraph_canvas import BGraphCanvas
 from topologiq.ux.widgets.verify_canvas import VerifyCanvas
 from topologiq.ux.widgets.zx_visual_select import ZXVisualSelect
@@ -34,21 +35,31 @@ class CompilePane(QWidget):  # Changed from BasePane for layout flexibility  # n
     def setup_ui(self):  # noqa: D102
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
-        # 1. The Splitter (Multi-Canvas | Blockgraph)
-        self.splitter = QSplitter(Qt.Horizontal)
+        # 1. Main Horizontal Splitter (Styled as DesignMainSplitter)
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setObjectName("DesignMainSplitter")
+        self.main_splitter.setHandleWidth(4)
+        # Note: The actual stylesheet logic for this ID is in DESIGN/Global styles
 
-        # LEFT: The Selector/Multi-Canvas
+        # 2. LEFT: Registry Sidebar
         self.left_pane = ZXVisualSelect(self.manager)
-        self.left_pane.graph_selected.connect(self.set_focus_key)
 
-        # RIGHT: The 3D Workspace with Stacked Overlay
+        # 3. RIGHT: 3D Workspace Frame
+        self.right_workspace = QFrame()
+        rw_layout = QVBoxLayout(self.right_workspace)
+        rw_layout.setContentsMargins(0, 0, 0, 0)
+        rw_layout.setSpacing(0)
+
         self.right_container = QStackedWidget()
 
         # Overlay 1: The "Select a Graph" prompt
-        self.empty_overlay = QLabel("Select graph from the registry.")
+        self.empty_overlay = QLabel("Select a graph from the registry to view 3D Lattice Surgery.")
         self.empty_overlay.setAlignment(Qt.AlignCenter)
-        self.empty_overlay.setStyleSheet("background: #1a1a1a; color: #666; font-size: 14px;")
+        self.empty_overlay.setStyleSheet(
+            "background: #121212; color: #444; font-size: 13px; font-weight: bold;"
+        )
 
         # Overlay 2: The actual 3D Visualizer
         self.block_canvas = BGraphCanvas()
@@ -57,12 +68,26 @@ class CompilePane(QWidget):  # Changed from BasePane for layout flexibility  # n
         self.right_container.addWidget(self.empty_overlay)
         self.right_container.addWidget(self.block_canvas)
 
-        self.splitter.addWidget(self.left_pane)
-        self.splitter.addWidget(self.right_container)
-        self.splitter.setStretchFactor(0, 1)  # ZX Multi
-        self.splitter.setStretchFactor(1, 2)  # Blockgraph
+        rw_layout.addWidget(self.right_container)
 
-        self.main_layout.addWidget(self.splitter)
+        # 4. Assembly
+        self.main_splitter.addWidget(self.left_pane)
+        self.main_splitter.addWidget(self.right_workspace)
+        self.main_splitter.setStretchFactor(0, 2)
+        self.main_splitter.setStretchFactor(1, 3)
+
+        self.main_layout.addWidget(self.main_splitter)
+
+        # 5. Connections for Layout Orchestration
+        self.left_pane.toggle_requested.connect(
+            lambda mode: self._trigger_layout_change("LEFT", mode)
+        )
+        self.block_canvas.toggle_requested.connect(
+            lambda mode: self._trigger_layout_change("RIGHT", mode)
+        )
+
+        # Force initial 40/60 split on next event loop cycle
+        QTimer.singleShot(0, lambda: self._trigger_layout_change("LEFT", "40/60"))
 
     def showEvent(self, event):  # noqa: N802
         """Refresh registry and check for pending data on tab switch."""
@@ -115,6 +140,12 @@ class CompilePane(QWidget):  # Changed from BasePane for layout flexibility  # n
         if aug_zx_in and aug_zx_out:
             # If you rename the method in VerifyCanvas to set_verification_state:
             self.output_canvas.set_verification_state(aug_zx_in, aug_zx_out, match_result)
+
+    def _trigger_layout_change(self, side, mode):
+        """Bridge to the existing aux utility."""
+        handle_splitter_toggle(
+            splitter=self.main_splitter, total_width=self.width(), side=side, mode=mode
+        )
 
     # --- Signal Handlers from Manager ---
     @Slot(str)

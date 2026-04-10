@@ -169,3 +169,6 @@ PILL_BTN_BASE = (
 # Variants
 PILL_BTN_PYZX = f"{PILL_BTN_BASE} background-color: #333; border-color: #666; color: #aaccff;"
 PILL_BTN_REDUCE = f"{PILL_BTN_BASE} background-color: #222; border-color: #444; color: #aaa;"
+
+
+MAIN_SPLITTER_STYLE = """ QSplitter#DesignMainSplitter::handle { border-left: 1px solid #333; margin: 7px 0; } QSplitter#DesignMainSplitter::handle:hover { background-color: #4d8dc1; } QSplitter#DesignMainSplitter::handle:pressed { background-color:#1e92df; } """

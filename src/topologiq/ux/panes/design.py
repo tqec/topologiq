@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import QSplitter
 
 from topologiq.ux.base_pane import BasePane
+from topologiq.ux.utils import styles
 from topologiq.ux.utils.aux import handle_splitter_toggle
 from topologiq.ux.widgets.ide_canvas import CircuitIDE
 from topologiq.ux.widgets.zx_canvas import ZXCanvas
@@ -40,18 +41,7 @@ class DesignPane(BasePane):
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.main_splitter.setObjectName("DesignMainSplitter")
         self.main_splitter.setHandleWidth(4)
-        self.main_splitter.setStyleSheet("""
-            QSplitter#DesignMainSplitter::handle {
-                border-left: 1px solid #333;
-                margin: 7px 0;
-            }
-            QSplitter#DesignMainSplitter::handle:hover {
-                background-color: #4d8dc1;
-            }
-            QSplitter#DesignMainSplitter::handle:pressed {
-                background-color:#1e92df;
-            }
-        """)
+        self.main_splitter.setStyleSheet(styles.MAIN_SPLITTER_STYLE)
         # 2. Instantiate components
         self.ide = CircuitIDE(self.manager)
         self.zx_canvas = ZXCanvas(self.manager)

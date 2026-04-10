@@ -10,9 +10,11 @@ AI disclaimer:
 """
 
 import numpy as np
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from vispy import app, scene
 
+from topologiq.ux.utils.aux import create_split_controls
 from topologiq.ux.utils.vis_blocks import (
     BlockMesh,
     create_infinite_axes,
@@ -23,28 +25,61 @@ from topologiq.ux.widgets.verify_canvas import VerifyCanvas
 
 
 class BGraphCanvas(QWidget):  # noqa: D101
+    toggle_requested = Signal(str)
+
     def __init__(self, parent=None):  # noqa: D107
         super().__init__(parent)
+        self.setMinimumWidth(0)
 
         # Explicitly ensure the app backend is set
         self.vispy_app = app.use_app("pyside6")
 
-        # Introduce main layout
+        # 1. Initialize the UI "Chassis"
+        self.setup_ui()
+
+        # 2. Trackers
+        self.block_items = []
+        self.label_items = []
+
+    def setup_ui(self):
+        """Integrate the layout header and the VisPy native widget."""
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
-        # Canvas setutp
-        self.canvas = scene.SceneCanvas(keys="interactive", show=False, bgcolor="#d4edda")
-        self.layout.addWidget(self.canvas.native)
+        # --- Section 1: Header Bar ---
+        self.header_bar = QFrame()
+        self.header_bar.setFixedHeight(28)
+        self.header_bar.setStyleSheet("background: #222; border-bottom: 1px solid #333;")
+        h_layout = QHBoxLayout(self.header_bar)
+        h_layout.setContentsMargins(10, 0, 0, 0)
 
-        # Viewbox and Camera
+        self.status_label = QLabel("3D LATTICE SURGERY")
+        self.status_label.setStyleSheet("color: #888; font-size: 10px; font-weight: bold;")
+
+        # Right-aligned layout controls
+        self.layout_controls = create_split_controls(
+            self, ["◫", "□", "✕"], self.toggle_requested.emit
+        )
+
+        h_layout.addWidget(self.status_label)
+        h_layout.addStretch()
+        h_layout.addWidget(self.layout_controls)
+
+        # --- Section 2: VisPy Canvas ---
+        # Note: bgcolor set to #121212 to match the IDE theme
+        self.canvas = scene.SceneCanvas(
+            keys="interactive", show=False, bgcolor="#121212", config={"depth_size": 24}
+        )
+
+        # Viewbox and Camera Setup
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = "turntable"
         self.view.camera.distance = 30
 
-        # Trackers
-        self.block_items = []
-        self.label_items = []
+        # Add to layout
+        self.layout.addWidget(self.header_bar)
+        self.layout.addWidget(self.canvas.native)
 
     def render_blockgraph(self, cubes, pipes):
         """Render the blockgraph."""

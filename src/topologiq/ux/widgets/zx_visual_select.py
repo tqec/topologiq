@@ -16,9 +16,10 @@ from matplotlib.collections import LineCollection
 # MATPLOTLIB IMPORTS
 from matplotlib.figure import Figure
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from topologiq.input.utils import ZXColors, ZXTypes
+from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
+from topologiq.ux.utils.aux import create_split_controls
 
 
 class ZXStaticViewer(QWidget):
@@ -31,10 +32,10 @@ class ZXStaticViewer(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
 
         # Setup Matplotlib Figure
-        self.fig = Figure(figsize=(2, 2), dpi=100, facecolor="#eef2f6")
+        self.fig = Figure(figsize=(2, 2), dpi=100, facecolor="#909090")
         self.canvas = FigureCanvas(self.fig)
         self.ax = self.fig.add_subplot(111)
-        self.ax.set_facecolor("#eef2f6")
+        self.ax.set_facecolor("#909090")
         self.ax.axis("off")
 
         self.fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -57,8 +58,21 @@ class ZXStaticViewer(QWidget):
         # 1. Edges
         edges = list(g.edges())
         if edges:
-            segments = [(pos[node_registry[u]], pos[node_registry[v]]) for u, v in edges]
-            lc = LineCollection(segments, colors="#444444", linewidths=1.0, zorder=1)
+            segments = []
+            edge_colors = []
+
+            for e in edges:
+                u, v = e
+                segments.append((pos[node_registry[u]], pos[node_registry[v]]))
+
+                # Direct logic match from your VisPy snippet
+                hex_e = (
+                    ZXColors.HADAMARD if g.edge_type(e) == ZXEdgeTypes.HADAMARD else ZXColors.SIMPLE
+                )
+                edge_colors.append(hex_e)
+
+            # Render as a single collection for performance
+            lc = LineCollection(segments, colors=edge_colors, linewidths=2.0, zorder=1)
             self.ax.add_collection(lc)
 
         # 2. Nodes & Labels
@@ -110,36 +124,54 @@ class ZXVisualSelect(QWidget):
     """Consolidated Sidebar with Registry Sync and Matplotlib Preview."""
 
     graph_selected = Signal(str)
+    toggle_requested = Signal(str)
 
     def __init__(self, manager, parent=None):  # noqa: D107
         super().__init__(parent)
         self.manager = manager
+        self.setMinimumWidth(0)  # For "Crush" logic
 
+        # 1. Initialize the UI "Chassis"
+        self.setup_ui()
+
+        # 2. Setup Internal Connections
+        self.combo_registry.currentTextChanged.connect(self._on_combo_changed)
+
+    def setup_ui(self):
+        """Standardized Sidebar layout with IDE-style headers."""
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
-        self.main_layout.setSpacing(12)
+        self.main_layout.setSpacing(5)
 
-        # --- Section 1: Selector Header ---
-        self.header = QFrame()
-        self.header.setStyleSheet("""
-            QFrame { background: #1e1e1e; border-radius: 4px; border: 1px solid #333; }
-            QLabel { color: #888; font-size: 9px; font-weight: bold; border: none; letter-spacing: 1px; }
-        """)
-        h_layout = QVBoxLayout(self.header)
-        h_layout.setContentsMargins(8, 8, 8, 8)
+        # --- Section 1: Header Bar ---
+        self.header_bar = QFrame()
+        self.header_bar.setFixedHeight(28)
+        self.header_bar.setStyleSheet("background: #222; border-bottom: 1px solid #333;")
+        h_layout = QHBoxLayout(self.header_bar)
+        h_layout.setContentsMargins(8, 0, 0, 0)
 
-        label = QLabel("INPUT REGISTRY")
-        h_layout.addWidget(label)
+        self.title_label = QLabel("REGISTRY")
+        self.title_label.setStyleSheet(
+            "color: #888; font-size: 10px; font-weight: bold; letter-spacing: 1px;"
+        )
 
+        # Standardized Layout Controls Cluster (◫, □, ✕)
+        self.layout_controls = create_split_controls(
+            self, ["◫", "□", "✕"], self.toggle_requested.emit
+        )
+
+        h_layout.addWidget(self.title_label)
+        h_layout.addStretch()
+        h_layout.addWidget(self.layout_controls)
+
+        # --- Section 2: Registry Selector ---
         self.combo_registry = QComboBox()
         self.combo_registry.setStyleSheet("""
             QComboBox { background: #0c0c0c; color: #ccc; border: 1px solid #444; padding: 4px; font-size: 11px; }
             QComboBox::drop-down { border: none; }
         """)
-        h_layout.addWidget(self.combo_registry)
-        self.main_layout.addWidget(self.header)
 
-        # --- Section 2: Visual Preview ---
+        # --- Section 3: Visual Preview (Matplotlib) ---
         self.preview_container = QFrame()
         self.preview_container.setStyleSheet(
             "background: #000; border: 1px solid #222; border-radius: 4px;"
@@ -150,10 +182,10 @@ class ZXVisualSelect(QWidget):
         self.static_viewer = ZXStaticViewer()
         p_layout.addWidget(self.static_viewer)
 
+        # Assembly
+        self.main_layout.addWidget(self.header_bar)
+        self.main_layout.addWidget(self.combo_registry)
         self.main_layout.addWidget(self.preview_container, stretch=1)
-
-        # Internal Connections
-        self.combo_registry.currentTextChanged.connect(self._on_combo_changed)
 
     def _on_combo_changed(self, key):
         """Update preview and notify parent."""
