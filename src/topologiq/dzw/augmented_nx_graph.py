@@ -2,6 +2,7 @@ from collections import deque, defaultdict
 from enum import Enum
 from typing import Iterable
 
+import numpy as np
 import pyzx as zx
 import networkx as nx
 
@@ -45,7 +46,6 @@ class AugmentedNxGraph(nx.Graph):
     KEY_ZX_EDGES_REALISED = 'zx_edges_realised'
     KEY_ZX_BG_CUBE = 'zx_bg_cube'
     KEY_ZX_BG_PATH = 'zx_bg_path'
-    KEY_ZX_BG_ALTERNATIVE_PATHS = 'zx_bg_alternative_paths'
 
     KEY_BG_ZX_NODE   = 'bg_zx_node'
     KEY_BG_CUBE_KIND = 'bg_cube_kind'
@@ -256,9 +256,6 @@ class AugmentedNxGraph(nx.Graph):
     def get_edge_realisation(self, source: NodeId, target: NodeId) -> Path:
         return self.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_BG_PATH)
 
-    def get_edge_alternatives(self, source: NodeId, target: NodeId) -> list[Path]:
-        return self.get_edge_data(source, target).get(AugmentedNxGraph.KEY_ZX_BG_ALTERNATIVE_PATHS)
-
     def is_node_realised(self, node: NodeId) -> bool:
         return self.nodes[node][AugmentedNxGraph.KEY_ZX_BG_CUBE] is not None
 
@@ -303,7 +300,7 @@ class AugmentedNxGraph(nx.Graph):
     def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
         return self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] is not None
 
-    def realise_edge(self, source: NodeId, target: NodeId, proposed_path: Path, alternative_paths: list[Path] | None = None):
+    def realise_edge(self, source: NodeId, target: NodeId, proposal: Path):
         if not self.is_node_realised(source):
             raise Exception(f"{source} is not placed; cannot connect with a path.")
 
@@ -322,14 +319,14 @@ class AugmentedNxGraph(nx.Graph):
         edge_type = self.get_edge_type(source, target)
 
         # # Reject path if it is invalid.
-        if not self.is_path_valid(proposed_path, edge_type):
+        if not self.is_path_valid(proposal, edge_type):
             raise Exception(f"Proposed path to realise edge {source}-{target} is invalid.")
 
-        if not proposed_path:
+        if not proposal:
             sequence = "[]"
         else:
             sequence = ""
-            for position, kind in proposed_path.get_extra_cubes():
+            for position, kind in proposal.get_extra_cubes():
                 sequence += f"{kind}@{position}"
         console.info(f"Realising edge {source}-{target} [type={self.get_edge_type(source,target)}] with extra cubes : {sequence}")
 
@@ -339,8 +336,8 @@ class AugmentedNxGraph(nx.Graph):
         # Add all the extra cubes and pipes of the path to the BlockGraph
         previous_cube: int = source_cube
 
-        proposed_cubes = proposed_path.get_cubes()
-        proposed_pipes = proposed_path.get_pipes()
+        proposed_cubes = proposal.get_cubes()
+        proposed_pipes = proposal.get_pipes()
 
         n = len(proposed_cubes)
         for index in range(1, n-1):
@@ -366,9 +363,7 @@ class AugmentedNxGraph(nx.Graph):
         cube_ids.append(target_cube)
 
         # Associate the path as a realisation of the edge
-        proposed_path.set_cube_ids(cube_ids)
-        self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = proposed_path
-        self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_ALTERNATIVE_PATHS] = alternative_paths
+        self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] = cube_ids
 
         # One more edge has been realised
         self.nodes[source][AugmentedNxGraph.KEY_ZX_EDGES_REALISED] += 1
@@ -460,7 +455,8 @@ class AugmentedNxGraph(nx.Graph):
                     return False
 
             # Check that the step taken lies in both reaches of successive cubes
-            step_taken = current_position - previous_position
+            difference = np.subtract(current_position, previous_position)
+            step_taken = (difference[0], difference[1], difference[2])
             if not Spacetime.contains(previous_reach, step_taken) or not Spacetime.contains(current_reach, step_taken):
                 console.debug(f"> Previous reach contains step : {Spacetime.contains(previous_reach, step_taken)}")
                 console.debug(f"> Current reach contains step : {Spacetime.contains(current_reach, step_taken)}")

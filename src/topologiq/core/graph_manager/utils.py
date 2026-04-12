@@ -8,12 +8,11 @@ Usage:
 import random
 import shutil
 from collections import deque
-from pathlib import Path
 
 import networkx as nx
 
 from topologiq.core.pathfinder.spatial import get_taken_coords
-from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_zx import EdgeType
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
@@ -22,6 +21,11 @@ from topologiq.utils.classes import (
     StandardBlock,
     StandardCoord,
 )
+
+
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_bg import CubeKind
+from topologiq.dzw.common.path import Path
 
 
 #################
@@ -310,6 +314,37 @@ def update_edge_paths(
         all_coords_in_path = get_taken_coords(winner_path_standard_pass.all_nodes_in_path)
         taken.extend(all_coords_in_path)
 
+        # TODO: update beams
+
+        # Realise the target node
+        target_cube = ang.realise_node(
+            node = tgt_id,
+            kind = CubeKind[winner_path_standard_pass.tgt_kind.upper()],
+            position = winner_path_standard_pass.tgt_coords
+        )
+
+        # Prepare the proposal
+        proposal = Path(
+            source_cube = ang.get_cube(src_id), target_cube = target_cube,
+            edge_type = ang.get_edge_type(src_id, tgt_id),
+            extra_cubes = [
+                (CubeKind[winner_path_standard_pass.all_nodes_in_path[idx][1].upper()],
+                 winner_path_standard_pass.all_nodes_in_path[idx][0])
+                for idx in range(0, len(winner_path_standard_pass.all_nodes_in_path), 2)
+            ],
+            proposed_pipes = [
+                EdgeType.HADAMARD if 'h' in winner_path_standard_pass.all_nodes_in_path[idx][1] else EdgeType.IDENTITY
+                for idx in range(1, len(winner_path_standard_pass.all_nodes_in_path), 2)
+            ]
+        )
+
+        # Update the ANG with the path realising the edge
+        ang.realise_edge(
+            source = src_id,
+            target = tgt_id,
+            proposal = proposal
+        )
+
     elif second_pass and winner_path_second_pass and edge_type_match:
         # Log as success
         edge_success = True
@@ -341,6 +376,30 @@ def update_edge_paths(
         # Add path to position to list of taken coordinates
         all_coords_in_path = get_taken_coords(winner_path_second_pass)
         taken.extend(all_coords_in_path)
+
+        # TODO: update the beams
+
+        # Prepare the proposed path
+        proposed_path = Path(
+            source_cube = ang.get_cube(src_id), target_cube = ang.get_cube(tgt_id),
+            edge_type = ang.get_edge_type(src_id, tgt_id),
+            extra_cubes = [
+                (CubeKind[winner_path_second_pass[idx][1].upper()],
+                 winner_path_second_pass[idx][0])
+                for idx in range(0, len(winner_path_second_pass), 2)
+            ],
+            proposed_pipes = [
+                EdgeType.HADAMARD if 'h' in winner_path_second_pass[idx][1] else EdgeType.IDENTITY
+                for idx in range(1, len(winner_path_second_pass), 2)
+            ]
+        )
+
+        # Update the ANG with the path realising the edge
+        ang.realise_edge(
+            source = src_id,
+            target = tgt_id,
+            proposal = proposed_path
+        )
 
     # Fill edge_paths with error if no paths available
     else:

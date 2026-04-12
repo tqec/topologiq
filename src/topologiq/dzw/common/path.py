@@ -1,9 +1,8 @@
-from topologiq.dzw.common.coordinates import Coordinates
+from topologiq.utils.classes import StandardCoord
 
+from topologiq.dzw.common.coordinates import Coordinates
 from topologiq.dzw.common.components_zx import EdgeType
 from topologiq.dzw.common.components_bg import CubeId, CubeKind
-
-from topologiq.dzw.common.cube_beams import CubeBeams
 
 from logging import getLogger
 console = getLogger(__name__)
@@ -12,17 +11,18 @@ class Path:
     PATH_LEN_HP = -1
     BEAMS_BROKEN_HP = -1
 
-    def __init__(self, source_cube: CubeId, target_cube: CubeId, edge_type: EdgeType, proposed_beams: CubeBeams,
-            proposed_cubes: list[tuple[CubeKind, Coordinates]], proposed_pipes: list[EdgeType]
+    def __init__(self,
+            source_cube: CubeId, target_cube: CubeId, edge_type: EdgeType,
+            extra_cubes: list[tuple[CubeKind, StandardCoord]],
+            proposed_pipes: list[EdgeType]
     ):
         self.__source_cube = source_cube
         self.__target_cube = target_cube
         self.__edge_type = edge_type
-        proposed_kind, proposed_position = proposed_cubes[-1]
+        proposed_kind, proposed_position = extra_cubes[-1]
         self.__target_kind = proposed_kind
         self.__target_position = proposed_position
-        self.__proposed_cube_beams = proposed_beams
-        self.__cubes = proposed_cubes
+        self.__cubes = extra_cubes
         self.__pipes = proposed_pipes
         self.__cube_ids = None
         self.__cube_beams = None
@@ -43,12 +43,6 @@ class Path:
     def get_target_position(self):
         return self.__target_position
 
-    def set_cube_ids(self, cube_ids: list[CubeId]):
-        self.__cube_ids = cube_ids
-
-    def get_cube_ids(self):
-        return self.__cube_ids
-
     def get_cubes(self):
         return self.__cubes
 
@@ -60,15 +54,6 @@ class Path:
 
     def get_cube_beams(self):
         return self.__cube_beams
-
-    def set_cube_beams(self, beams: CubeBeams):
-        self.__cube_beams = beams
-
-    def get_total_beams_interrupted(self):
-        return self.__total_beams_interrupted
-
-    def set_total_beams_interrupted(self, total_interrupted_beams: int):
-        self.__total_beams_interrupted = total_interrupted_beams
 
     def weight(self):
         return len(self.__pipes) * Path.PATH_LEN_HP + self.__total_beams_interrupted * Path.BEAMS_BROKEN_HP

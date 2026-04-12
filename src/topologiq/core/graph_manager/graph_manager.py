@@ -259,15 +259,15 @@ def graph_manager_bfs(
 
     # 2. Validity checks
     # Health check depating point
-    node, cube_kind = first_cube
-    if not validity_checks(simple_graph, (node, cube_kind)):
+    if not validity_checks(simple_graph, first_cube):
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
+    node, cube_kind = first_cube
     cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
     all_beams[cube] = check_exits(Spacetime.ORIGIN, cube_kind, [Spacetime.ORIGIN], [Spacetime.ORIGIN])
-    nx_g, taken = place_first_cube(nx_g, taken, (node, cube_kind))
+    nx_g, taken = place_first_cube(nx_g, taken, first_cube)
 
     # 4. Graph manager BFS
     # Group parameters for readability
