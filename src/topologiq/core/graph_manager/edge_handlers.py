@@ -17,6 +17,7 @@ from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, upd
 from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_zx import EdgeType
 from topologiq.utils.classes import (
     Colors,
     CubeBeams,
@@ -81,26 +82,24 @@ def handle_std_edge(
 
     # Get source cube data
     # TODO-ANG: replace with ang.get_cube_position(..), ang.get_cube_kind(..)
-    src_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
-    src_kind: str | None = nx_g.nodes[src_id].get("kind")
-    if src_coords is None or src_kind is None:
+    if not ang.is_node_realised(src_id):
         return nx_g, taken, edge_paths, False
-    src_block_info: StandardBlock = (src_coords, src_kind)
 
-    # Check position of target cube (should be None)
-    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
+    source_cube = ang.get_cube(src_id)
+    src_kind = ang.get_cube_kind(source_cube).name.lower()
+    src_coords = ang.get_cube_position(source_cube)
+    src_block_info: StandardBlock = (src_coords, src_kind)
 
     # Process targets that have yet to be placed in the 3D space
     edge_success = False
 
-    if nxt_neigh_coords is None:
-    # if not ang.is_node_realised(tgt_id):
+    if not ang.is_node_realised(tgt_id):
         # Get target information
         nxt_neigh_zx_type = ang.get_node_type(tgt_id).name
 
         # Get edge information
-        zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-        hdm: bool = True if zx_edge_type == "HADAMARD" else False
+        zx_edge_type = "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
+        hdm: bool = zx_edge_type == "HADAMARD"
 
         # Remove source coordinates from occupied coords
         taken_coords_c = taken[:]
@@ -284,18 +283,21 @@ def handle_cross_edge(
 
     # Get source and target data for current (src_id, tgt_id) pair
     # TODO-ANG: replace to use ang.get_cube_position(..)
-    u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
+    # u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
 
     # Process edge only if both src_id and tgt_id have already been placed in the 3D space
     # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
-    if u_coords is not None and v_coords is not None:
+    if ang.is_node_realised(src_id) and ang.is_node_realised(tgt_id):
         # Format adjustments to match existing operations
-        u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
-        v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
-        edge = tuple(sorted((src_id, tgt_id)))
+        source_cube = ang.get_cube(src_id)
+        target_cube = ang.get_cube(tgt_id)
+        src_coords = ang.get_cube_position( source_cube )
+        src_kind = ang.get_cube_kind(source_cube).name.lower()
+        tgt_coords = ang.get_cube_position( target_cube )
+        tgt_zx_type = ang.get_node_type(tgt_id).name
 
         # Call pathfinder on any graph edge that does not have an entry in edge_paths
-        if edge not in edge_paths:
+        if not ang.is_edge_realised(src_id, tgt_id): # edge not in edge_paths:
             critical_beams = _assemble_critical_beams(nx_g)
 
             # Check if edge is hadamard
@@ -304,16 +306,16 @@ def handle_cross_edge(
             hdm: bool = True if zx_edge_type == "HADAMARD" else False
 
             # Call pathfinder using optional parameters that flag second pass nature of operation
-            v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
+            tgt_kind: str = ang.get_cube_kind( ang.get_cube(tgt_id) ).name.lower()
 
-            if v_coords and v_kind:
+            if tgt_coords and tgt_kind:
                 # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
-                    (u_coords, u_kind),
-                    v_zx_type,
+                    (src_coords, src_kind),
+                    tgt_zx_type,
                     3,
                     taken[:],
-                    tgt_block_info=(v_coords, v_kind),
+                    tgt_block_info=(tgt_coords, tgt_kind),
                     hdm=hdm,
                     critical_beams=critical_beams,
                     src_tgt_ids=(src_id, tgt_id),
@@ -339,7 +341,7 @@ def handle_cross_edge(
                         None,
                         clean_paths[0] if clean_paths else None,
                         (src_id, tgt_id),
-                        (u_coords, u_kind),
+                        (src_coords, src_kind),
                         pathfinder_vis_data,
                         fig_data=fig_data,
                         **kwargs,

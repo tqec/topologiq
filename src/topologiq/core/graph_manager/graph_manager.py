@@ -247,7 +247,6 @@ def graph_manager_bfs(
     else:
         ang = AugmentedNxGraph.from_simple_graph(simple_graph)
 
-    ang.print_summary()
     nx_g = prep_3d_g(simple_graph)
 
     # First spider/cube
@@ -489,7 +488,7 @@ def do_bfs(
                     break
 
             # TODO-ANG: adapt this condition to use ang.is_edge_realised(..)
-            elif (src_id, tgt_id) not in edge_paths and (tgt_id, src_id) not in edge_paths:
+            elif not ang.is_edge_realised(src_id, tgt_id):
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
