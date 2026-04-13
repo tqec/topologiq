@@ -51,6 +51,7 @@ def run_random(pyzx_graph: BaseGraph | GraphS, fig_data: matplotlib.figure.Figur
                 simple_graph,
                 circuit_name,
                 fig_data=fig_data,
+                pyzx_graph=pyzx_graph,
                 **kwargs,
             )
 

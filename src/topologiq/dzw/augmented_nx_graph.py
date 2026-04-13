@@ -89,10 +89,57 @@ class AugmentedNxGraph(nx.Graph):
 
         # TODO: split any spider with more than 4 edges (cfr. graph_manager.py; prep_3d_g)
         # TODO: does the choice of how to split such spiders affect the minimal achievable volume ?
-        if self.number_of_nodes() > 0:
-            _, max_degree = max(self.degree, key=lambda entry: entry[1])
-            if max_degree > 4:
-                raise NotImplementedError("Enforcement of no-more-than-four-legs condition not implemented.")
+        self.enforce_nmtfl()
+
+    def enforce_nmtfl(self):
+        """Ensures that all spiders of a AugmentedNxGraph have at most four legs (i.e. No-More-Than-Four-Legs).
+            N.B. the provided graph is altered by this method to perform the enforcing.
+
+        Args:
+            self: An AugmentedNxGraph
+
+        Returns:
+            graph: An equivalent (under spider fusion) AugmentedNxGraph with every node having at most four edges.
+
+        """
+
+        # Process all zx-nodes with more than four zx-edges
+        for node in filter(lambda nd: self.degree[nd] > 4, self.nodes):
+            neighbors = self.neighbors(node)
+            degree = self.degree[node]
+            node_type = self.get_node_type(node)
+            node_qubit = self.get_qubit(node)
+            node_layer = self.get_node_layer(node)
+
+            remaining_neighbors = degree - 3
+            next(neighbors); next(neighbors); next(neighbors)
+            previous = node
+            while remaining_neighbors > 0:
+                extra_node_id = self.number_of_nodes()
+
+                self.add_node(extra_node_id)
+                extra_node = self.nodes[extra_node_id]
+                extra_node[AugmentedNxGraph.KEY_ZX_NODE_TYPE] = node_type
+                extra_node[AugmentedNxGraph.KEY_ZX_NODE_QUBIT] = node_qubit
+                extra_node[AugmentedNxGraph.KEY_ZX_NODE_LAYER] = node_layer
+                extra_node[AugmentedNxGraph.KEY_ZX_BG_CUBE] = None
+
+                # Make zx-edge between previous node of chain and new extra_node
+                self.add_edge(previous, extra_node_id)
+
+                neighbors_to_graft = remaining_neighbors if remaining_neighbors <= 3 else 2
+                for _ in range(neighbors_to_graft):
+                    neighbor = next(neighbors)
+                    edge_type = self.get_edge_type(extra_node_id, neighbor)
+
+                    self.remove_edge(node, neighbor)
+                    self.add_edge(extra_node_id, neighbor)
+                    extra_edge = self.edges[extra_node_id, neighbor]
+                    extra_edge[AugmentedNxGraph.KEY_ZX_EDGE_TYPE] = edge_type
+                    extra_edge[AugmentedNxGraph.KEY_ZX_BG_PATH] = []
+
+                remaining_neighbors -= neighbors_to_graft
+                previous = extra_node_id
 
     @staticmethod
     def from_pyzx_graph(zx_graph: zx.graph.base.BaseGraph):

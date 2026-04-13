@@ -18,10 +18,10 @@ Notes:
 import traceback
 from collections import deque
 from pathlib import Path
-from typing import cast
 
 import matplotlib.figure
 import networkx as nx
+import pyzx as zx
 
 from topologiq.core.graph_manager.beams import check_need_for_twins
 from topologiq.core.graph_manager.callers import call_logger
@@ -37,16 +37,17 @@ from topologiq.core.graph_manager.utils import (
     validity_checks,
 )
 from topologiq.core.pathfinder.symbolic import check_exits
-from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.components_bg import CubeKind
-from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
-from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
+from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord, CubeBeams
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import write_outputs
 from topologiq.vis.animation import create_animation
 from topologiq.vis.blockgraph import vis_3d
 from topologiq.vis.common import lattice_to_g
+
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
+from topologiq.dzw.common.components_bg import CubeId, CubeKind
+from topologiq.dzw.helpers.spacetime import Spacetime
 
 #########
 # PATHS #
@@ -64,6 +65,7 @@ def runner(
     circuit_name: str,
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: tuple[int | None, str | None] = (None, None),
+    pyzx_graph: zx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
     SimpleDictGraph,
@@ -130,6 +132,7 @@ def runner(
                 circuit_name=circuit_name,
                 fig_data=fig_data,
                 first_cube=first_cube,
+                pyzx_graph = pyzx_graph,
                 **kwargs,
             )
         except ValueError as e:
@@ -197,6 +200,7 @@ def graph_manager_bfs(
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: tuple[int | None, str | None] = (None, None),
+    pyzx_graph: zx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
     nx.Graph, #TODO-ANG: Replace this with AugmentedNxGraph
@@ -237,7 +241,12 @@ def graph_manager_bfs(
     zx_spiders_num, zx_edges_num = (len(simple_graph["nodes"]), len(simple_graph["edges"]))
     std_edges_processed, cross_edges_processed, num_edges_processed = (0, 0, 0)
 
-    ang: AugmentedNxGraph = AugmentedNxGraph.from_simple_graph(simple_graph)
+    ang: AugmentedNxGraph
+    if pyzx_graph:
+        ang = AugmentedNxGraph.from_pyzx_graph(pyzx_graph)
+    else:
+        ang = AugmentedNxGraph.from_simple_graph(simple_graph)
+
     ang.print_summary()
     nx_g = prep_3d_g(simple_graph)
 
@@ -251,7 +260,7 @@ def graph_manager_bfs(
 
     # BFS management
     queue, visited, taken, edge_paths, run_success = init_bfs(first_cube)
-    all_beams = dict()
+    all_beams: dict[CubeId, tuple[int, CubeBeams, CubeBeams]] = dict()
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
