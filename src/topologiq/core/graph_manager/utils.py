@@ -27,7 +27,7 @@ from topologiq.utils.classes import (
 
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 from topologiq.dzw.common.components_bg import CubeKind
-from topologiq.dzw.common.path import Path
+from topologiq.dzw.common.path import PathSpecification
 
 
 #################
@@ -57,7 +57,7 @@ def validity_checks(simple_graph: SimpleDictGraph, first_cube: StandardBlock) ->
         return False
 
     if first_kind not in ["zxz", "zzx", "xzz", "yyy", "xzx", "xxz", "zxx", "ooo"]:
-        print(Colors.RED + "Invalid first kind. Input graph might be malformed" + Colors.RESET)
+        print(Colors.RED + f"Invalid first kind. Input graph might be malformed {first_kind}" + Colors.RESET)
         return False
 
     return True
@@ -83,7 +83,7 @@ def prep_3d_g(simple_graph: SimpleDictGraph) -> nx.Graph:
     """
 
     # Prepare an empty NX graph
-    nx_g = nx.Graph()
+    nx_g: nx.Graph = nx.Graph()
 
     # Get the spiders and edges of incoming `simple_graph`
     nodes: list[tuple[int, str]] = simple_graph.get("nodes", [])
@@ -184,7 +184,7 @@ def enforce_max_four_legs_per_spider(nx_g: nx.Graph) -> nx.Graph:
 ############
 # BFS INIT #
 ############
-def init_bfs(first_cube) -> tuple[deque, set, list[StandardCoord], dict, bool]:
+def init_bfs(first_cube) -> tuple[deque, set, dict, bool]:
     """Initialise key BFS management objects.
 
     Args:
@@ -207,11 +207,10 @@ def init_bfs(first_cube) -> tuple[deque, set, list[StandardCoord], dict, bool]:
     visited: set = {first_id}
 
     # Init other trackers
-    taken: list[StandardCoord] = []
     edge_paths: dict = {}
     run_success = False
 
-    return queue, visited, taken, edge_paths, run_success
+    return queue, visited, edge_paths, run_success
 
 
 ##############
@@ -246,7 +245,6 @@ def update_edge_paths(
     edge_paths: dict,
     winner_path_standard_pass: PathBetweenNodes | None,
     winner_path_second_pass: list[StandardBlock] | None,
-    taken: list[StandardCoord],
     zx_edge_type: str,
     src_id: int,
     tgt_id: int,
@@ -259,7 +257,6 @@ def update_edge_paths(
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
         winner_path_standard_pass: A winner path chosen by the value function.
         winner_path_second_pass: A list of paths each containing the 3D cubes and pipes needed to connect source and target in the 3D space.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         zx_edge_type: The type of edge currently being processed, i.e., SIMPLE or HADAMARD.
         src_id: The ID of the current source cube.
         tgt_id: The ID of the potential target cube.
@@ -268,7 +265,6 @@ def update_edge_paths(
 
     Returns:
         nx_g: An updated version of the incoming nx_graph.
-        taken: An updated version of the list of taken coordinates.
         edge_paths: An updated version of the `edge_paths` object.
         edge_success: Whether the edge was succesfully written to `edge_paths` or not.
 
@@ -314,7 +310,6 @@ def update_edge_paths(
 
         # Add path to position to list of graphs' occupied coordinates
         all_coords_in_path = get_taken_coords(winner_path_standard_pass.all_nodes_in_path)
-        taken.extend(all_coords_in_path)
 
         # TODO: update beams
 
@@ -326,7 +321,7 @@ def update_edge_paths(
         )
 
         # Prepare the proposal
-        proposal = Path(
+        proposal = PathSpecification(
             source_cube = ang.get_cube(src_id), target_cube = target_cube,
             edge_type = ang.get_edge_type(src_id, tgt_id),
             extra_cubes = [
@@ -377,12 +372,11 @@ def update_edge_paths(
 
         # Add path to position to list of taken coordinates
         all_coords_in_path = get_taken_coords(winner_path_second_pass)
-        taken.extend(all_coords_in_path)
 
         # TODO: update the beams
 
         # Prepare the proposed path
-        proposed_path = Path(
+        proposed_path = PathSpecification(
             source_cube = ang.get_cube(src_id), target_cube = ang.get_cube(tgt_id),
             edge_type = ang.get_edge_type(src_id, tgt_id),
             extra_cubes = [
@@ -414,7 +408,7 @@ def update_edge_paths(
 
     # Prune beams before moving to next edge
     nx_g = prune_beams(nx_g, ang.occupied)
-    return nx_g, taken, edge_paths, edge_success
+    return nx_g, edge_paths, edge_success
 
 
 def prune_beams(nx_g: nx.Graph, taken: Iterable[StandardCoord]) -> nx.Graph:

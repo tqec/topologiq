@@ -64,7 +64,7 @@ def runner(
     simple_graph: SimpleDictGraph,
     circuit_name: str,
     fig_data: matplotlib.figure.Figure | None = None,
-    first_cube: tuple[int | None, str | None] = (None, None),
+    first_cube: tuple[int, str] | None = None,
     pyzx_graph: zx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
@@ -199,7 +199,7 @@ def graph_manager_bfs(
     simple_graph: SimpleDictGraph,
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
-    first_cube: tuple[int | None, str | None] = (None, None),
+    first_cube: tuple[int, str] | None = None,
     pyzx_graph: zx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
@@ -247,11 +247,11 @@ def graph_manager_bfs(
     else:
         ang = AugmentedNxGraph.from_simple_graph(simple_graph)
 
-    nx_g = prep_3d_g(simple_graph)
+    print(f"First cube : {first_cube}")
 
     # First spider/cube
     nx_g = prep_3d_g(simple_graph)
-    first_cube = get_first_cube(
+    root_cube = get_first_cube(
         ang,
         first_cube=first_cube,
         first_id_strategy=kwargs["first_id_strategy"],
@@ -259,7 +259,7 @@ def graph_manager_bfs(
     )
 
     # BFS management
-    queue, visited, taken, edge_paths, run_success = init_bfs(first_cube)
+    queue, visited, edge_paths, run_success = init_bfs(root_cube)
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
@@ -267,14 +267,15 @@ def graph_manager_bfs(
 
     # 2. Validity checks
     # Health check depating point
-    if not validity_checks(simple_graph, first_cube):
+    first_cube_nx = ( (0,0,0), root_cube[1] )
+    if not validity_checks(simple_graph, first_cube_nx):
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    node, cube_kind = first_cube
+    node, cube_kind = root_cube
     cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
-    nx_g, taken = place_first_cube(nx_g, taken, first_cube)
+    nx_g = place_first_cube(nx_g, ang, root_cube)
 
     # 4. Graph manager BFS
     # Group parameters for readability
@@ -284,12 +285,11 @@ def graph_manager_bfs(
 
     try:
         # TODO-ANG: Replace nx_g with ang. Drop taken, edge_paths
-        edge_paths, taken, run_success, trackers, _ = do_bfs(
+        edge_paths, run_success, trackers, _ = do_bfs(
             ang,
             nx_g,
             queue,
             visited,
-            taken,
             circuit_name,
             edge_paths,
             trackers,
@@ -301,9 +301,6 @@ def graph_manager_bfs(
         duration_trackers, edge_trackers = trackers
         t_std_edges, t_cross_edges = duration_trackers
         std_edges_processed, num_edges_processed, cross_edges_processed = edge_trackers
-
-        # Taken is used extensively, so prune it again
-        taken = list(set(taken))
 
         # Assemble final lattice if run is successfull
         if run_success:
@@ -340,7 +337,6 @@ def do_bfs(
     nx_g: nx.Graph, # TODO-ANG: replace with AugmentedNxGraph
     queue: deque,
     visited: set,
-    taken: list[StandardCoord], # TODO-ANG: drop
     circuit_name: str,
     edge_paths: dict, # TODO-ANG: drop
     trackers: list[any],
@@ -354,7 +350,6 @@ def do_bfs(
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
         queue: The main BFS queue.
         visited: The main BFS set of visited sites.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
         circuit_name: The name of the ZX circuit.
         edge_paths: An edge-by-edge/block-by-block summary of the space-time diagram Topologiq builds.
         trackers: A list containing several trackers used to track Topologiq statistics.
@@ -403,17 +398,13 @@ def do_bfs(
                 queue.append(tgt_id)
                 visited.add(tgt_id)
 
-                # Ensure taken has unique entries on each run
-                taken = list(set(taken)) # TODO-ANG: drop
-
                 # Try to place blocks as close to one another as as possible
                 step, max_step = (3, 15)
                 while step <= max_step:
-                    nx_g, taken, edge_paths, edge_success = handle_std_edge(
+                    nx_g, edge_paths, edge_success = handle_std_edge(
                         src_id,
                         tgt_id,
                         nx_g,       # TODO-ANG: replace with ang
-                        taken,      # TODO-ANG: drop
                         edge_paths, # TODO-ANG: drop
                         ang,
                         circuit_name=circuit_name,
@@ -492,11 +483,10 @@ def do_bfs(
 
                 # Trigger connection for previously placed cubes
                 # TODO-ANG: adapt this to use ang, drop taken & edge_paths
-                nx_g, taken, edge_paths, edge_success = handle_cross_edge(
+                nx_g, edge_paths, edge_success = handle_cross_edge(
                     src_id,
                     tgt_id,
                     nx_g,
-                    taken,
                     edge_paths,
                     ang,
                     circuit_name=circuit_name,
@@ -561,4 +551,4 @@ def do_bfs(
     edge_trackers = std_edges_processed, num_edges_processed, cross_edges_processed
     trackers = duration_trackers, edge_trackers
 
-    return edge_paths, taken, run_success, trackers, visited
+    return edge_paths, run_success, trackers, visited

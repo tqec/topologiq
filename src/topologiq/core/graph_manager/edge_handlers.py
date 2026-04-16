@@ -35,7 +35,6 @@ def handle_std_edge(
     src_id: int,
     tgt_id: int,
     nx_g: nx.Graph, # TODO-ANG: replace with ang
-    taken: list[StandardCoord], # TODO-ANG: drop
     edge_paths: dict, # TODO-ANG: drop
     ang: AugmentedNxGraph,
     circuit_name: str = "circuit",
@@ -44,7 +43,7 @@ def handle_std_edge(
     twin_mode: bool = False,
     ids_to_twin: list[int] | None = None,
     **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
+) -> tuple[nx.Graph, dict, bool]:
     """Position target cube in the 3D space as part of the primary BFS flow.
 
     This function calls the inner pathfinder algorithm on any arbitrary combination of an already-placed
@@ -68,7 +67,7 @@ def handle_std_edge(
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
     Returns:
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        nx_g: Updated nx_g
         edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
         (bool): A boolean flag to signal success (True if placement was succesful).
 
@@ -81,17 +80,13 @@ def handle_std_edge(
     nx_g = prune_beams(nx_g, ang.occupied)
 
     # Get source cube data
-    # TODO-ANG: replace with ang.get_cube_position(..), ang.get_cube_kind(..)
     if not ang.is_node_realised(src_id):
-        return nx_g, taken, edge_paths, False
+        return nx_g, edge_paths, False
 
     source_cube = ang.get_cube(src_id)
     src_kind = ang.get_cube_kind(source_cube).name.lower()
     src_coords = ang.get_cube_position(source_cube)
     src_block_info: StandardBlock = (src_coords, src_kind)
-
-    # Check position of target cube (should be None)
-    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
 
     # Process targets that have yet to be placed in the 3D space
     edge_success = False
@@ -105,7 +100,7 @@ def handle_std_edge(
         hdm: bool = zx_edge_type == "HADAMARD"
 
         # Remove source coordinates from occupied coords
-        taken_coords_c = list(ang.occupied) #.copy() #taken[:]
+        taken_coords_c = list(ang.occupied)
         if src_coords in taken_coords_c:
             taken_coords_c.remove(src_coords)
 
@@ -214,8 +209,8 @@ def handle_std_edge(
         # Write to edge_paths if winner is found
         if winner_path:
             # TODO-ANG: adapt to use ang, drop taken, edge_paths
-            nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                ang, nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
+            nx_g, edge_paths, edge_success = update_edge_paths(
+                ang, nx_g, edge_paths, winner_path, clean_paths, zx_edge_type, src_id, tgt_id
             )
 
         # Update user
@@ -235,7 +230,7 @@ def handle_std_edge(
             )
 
     nx_g = prune_beams(nx_g, ang.occupied)
-    return nx_g, taken, edge_paths, edge_success
+    return nx_g, edge_paths, edge_success
 
 
 ####################################################
@@ -245,13 +240,12 @@ def handle_cross_edge(
     src_id: int,
     tgt_id: int,
     nx_g: nx.Graph, # TODO-ANG: replace with ang
-    taken: list[StandardCoord], # TODO-ANG: drop
     edge_paths: dict, # TODO-ANG: drop
     ang: AugmentedNxGraph,
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
     **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
+) -> tuple[nx.Graph, dict, bool]:
     """Search for a path between two cubes that have already been placed in 3D space.
 
     This function calls the inner pathfinder algorithm to search for paths between cubes that have
@@ -281,8 +275,7 @@ def handle_cross_edge(
 
     # Prune taken and beams
     edge_success = False
-    taken = list(set(taken)) # TODO-ANG: drop
-    nx_g = prune_beams(nx_g, taken) # TODO-ANG: adapt to use ang
+    nx_g = prune_beams(nx_g, ang.occupied)
 
     # Process edge only if both src_id and tgt_id have already been placed in the 3D space
     # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
@@ -312,8 +305,8 @@ def handle_cross_edge(
                     (src_coords, src_kind),
                     tgt_zx_type,
                     3,
-                    taken[:],
-                    tgt_block_info=(tgt_coords, tgt_kind),
+                    list(ang.occupied),
+                    tgt_block_info = (tgt_coords, tgt_kind),
                     hdm=hdm,
                     critical_beams=critical_beams,
                     src_tgt_ids=(src_id, tgt_id),
@@ -347,13 +340,12 @@ def handle_cross_edge(
 
                 # Write to edge_paths if an edge is found
                 # TODO-ANG: adapt this to use ang
-                nx_g, taken, edge_paths, edge_success = update_edge_paths(
+                nx_g, edge_paths, edge_success = update_edge_paths(
                     ang,
                     nx_g,
                     edge_paths,
                     None,
                     clean_paths[0] if clean_paths else None,
-                    taken,
                     zx_edge_type,
                     src_id,
                     tgt_id,
@@ -375,13 +367,13 @@ def handle_cross_edge(
                     )
 
     # TODO-ANG: adapt to use ang
-    nx_g = prune_beams(nx_g, taken)
-    return nx_g, taken, edge_paths, edge_success
+    nx_g = prune_beams(nx_g, ang.occupied)
+    return nx_g, edge_paths, edge_success
 
 
 def _assemble_critical_beams(
     nx_g: nx.Graph,
-) -> dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]]:
+) -> dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]]:
     """Assemble a dictionary of beams and related information.
 
     Args:
@@ -476,11 +468,10 @@ def add_twin(
 
         step, max_step = (6, 15)
         while step <= max_step:
-            nx_g, taken, edge_paths, edge_success = handle_std_edge(
+            nx_g, edge_paths, edge_success = handle_std_edge(
                 priority_id,
                 twin_id,
                 nx_g,
-                taken,
                 edge_paths,
                 ang,
                 circuit_name=circuit_name,

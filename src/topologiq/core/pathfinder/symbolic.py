@@ -47,7 +47,7 @@ def cube_match(src_c: StandardCoord, src_k: str, tgt_pos: StandardCoord, tgt_k: 
 def check_exits(
     src_c: StandardCoord,
     src_k: str | None,
-    taken: list[StandardCoord],
+    taken: set[StandardCoord],
     coords_in_path: list[StandardCoord],
 ) -> tuple[int, CubeBeams, CubeBeams]:
     """Find the number of unobstructed exits for an arbitrary block.
@@ -167,8 +167,8 @@ def check_is_exit(src_c: StandardCoord, src_k: str | None, tgt_c: StandardCoord)
 def check_unobstructed(
     src_c: StandardCoord,
     tgt_c: StandardCoord,
-    taken: list[StandardCoord],
-) -> tuple[bool, SingleBeam]:
+    taken: set[StandardCoord],
+) -> tuple[bool, SingleBeam, SingleBeam]:
     """Check if a face is unobstructed.
 
     This function should typically be called after verifying a face is exit.

@@ -107,7 +107,7 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
 
 def get_first_cube(
     ang: AugmentedNxGraph, # TODO-ANG: replace with ang
-    first_cube: tuple[int | None, str | None] = (None, None),
+    first_cube: tuple[int, str] | None = None,
     first_id_strategy: str = "centrality_random",
     random_seed: int | None = None,
 ) -> tuple[int, str]:
@@ -128,15 +128,13 @@ def get_first_cube(
 
     """
 
-    first_id, first_kind = first_cube
+    if first_cube:
+        first_id, first_kind = first_cube
 
-    if (not first_id or not first_kind) and random_seed:
-        random.seed(random_seed)
-
-    if not first_id:
+        if (not first_id or not first_kind) and random_seed:
+            random.seed(random_seed)
+    else:
         first_id = get_first_id(ang, first_id_strategy=first_id_strategy)
-
-    if not first_kind:
         deterministic = False if first_id_strategy == "centrality_random" else True
         tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id))
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
@@ -147,11 +145,11 @@ def get_first_cube(
 
 def place_first_cube(
     nx_g: nx.Graph, # TODO-ANG: replace with ang
-    taken: list[StandardCoord],
-    first_cube: StandardBlock,
+    ang: AugmentedNxGraph,
+    first_cube: tuple[int, str],
     log_stats_id: int | None = None,
     debug: int = 0,
-) -> tuple[nx.Graph, list[StandardCoord]]:
+) -> nx.Graph:
     """Place the first cube in the 3D space.
 
     Args:
@@ -167,12 +165,9 @@ def place_first_cube(
 
     """
 
-    # Update taken
-    taken.append((0, 0, 0))
-
     # Get beams
     first_id, first_kind = first_cube
-    _, src_beams, src_beams_short = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)])
+    _, src_beams, src_beams_short = check_exits((0, 0, 0), first_kind, ang.occupied, [(0, 0, 0)])
 
     # Write info to nx_g
     nx_g.nodes[first_id]["coords"] = (0, 0, 0)
@@ -183,4 +178,4 @@ def place_first_cube(
     if log_stats_id or debug > 0:
         print(f"First cube ID: {first_id} ({first_kind}).")
 
-    return nx_g, taken
+    return nx_g

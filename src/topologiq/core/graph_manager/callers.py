@@ -30,7 +30,7 @@ def call_pathfinder(
     tgt_zx_type: str,
     init_step: int,
     taken: list[StandardCoord], # TODO-ANG: drop this
-    tgt_block_info: StandardCoord | None = None,
+    tgt_block_info: StandardBlock | None = None,
     hdm: bool = False, # TODO-ANG: drop this
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,

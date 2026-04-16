@@ -7,7 +7,7 @@ from topologiq.dzw.common.components_bg import CubeId, CubeKind
 from logging import getLogger
 console = getLogger(__name__)
 
-class Path:
+class PathSpecification:
     PATH_LEN_HP = -1
     BEAMS_BROKEN_HP = -1
 
@@ -56,4 +56,4 @@ class Path:
         return self.__cube_beams
 
     def weight(self):
-        return len(self.__pipes) * Path.PATH_LEN_HP + self.__total_beams_interrupted * Path.BEAMS_BROKEN_HP
+        return len(self.__pipes) * PathSpecification.PATH_LEN_HP + self.__total_beams_interrupted * PathSpecification.BEAMS_BROKEN_HP

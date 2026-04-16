@@ -14,7 +14,7 @@ from topologiq.dzw.helpers.blockgraph import BlockGraphHelper
 
 from topologiq.dzw.common.components_zx import NodeId, NodeType, EdgeId, EdgeType
 from topologiq.dzw.common.components_bg import CubeId, CubeKind
-from topologiq.dzw.common.path import Path
+from topologiq.dzw.common.path import PathSpecification
 
 from logging import getLogger
 
@@ -348,7 +348,7 @@ class AugmentedNxGraph(nx.Graph):
     def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
         return self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_BG_PATH] is not None
 
-    def realise_edge(self, source: NodeId, target: NodeId, proposal: Path):
+    def realise_edge(self, source: NodeId, target: NodeId, proposal: PathSpecification):
         if not self.is_node_realised(source):
             raise Exception(f"{source} is not placed; cannot connect with a path.")
 
@@ -463,7 +463,7 @@ class AugmentedNxGraph(nx.Graph):
         self.__bg_graph.add_edge(source_cube, target_cube)
         self.__bg_graph.get_edge_data(source_cube, target_cube)[AugmentedNxGraph.KEY_BG_PIPE_TYPE] = pipe_type
 
-    def is_path_valid(self, path: Path, edge_type: EdgeType) -> bool:
+    def is_path_valid(self, path: PathSpecification, edge_type: EdgeType) -> bool:
         is_hadamard_path = False
 
         source_cube = path.get_source_cube()
