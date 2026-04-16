@@ -7,6 +7,7 @@ from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.common.components_zx import NodeType
 
 CubeId = int
+PipeId = tuple[CubeId, CubeId]
 
 class CubeKind(Enum):
     OOO = 0
