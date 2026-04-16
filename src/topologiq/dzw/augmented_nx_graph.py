@@ -711,7 +711,7 @@ class AugmentedNxGraph(nx.Graph):
             file.write(f"BLOCKGRAPH 0.1.0;\n")
 
             # Store cube information
-            file.write("CUBES: index;x;y;z;kind;label;\n")
+            file.write("\nCUBES: index;x;y;z;kind;label;\n")
             file.writelines(
                 [
                     f"{cube};{';'.join(map(str, iter(self.get_cube_position(cube))))};{self.get_cube_kind(cube).name.lower()};{self.__format_label(cube)};\n"
@@ -720,7 +720,7 @@ class AugmentedNxGraph(nx.Graph):
             )
 
             # Store pipe information
-            file.write("PIPES: src;tgt;kind;\n")
+            file.write("\nPIPES: src;tgt;kind;\n")
             file.writelines(
                 [
                     f"{src};{tgt};{self.__infer_pipe_kind(src, tgt)};\n"
