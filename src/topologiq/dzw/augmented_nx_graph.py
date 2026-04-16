@@ -7,6 +7,7 @@ import numpy as np
 import pyzx as zx
 import networkx as nx
 
+from topologiq.dzw.common.coordinates import Coordinates
 from topologiq.utils.classes import StandardCoord
 
 from topologiq.dzw.helpers.spacetime import Spacetime
@@ -108,7 +109,7 @@ class AugmentedNxGraph(nx.Graph):
             neighbors = self.neighbors(node)
             degree = self.degree[node]
             node_type = self.get_node_type(node)
-            node_qubit = self.get_qubit(node)
+            node_qubit = self.get_node_qubit(node)
             node_layer = self.get_node_layer(node)
 
             remaining_neighbors = degree - 3
@@ -190,11 +191,14 @@ class AugmentedNxGraph(nx.Graph):
     def get_qubits(self):
         return self.__zx_qubits.keys()
 
-    def get_qubit(self, node) -> QubitId:
+    def get_node_qubit(self, node) -> QubitId:
         return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT]
 
     def get_nodes(self):
         return self.nodes()
+
+    def get_depth(self):
+        return len(self.__zx_layers)
 
     def get_layers(self):
         return self.__zx_layers.keys()
@@ -573,7 +577,7 @@ class AugmentedNxGraph(nx.Graph):
             console.info(f"Layer {layer}  : {self.get_layer(layer)}")
 
         for qubit in self.get_qubits():
-            nodes = filter(lambda nd: qubit == self.get_qubit(nd), self.nodes)
+            nodes = filter(lambda nd: qubit == self.get_node_qubit(nd), self.nodes)
             console.info(f"Qubit {qubit}  : {list(nodes)}")
 
     def print_summary(self):
@@ -593,7 +597,7 @@ class AugmentedNxGraph(nx.Graph):
             print(f"Layer {layer}  : {self.get_layer(layer)}")
 
         for qubit in self.get_qubits():
-            nodes = filter(lambda nd: qubit == self.get_qubit(nd), self.nodes)
+            nodes = filter(lambda nd: qubit == self.get_node_qubit(nd), self.nodes)
             print(f"Qubit {qubit}  : {list(nodes)}")
 
     @staticmethod
@@ -719,59 +723,110 @@ class AugmentedNxGraph(nx.Graph):
     def __scaled_position(position: tuple[int,int,int]) -> str:
         return '(' + ','.join(str(int(p / 3.0)) for p in position) + ')'
 
-    def into_file(self, filepath: str):
+    def __infer_pipe_kind(self, src: CubeId, tgt: CubeId) -> str:
+        # cellcolors are for faces (+X, -X, +Y, -Y, +Z, -Z)
+        colors = ""
+        src_kind = self.get_cube_kind(src)
+        tgt_kind = self.get_cube_kind(tgt)
+        src_position = Coordinates.from_tuple(self.get_cube_position(src))
+        tgt_position = Coordinates.from_tuple(self.get_cube_position(tgt))
+        step_taken = tgt_position - src_position
+        distances = step_taken.as_tuple()
+        for c in range(3):
+            if distances[c] == 0 and (
+                    src_kind not in [CubeKind.OOO, CubeKind.YYY] or tgt_kind not in [CubeKind.OOO, CubeKind.YYY]):
+                color = src_kind.name[c] if src_kind not in [CubeKind.OOO, CubeKind.YYY] else tgt_kind.name[c]
+            else:
+                color = 'o'
+            colors += color
+
+        if self.get_pipe_type(src, tgt) == EdgeType.HADAMARD:
+            colors += 'h'
+
+        return colors.lower()
+
+    def __format_label(self, cube: CubeId):
+        label = ""
+        if self.get_cube_kind(cube) == CubeKind.OOO:
+            node = self.get_node(cube)
+            qubit = self.get_node_qubit(node)
+            layer = self.get_node_layer(node)
+            if layer == 0:
+                label = f"in_{qubit}"
+            elif layer == self.get_depth() - 1:
+                label = f"out_{qubit}"
+        return label
+
+    def into_file(self, filepath: str, include_zx_graph: bool = False):
         with (open(filepath, 'w') as file):
-            # Dump zx-nodes
-            file.write(f"ZX-NODES:\n")
-            for node_type in [ NodeType.O, NodeType.X, NodeType.Y, NodeType.Z ]:
-                content = map(str, filter(lambda nd: self.get_node_type(nd) == node_type, self.get_nodes()))
-                file.write(f">{node_type}: {" ".join(content)}\n")
-            # Dump zx-edges
-            file.write(f"ZX-EDGES:\n")
-            for edge_type in [ EdgeType.IDENTITY, EdgeType.HADAMARD ]:
-                content = map(
-                    lambda edge: str(edge[0]) + '-' + str(edge[1]),
-                    filter(lambda ed: self.get_edge_type(*ed) == edge_type, self.get_edges())
-                )
-                file.write(f">{edge_type.name}: {" ".join(content)}\n")
-            # Dump zx-qubits
-            file.write(f"ZX-QUBITS: {len(self.get_qubits())}\n")
-            for qubit in self.get_qubits():
-                content = map(str, filter(lambda nd: self.get_qubit(nd) == qubit, self.get_nodes()))
-                file.write(f">{qubit}: {" ".join(content)}\n")
-            # Dump zx-layers
-            file.write(f"ZX-LAYERS: {len(self.get_layers())}\n")
-            for layer in self.get_layers():
-                content = map(str, filter(lambda nd: self.get_node_layer(nd) == layer, self.get_nodes()))
-                file.write(f">{layer}: {" ".join(content)}\n")
-            # Dump bg-cubes
-            file.write(f"BG-CUBES:\n")
-            for cube_kind in [ CubeKind.OOO, CubeKind.XZZ, CubeKind.ZXZ, CubeKind.ZZX, CubeKind.ZXX, CubeKind.XZX, CubeKind.XXZ, CubeKind.YYY ]:
-                content = map(
-                    lambda cb : str(cb) + '@' + AugmentedNxGraph.__scaled_position(self.get_cube_position(cb)),
-                    filter(lambda cb: self.get_cube_kind(cb) == cube_kind, self.get_cubes())
-                )
-                file.write(f">{cube_kind.name}: {" ".join(content)}\n")
-            # Dump bg-pipes
-            file.write(f"BG-PIPES:\n")
-            for pipe_kind in [ EdgeType.IDENTITY, EdgeType.HADAMARD ]:
-                content = map(
-                    lambda edge: str(edge[0]) + '-' + str(edge[1]),
-                    filter(lambda pp: self.get_pipe_type(*pp) == pipe_kind, self.get_pipes())
-                )
-                file.write(f">{pipe_kind.name}: {" ".join(content)}\n")
-            # Dump zx-nodes-bg-cubes
-            zx_nodes_bg_cubes = []
-            for node in self.get_nodes():
-                zx_nodes_bg_cubes.append(str(node) + ':' + str(self.get_cube(node)))
-            # content = map(lambda nd: str(nd) + ':' + str(self.get_realising_cubes(nd)), self.get_nodes())
-            file.write(f"ZX-NODES-BG-CUBES:\n> {" ".join(zx_nodes_bg_cubes)}\n")
-            # Dump zx-edges-bg-pipes
-            content = map(
-                lambda ed: '>' + str(ed[0]) + '-' + str(ed[1]) + ": " + " ".join(map(lambda pp: str(pp[0]) + '-' + str(pp[1]), self.get_edge_realisation(*ed))),
-                self.get_edges()
+            file.write(f"BLOCKGRAPH 0.1.0;\n")
+
+            # Store cube information
+            file.write("\nCUBES: index;x;y;z;kind;label;\n")
+            file.writelines(
+                [
+                    f"{cube};{';'.join(map(str, iter(self.get_cube_position(cube))))};{self.get_cube_kind(cube).name.lower()};{self.__format_label(cube)};\n"
+                    for cube in self.get_cubes()
+                ]
             )
-            file.write(f"ZX-EDGES-BG-PIPES:\n{"\n".join(content)}")
+
+            # Store pipe information
+            file.write("\nPIPES: src;tgt;kind;\n")
+            file.writelines(
+                [
+                    f"{src};{tgt};{self.__infer_pipe_kind(src, tgt)};\n"
+                    for src, tgt in self.get_pipes()
+                ]
+            )
+
+            if include_zx_graph:
+                # Store node information
+                file.write("\nNODES: index;type;qubit;layer;\n")
+                file.writelines(
+                    [
+                        f"{node};{self.get_node_type(node)};{self.get_node_qubit(node)};{self.get_node_layer(node)};\n"
+                        for node in self.nodes
+                    ]
+                )
+
+                # Store edge information
+                file.write("\nEDGES: src;tgt;type;\n")
+                file.writelines(
+                    [
+                        f"{src};{tgt};{self.get_edge_type(src, tgt)};\n"
+                        for src, tgt in self.edges
+                    ]
+                )
+
+                # Store node-cube correspondence
+                file.write("\nNODES-CUBES: node_id;cube_id;\n")
+                file.writelines(
+                    [
+                        f"{node};{self.get_cube(node)}\n"
+                        for node in self.nodes
+                    ]
+                )
+
+                # Store edge-pipes correspondence
+                file.write("\nEDGES-PIPES: edge;pipes;\n")
+                file.writelines(
+                    [
+                        f"{edge};{self.get_edge_realisation(*edge)}\n"
+                        for edge in self.edges
+                    ]
+                )
+            #     # Dump zx-nodes-bg-cubes
+            #     zx_nodes_bg_cubes = []
+            #     for node in self.get_nodes():
+            #         zx_nodes_bg_cubes.append(str(node) + ':' + str(self.get_cube(node)))
+            #     # content = map(lambda nd: str(nd) + ':' + str(self.get_realising_cubes(nd)), self.get_nodes())
+            #     file.write(f"ZX-NODES-BG-CUBES:\n> {" ".join(zx_nodes_bg_cubes)}\n")
+            #     # Dump zx-edges-bg-pipes
+            #     content = map(
+            #         lambda ed: '>' + str(ed[0]) + '-' + str(ed[1]) + ": " + " ".join(map(lambda pp: str(pp[0]) + '-' + str(pp[1]), self.get_edge_realisation(*ed))),
+            #         self.get_edges()
+            #     )
+            #     file.write(f"ZX-EDGES-BG-PIPES:\n{"\n".join(content)}")
 
     def __identify_cube_at_position(self, position: StandardCoord) -> int:
         for cube in self.get_cubes():
