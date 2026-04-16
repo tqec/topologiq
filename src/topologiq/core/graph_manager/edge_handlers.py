@@ -11,17 +11,17 @@ from typing import cast
 import matplotlib
 import networkx as nx
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.graph_manager.beams import check_path_to_beam_clashes, check_tgt_beam_clashes
 from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
 from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
 from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.core.paths import PathBetweenNodes
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 from topologiq.dzw.common.components_zx import EdgeType
 from topologiq.utils.classes import (
     Colors,
-    CubeBeams,
-    PathBetweenNodes,
     StandardBlock,
     StandardCoord,
 )
@@ -89,6 +89,9 @@ def handle_std_edge(
     src_kind = ang.get_cube_kind(source_cube).name.lower()
     src_coords = ang.get_cube_position(source_cube)
     src_block_info: StandardBlock = (src_coords, src_kind)
+
+    # Check position of target cube (should be None)
+    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
 
     # Process targets that have yet to be placed in the 3D space
     edge_success = False
@@ -303,7 +306,7 @@ def handle_cross_edge(
             # Call pathfinder using optional parameters that flag second pass nature of operation
             tgt_kind: str = ang.get_cube_kind( ang.get_cube(tgt_id) ).name.lower()
 
-            if tgt_coords and tgt_kind:
+            if ang.is_node_realised(tgt_id):
                 # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
                     (src_coords, src_kind),

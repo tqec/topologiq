@@ -83,7 +83,7 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
     elif first_id_strategy == "centrality_random":
         # Loose build a list of central spiders
         max_degree = -1
-        central_nodes = []
+        central_nodes: list[int] = []
         node_degrees = ang.degree
 
         if isinstance(node_degrees, int):
@@ -148,7 +148,7 @@ def get_first_cube(
 def place_first_cube(
     nx_g: nx.Graph, # TODO-ANG: replace with ang
     taken: list[StandardCoord],
-    first_cube: tuple[int, str],
+    first_cube: StandardBlock,
     log_stats_id: int | None = None,
     debug: int = 0,
 ) -> tuple[nx.Graph, list[StandardCoord]]:

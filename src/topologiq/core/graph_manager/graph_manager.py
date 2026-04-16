@@ -18,6 +18,7 @@ Notes:
 import traceback
 from collections import deque
 from pathlib import Path
+from typing import cast
 
 import matplotlib.figure
 import networkx as nx
@@ -36,9 +37,8 @@ from topologiq.core.graph_manager.utils import (
     rm_temp_files,
     validity_checks,
 )
-from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
-from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord, CubeBeams
+from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import write_outputs
 from topologiq.vis.animation import create_animation
@@ -250,6 +250,7 @@ def graph_manager_bfs(
     nx_g = prep_3d_g(simple_graph)
 
     # First spider/cube
+    nx_g = prep_3d_g(simple_graph)
     first_cube = get_first_cube(
         ang,
         first_cube=first_cube,
@@ -259,7 +260,6 @@ def graph_manager_bfs(
 
     # BFS management
     queue, visited, taken, edge_paths, run_success = init_bfs(first_cube)
-    all_beams: dict[CubeId, tuple[int, CubeBeams, CubeBeams]] = dict()
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
@@ -274,7 +274,6 @@ def graph_manager_bfs(
     # TODO-ANG: replace this with ang.place_cube(..)
     node, cube_kind = first_cube
     cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
-    all_beams[cube] = check_exits(Spacetime.ORIGIN, cube_kind, [Spacetime.ORIGIN], [Spacetime.ORIGIN])
     nx_g, taken = place_first_cube(nx_g, taken, first_cube)
 
     # 4. Graph manager BFS
@@ -392,7 +391,6 @@ def do_bfs(
 
         # Get first cube from queue
         src_id: int = queue.popleft()
-        print(f"> src_id: {src_id}")
 
         # Iterate over neighbours of current source
         for tgt_id in ang.get_node_neighbours(src_id):

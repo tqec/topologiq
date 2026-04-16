@@ -9,15 +9,16 @@ import random
 import shutil
 from collections import deque
 from typing import Iterable
+from pathlib import Path
 
 import networkx as nx
 
 from topologiq.core.pathfinder.spatial import get_taken_coords
+from topologiq.core.paths import PathBetweenNodes
 from topologiq.dzw.common.components_zx import EdgeType
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
-    PathBetweenNodes,
     SimpleDictGraph,
     StandardBlock,
     StandardCoord,
@@ -32,7 +33,7 @@ from topologiq.dzw.common.path import Path
 #################
 # HEALTH CHECKS #
 #################
-def validity_checks(simple_graph: SimpleDictGraph, first_cube: tuple[int, str]) -> bool:
+def validity_checks(simple_graph: SimpleDictGraph, first_cube: StandardBlock) -> bool:
     """Check validity of key non-optional BFS parameters.
 
     Args:

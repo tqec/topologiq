@@ -8,9 +8,11 @@ Usage:
 import networkx as nx
 import numpy as np
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.graph_manager.utils import get_node_degree
-from topologiq.core.pathfinder.utils import get_manhattan
-from topologiq.utils.classes import CubeBeams, StandardCoord
+
+# from topologiq.core.pathfinder.utils import get_manhattan
+from topologiq.utils.classes import StandardCoord
 
 
 ##################
@@ -164,8 +166,7 @@ def check_tgt_beam_clashes(
                 for cube_beam in nx_g.nodes[cube_id]["beams_short"]:
                     if nx_g.nodes[cube_id]["beams_short"]:
                         intersections = [
-                            tgt_beam.intersects(cube_beam, kwargs["beams_len_short"])
-                            for tgt_beam in tgt_beams_short
+                            tgt_beam.intersects(cube_beam) for tgt_beam in tgt_beams_short
                         ]
                         tgt_clash_tracker = tgt_clash_tracker + np.array(intersections)
                         cube_clash_count += 1 if any(intersections) else 0
@@ -328,7 +329,6 @@ def check_need_twins_beams(
         if (
             nx_g.nodes[out_id]["beams"] if strict else nx_g.nodes[out_id]["beams_short"]
         ) and nx_g.nodes[out_id]["coords"]:
-            out_coords = nx_g.nodes[out_id]["coords"]
             out_beams = nx_g.nodes[out_id]["beams"] if strict else nx_g.nodes[out_id]["beams_short"]
             out_beams_num = len(out_beams)
             out_degree = get_node_degree(nx_g, out_id)
@@ -341,7 +341,6 @@ def check_need_twins_beams(
                     if (
                         nx_g.nodes[out_id]["beams"] if strict else nx_g.nodes[in_id]["beams_short"]
                     ) and nx_g.nodes[in_id]["coords"]:
-                        in_coords = nx_g.nodes[in_id]["coords"]
                         in_beams = (
                             nx_g.nodes[in_id]["beams"]
                             if strict
@@ -350,11 +349,10 @@ def check_need_twins_beams(
                         in_beams_num = len(in_beams)
                         in_degree = get_node_degree(nx_g, in_id)
                         in_pending = in_degree - nx_g.nodes[in_id]["completed"]
-                        manhattan_between = get_manhattan(out_coords, in_coords)
 
                         for beam in in_beams:
                             broken_beams = [
-                                beam.intersects(out_beam, manhattan_between)
+                                beam.intersects(out_beam, short_beams=False)
                                 for out_beam in out_beams
                             ]
                             out_tracker = out_tracker + np.array(broken_beams)
