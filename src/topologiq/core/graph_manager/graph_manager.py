@@ -386,7 +386,7 @@ def do_bfs(
         repeat_current_src = False
         if hold_for_edge_removal:
             nx_g.remove_edges_from(hold_for_edge_removal) # TODO-ANG: what is this ??
-            nx_g = prune_beams(nx_g, taken)
+            nx_g = prune_beams(nx_g, ang.occupied)
 
             hold_for_edge_removal = []
 

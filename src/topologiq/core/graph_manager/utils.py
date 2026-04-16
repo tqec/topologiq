@@ -8,6 +8,7 @@ Usage:
 import random
 import shutil
 from collections import deque
+from typing import Iterable
 
 import networkx as nx
 
@@ -274,7 +275,7 @@ def update_edge_paths(
 
     # ID edge as sorted to avoid duplicates
     edge = tuple(sorted((src_id, tgt_id)))
-    edge_type_match = zx_edge_type == nx_g.get_edge_data(src_id, tgt_id).get("type")
+    edge_type_match = zx_edge_type == "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
 
     # Assume failure
     edge_success = False
@@ -411,11 +412,11 @@ def update_edge_paths(
         }
 
     # Prune beams before moving to next edge
-    nx_g = prune_beams(nx_g, taken)
+    nx_g = prune_beams(nx_g, ang.occupied)
     return nx_g, taken, edge_paths, edge_success
 
 
-def prune_beams(nx_g: nx.Graph, taken: list[StandardCoord]) -> nx.Graph:
+def prune_beams(nx_g: nx.Graph, taken: Iterable[StandardCoord]) -> nx.Graph:
     """Remove beams that have already been broken.
 
     Args:

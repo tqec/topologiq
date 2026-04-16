@@ -78,7 +78,7 @@ def handle_std_edge(
     t_1, _ = datetime_manager()
 
     # Always prune beams to ensure recent placements are accounted for
-    nx_g = prune_beams(nx_g, taken)
+    nx_g = prune_beams(nx_g, ang.occupied)
 
     # Get source cube data
     # TODO-ANG: replace with ang.get_cube_position(..), ang.get_cube_kind(..)
@@ -102,7 +102,7 @@ def handle_std_edge(
         hdm: bool = zx_edge_type == "HADAMARD"
 
         # Remove source coordinates from occupied coords
-        taken_coords_c = taken[:]
+        taken_coords_c = list(ang.occupied) #.copy() #taken[:]
         if src_coords in taken_coords_c:
             taken_coords_c.remove(src_coords)
 
@@ -112,7 +112,7 @@ def handle_std_edge(
             src_block_info,
             nxt_neigh_zx_type,
             init_step,
-            taken_coords_c if taken else [],
+            taken_coords_c, # if taken else [],
             hdm=hdm,
             src_tgt_ids=(src_id, tgt_id),
             **kwargs,
@@ -231,7 +231,7 @@ def handle_std_edge(
                 f"Runtime: ~{int(t_total_iter * 1000)}ms.",
             )
 
-    nx_g = prune_beams(nx_g, taken)
+    nx_g = prune_beams(nx_g, ang.occupied)
     return nx_g, taken, edge_paths, edge_success
 
 
@@ -281,10 +281,6 @@ def handle_cross_edge(
     taken = list(set(taken)) # TODO-ANG: drop
     nx_g = prune_beams(nx_g, taken) # TODO-ANG: adapt to use ang
 
-    # Get source and target data for current (src_id, tgt_id) pair
-    # TODO-ANG: replace to use ang.get_cube_position(..)
-    # u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
-
     # Process edge only if both src_id and tgt_id have already been placed in the 3D space
     # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
     if ang.is_node_realised(src_id) and ang.is_node_realised(tgt_id):
@@ -301,9 +297,8 @@ def handle_cross_edge(
             critical_beams = _assemble_critical_beams(nx_g)
 
             # Check if edge is hadamard
-            # TODO-ANG: replace to use get_edge_type(..)
-            zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-            hdm: bool = True if zx_edge_type == "HADAMARD" else False
+            zx_edge_type = "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
+            hdm: bool = zx_edge_type == "HADAMARD"
 
             # Call pathfinder using optional parameters that flag second pass nature of operation
             tgt_kind: str = ang.get_cube_kind( ang.get_cube(tgt_id) ).name.lower()
