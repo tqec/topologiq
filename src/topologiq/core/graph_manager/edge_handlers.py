@@ -107,11 +107,9 @@ def handle_std_edge(
         # Get clean candidate paths
         # Note. Topologically correct but not necessarily smart paths
         clean_paths, pathfinder_vis_data = call_pathfinder(
+            ang, src_id, tgt_id,
             src_block_info,
-            nxt_neigh_zx_type,
             init_step,
-            taken_coords_c, # if taken else [],
-            hdm=hdm,
             src_tgt_ids=(src_id, tgt_id),
             **kwargs,
         )
@@ -302,12 +300,9 @@ def handle_cross_edge(
             if ang.is_node_realised(tgt_id):
                 # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
+                    ang, src_id, tgt_id,
                     (src_coords, src_kind),
-                    tgt_zx_type,
                     3,
-                    list(ang.occupied),
-                    tgt_block_info = (tgt_coords, tgt_kind),
-                    hdm=hdm,
                     critical_beams=critical_beams,
                     src_tgt_ids=(src_id, tgt_id),
                     **kwargs,

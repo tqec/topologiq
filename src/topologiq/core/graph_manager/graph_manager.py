@@ -323,7 +323,7 @@ def graph_manager_bfs(
         traceback.print_exc()
         raise ValueError("ERROR. The graph_manager BFS crashed.", e, "\n")
 
-    ang.print_summary()
+    # ang.print_summary()
     ang.into_file("../../assets/" + circuit_name + ".ang")
 
     return nx_g, edge_paths, lat_nodes, lat_edges, ang

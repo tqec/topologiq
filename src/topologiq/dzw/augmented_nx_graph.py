@@ -17,11 +17,10 @@ from topologiq.dzw.common.components_zx import NodeId, NodeType, EdgeId, EdgeTyp
 from topologiq.dzw.common.components_bg import CubeId, CubeKind, PipeId
 from topologiq.dzw.common.path import PathSpecification
 
-from logging import getLogger
-
 from topologiq.utils.classes import SimpleDictGraph
 from topologiq.core.pathfinder.utils import get_manhattan
 
+from logging import getLogger
 console = getLogger(__name__)
 
 QubitId = int
@@ -191,11 +190,16 @@ class AugmentedNxGraph(nx.Graph):
     def get_qubits(self):
         return self.__zx_qubits.keys()
 
-    def get_node_qubit(self, node) -> QubitId:
-        return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT]
-
-    def get_nodes(self):
-        return self.nodes()
+    def get_nodes(self, node_type: NodeType | None = None, qubit: QubitId | None = None, layer: LayerId | None = None):
+        if node_type or qubit or layer:
+            return filter(
+                lambda node : (node_type is None or self.get_node_type(node) == node_type) and
+                              (qubit is None or self.get_node_qubit(node) == qubit) and
+                              (layer is None or self.get_node_layer(node) == layer),
+                self.nodes
+            )
+        else:
+            return self.nodes
 
     def get_depth(self):
         return len(self.__zx_layers)
@@ -207,7 +211,7 @@ class AugmentedNxGraph(nx.Graph):
         return self.__zx_layers[layer]
 
     def get_layer_density(self, layer: int) -> tuple[int,int]:
-        layer_nodes = self.get_layer(layer)
+        layer_nodes = list(self.get_nodes(layer = layer))
         number_of_nodes = len(layer_nodes)
         number_of_edges = 0
         for node in layer_nodes:
@@ -232,8 +236,10 @@ class AugmentedNxGraph(nx.Graph):
 
         return filter(filtering, self.edges())
 
-    def get_cubes(self):
-        return self.__bg_graph.nodes()
+    def get_cubes(self, cube_kind: CubeKind | None = None):
+        return filter(
+            lambda cb: (cube_kind is None or self.get_cube_kind(cb) == cube_kind), self.__bg_graph.nodes()
+        )
 
     def number_of_cubes(self) -> int:
         return self.__bg_graph.number_of_nodes()
@@ -290,7 +296,10 @@ class AugmentedNxGraph(nx.Graph):
     def get_node_type(self, node: NodeId) -> NodeType:
         return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_TYPE]
 
-    def get_node_layer(self, node: int) -> int:
+    def get_node_qubit(self, node) -> QubitId:
+        return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_QUBIT]
+
+    def get_node_layer(self, node: int) -> LayerId:
         return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE_LAYER]
 
     def get_cube_position(self, cube: CubeId) -> StandardCoord:

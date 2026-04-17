@@ -20,20 +20,19 @@ from topologiq.vis.animation import create_animation
 from topologiq.vis.blockgraph import vis_3d
 from topologiq.vis.common import lattice_to_g
 
+from topologiq.dzw.common.components_zx import NodeId
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 
 ##############
 # PATHFINDER #
 ##############
 def call_pathfinder(
     # TODO-ANG: adapt to use ang to query revelant information
+    ang: AugmentedNxGraph, source: NodeId, target: NodeId,
     src_block_info: StandardBlock,
-    tgt_zx_type: str,
     init_step: int,
-    taken: list[StandardCoord], # TODO-ANG: drop this
-    tgt_block_info: StandardBlock | None = None,
-    hdm: bool = False, # TODO-ANG: drop this
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
-    src_tgt_ids: tuple[int, int] | None = None,
+    src_tgt_ids: tuple[NodeId, NodeId] | None = None,
     **kwargs,
 ) -> tuple[
     list[Any],
@@ -72,20 +71,23 @@ def call_pathfinder(
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
+    source_cube = ang.get_cube(source)
+    target_cube = ang.get_cube(target)
+    src_coords = ang.get_cube_position(source_cube)
+    tgt_coords = ang.get_cube_position(target_cube) if ang.is_node_realised(target) else None
+    tgt_type = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None
+
     step = init_step
-    src_coords, _ = src_block_info
-    tgt_coords, tgt_type = tgt_block_info if tgt_block_info else (None, None)
 
     # Copy taken to avoid accidental overwrites
-    taken_cc = taken[:]
+    taken_cc = list(ang.occupied)
     if src_coords in taken_cc:
         taken_cc.remove(src_coords)
-    # if tgt_coords and tgt_coords in taken_cc:
     if tgt_coords:
         taken_cc.remove(tgt_coords)
 
     # Loop call the inner pathfinder in case there is a need to re-run the pathfinder
-    max_step = init_step if tgt_block_info else 15
+    max_step = init_step if ang.is_node_realised(target) else 15
     while step <= max_step:
         # Generate tentative coordinates for current step or use target node
         if tgt_coords:
@@ -94,18 +96,15 @@ def call_pathfinder(
             tent_coords = _gen_tent_tgt_coords(
                 src_coords,
                 step,
-                taken,  # Real occupied coords: position cannot overlap start node
+                list(ang.occupied),  # Real occupied coords: position cannot overlap start node
             )
 
         # Try finding paths to each tentative coordinates
         if tent_coords:
             valid_paths, pathfinder_vis_data = pathfinder(
+                ang, source, target,
                 src_block_info,
                 tent_coords,
-                tgt_zx_type,
-                taken=taken_cc,
-                tgt_block_info=(tent_coords[0], tgt_type),
-                hdm=hdm,
                 critical_beams=critical_beams,
                 src_tgt_ids=src_tgt_ids,
                 **kwargs,

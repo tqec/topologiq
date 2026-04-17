@@ -45,18 +45,17 @@ from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
 
+from topologiq.dzw.common.components_zx import NodeId, EdgeType
+from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 
 ############################
 # MAIN PATHFINDER WORKFLOW #
 ############################
 # TODO-ANG: adapt to use ang
 def pathfinder(
+    ang: AugmentedNxGraph, source: NodeId, target: NodeId,
     src_block_info: StandardBlock,
     tent_coords: list[StandardCoord],
-    tgt_zx_type: str,
-    tgt_block_info: tuple[StandardCoord | None, str | None] = (None, None),
-    taken: list[StandardCoord] = [],
-    hdm: bool = False,
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
@@ -75,9 +74,6 @@ def pathfinder(
     Args:
         src_block_info: The coords and kind of the source block.
         tent_coords: A list of tentative target coordinates to find paths to.
-        tgt_zx_type: The ZX type of the target spider/cube.
-        tgt_block_info (optional): The coords and type of a previously placed target block.
-        taken (optional): A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process (updated regularly).
         hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
         src_tgt_ids (optional): The exact IDs of the source and target cubes.
@@ -94,29 +90,33 @@ def pathfinder(
     # Preliminaries
     t_1, _ = datetime_manager()
 
-    # Unpack incoming data
-    src_coords, _ = src_block_info
-    _, tgt_kind = tgt_block_info
-    taken_cc: list[StandardCoord] = taken[:]
+    # Retrieve attributes of source and target from the ANG
+    source_cube = ang.get_cube(source)
+    target_cube = ang.get_cube(target)
+    source_position = ang.get_cube_position(source_cube)
+    target_node_type = ang.get_node_type(target).name
+    target_cube_kind = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None
+
+    taken_cc: list[StandardCoord] = list(ang.occupied)
     if taken_cc:
-        if src_coords in taken_cc:
-            taken_cc.remove(src_coords)
+        if source_position in taken_cc:
+            taken_cc.remove(source_position)
 
     # Generate kinds that could in theory be assigned to the target cube
     # Note. When handling many tent_coords, the kind for a given ZX type might differ
     tent_tgt_kinds = gen_tent_tgt_kinds(
-        tgt_zx_type,
-        tgt_kind=(tgt_kind if tgt_kind else None),
+        target_node_type,
+        tgt_kind = target_cube_kind if target_cube_kind else None,
     )
     # Call pathfinder
     valid_paths, all_search_paths, visit_stats = core_pathfinder_bfs(
         src_block_info,
         tent_coords,
         tent_tgt_kinds,
-        taken=taken_cc,
-        hdm=hdm,
-        critical_beams=critical_beams,
-        src_tgt_ids=src_tgt_ids,
+        taken = taken_cc,
+        hdm = ang.get_edge_type(source, target) == EdgeType.HADAMARD,
+        critical_beams = critical_beams,
+        src_tgt_ids = src_tgt_ids,
         **kwargs,
     )
 
@@ -142,7 +142,7 @@ def pathfinder(
             "num_tent_coords_filled": (
                 len(set([p[0] for p in valid_paths.keys()])) if valid_paths else 0
             ),
-            "max_manhattan": get_max_manhattan(src_coords, tent_coords),
+            "max_manhattan": get_max_manhattan(source_position, tent_coords),
             "len_longest_path": len_longest_path if len_longest_path > 0 else 0,
         }
 
@@ -155,7 +155,7 @@ def pathfinder(
             times,
             src_block_info=src_block_info,
             tgt_block_info=adjusted_target_info,
-            tgt_zx_type=tgt_zx_type,
+            tgt_zx_type=target_node_type,
             visit_stats=visit_stats,
             cross_edge=len(tent_coords) == 1 and len(tent_tgt_kinds) == 1,
             **kwargs,
