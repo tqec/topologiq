@@ -1,4 +1,4 @@
-from recordclass import RecordClass
+from recordclass import RecordClass  # type: ignore[import-untyped]
 
 from topologiq.utils.classes import StandardCoord
 
@@ -52,3 +52,9 @@ class BgPipe(RecordClass):
     source: CubeId
     target: CubeId
     type: EdgeType
+
+    def __str__(self):
+        return f"#{self.source}-{self.type.name[0]}-#{self.target}"
+
+    def __repr__(self):
+        return str(self)

@@ -41,6 +41,7 @@ from topologiq.core.pathfinder.utils import (
     get_max_manhattan,
     init_bfs,
 )
+from topologiq.dzw.common.components import BgCube
 from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
@@ -54,10 +55,8 @@ from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 # TODO-ANG: adapt to use ang
 def pathfinder(
     ang: AugmentedNxGraph, source: NodeId, target: NodeId,
-    src_block_info: StandardBlock,
     tent_coords: list[StandardCoord],
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
-    src_tgt_ids: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[
     dict[StandardBlock, list[StandardBlock]] | None,
@@ -91,16 +90,20 @@ def pathfinder(
     t_1, _ = datetime_manager()
 
     # Retrieve attributes of source and target from the ANG
-    source_cube = ang.get_zx_node(source).realising_cube
-    target_cube = ang.get_zx_node(target).realising_cube
-    source_position = ang.get_bg_cube(source_cube).position
+    source_cube: BgCube = ang.get_bg_cube(ang.get_zx_node(source).realising_cube)
+    src_block_info = (source_cube.position, source_cube.kind.name.lower())
+    src_tgt_ids = (source, target)
     target_node_type = ang.get_zx_node(target).type.name
-    target_cube_kind = ang.get_bg_cube(target_cube).kind.name.lower() if ang.is_node_realised(target) else None
+    if ang.is_node_realised(target):
+        target_cube: BgCube = ang.get_bg_cube(ang.get_zx_node(target).realising_cube)
+        target_cube_kind = target_cube.kind.name.lower()
+    else:
+        target_cube_kind = None
 
     taken_cc: list[StandardCoord] = list(ang.occupied)
     if taken_cc:
-        if source_position in taken_cc:
-            taken_cc.remove(source_position)
+        if source_cube.position in taken_cc:
+            taken_cc.remove(source_cube.position)
 
     # Generate kinds that could in theory be assigned to the target cube
     # Note. When handling many tent_coords, the kind for a given ZX type might differ
@@ -142,7 +145,7 @@ def pathfinder(
             "num_tent_coords_filled": (
                 len(set([p[0] for p in valid_paths.keys()])) if valid_paths else 0
             ),
-            "max_manhattan": get_max_manhattan(source_position, tent_coords),
+            "max_manhattan": get_max_manhattan(source_cube.position, tent_coords),
             "len_longest_path": len_longest_path if len_longest_path > 0 else 0,
         }
 

@@ -6,19 +6,18 @@ import numpy as np
 import pyzx as zx
 import networkx as nx
 
-from topologiq.dzw.common.components import ZxNode, ZxEdge, BgCube, BgPipe
-from topologiq.dzw.common.coordinates import Coordinates
 from topologiq.utils.classes import StandardCoord
+from topologiq.utils.classes import SimpleDictGraph
+from topologiq.core.pathfinder.utils import get_manhattan
 
 from topologiq.dzw.helpers.spacetime import Spacetime
 from topologiq.dzw.helpers.blockgraph import BlockGraphHelper
 
 from topologiq.dzw.common.attributes_zx import NodeId, NodeType, EdgeId, EdgeType, QubitId, LayerId
 from topologiq.dzw.common.attributes_bg import CubeId, CubeKind, PipeId
+from topologiq.dzw.common.components import ZxNode, ZxEdge, BgCube, BgPipe
+from topologiq.dzw.common.coordinates import Coordinates
 from topologiq.dzw.common.path import PathSpecification
-
-from topologiq.utils.classes import SimpleDictGraph
-from topologiq.core.pathfinder.utils import get_manhattan
 
 from logging import getLogger
 console = getLogger(__name__)
@@ -30,6 +29,7 @@ class LayerTransitionType(Enum):
     UPPER = 3
     OUTER = 4
 
+# TODO: figure out whether anything can be added as a node/edge in networkx
 # TODO: figure out what the other VertexType and EdgeType represent
 # TODO: how do we deal with the last four VertexType (i.e. H_BOX, W_INPUT, W_OUTPUT, Z_BOX) ?
 # TODO: do we need the last EdgeType (i.e. W_IO) ?
@@ -161,7 +161,7 @@ class AugmentedNxGraph(nx.Graph):
     def get_node_realisation_order(self) -> list[NodeId]:
         return self.__zx_node_realisation_order
 
-    def get_edge_realisation_order(self) -> list[tuple[NodeId, NodeId]]:
+    def get_edge_realisation_order(self) -> list[EdgeId]:
         return self.__zx_edge_realisation_order
 
     def get_qubits(self):
@@ -270,9 +270,6 @@ class AugmentedNxGraph(nx.Graph):
     def is_cube_placed(self, cube: CubeId) -> bool:
         return cube in self.__bg_graph
 
-    # def get_pipe_type(self, source_cube: CubeId, target_cube: CubeId) -> EdgeType :
-    #     return self.__bg_graph.get_edge_data(source_cube, target_cube)[AugmentedNxGraph.KEY_BG_PIPE_TYPE]
-
     def is_node_realised(self, node: NodeId) -> bool:
         return self.get_zx_node(node).realising_cube != -1
 
@@ -315,7 +312,7 @@ class AugmentedNxGraph(nx.Graph):
         return realising
 
     def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
-        return len(self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE].realisation) > 0
+        return len(self.edges[source, target][AugmentedNxGraph.KEY_ZX_EDGE].realisation) > 0
 
     def realise_edge(self, source: NodeId, target: NodeId, proposal: PathSpecification):
         if not self.is_node_realised(source):
@@ -347,8 +344,8 @@ class AugmentedNxGraph(nx.Graph):
                 sequence += f"{kind}@{position}"
         console.info(f"Realising edge {source}-{target} [type={self.get_zx_edge(source, target).type}] with extra cubes : {sequence}")
 
-        # Representation of the path that will go into edge_realisations
-        pipe_ids = []
+        # The sequence of pipes ids will serve as the realisation of the edge
+        realisation = []
 
         # Add all the extra cubes and pipes of the path to the BlockGraph
         previous_cube: int = source_cube
@@ -363,12 +360,11 @@ class AugmentedNxGraph(nx.Graph):
 
             # Place the current cube and connect it to the previous cube.
             current_cube = self.place_cube(current_kind, current_position)
-            # self.__bg_graph.nodes[current_cube][AugmentedNxGraph.KEY_BG_ZX_NODE] = None
             self.connect_pipe(previous_cube, current_cube, current_pipe_type)
 
             # Extend the sequence of extra node ids
             pipe = (previous_cube, current_cube)
-            pipe_ids.append( pipe )
+            realisation.append( pipe )
 
             # Prepare for the next iteration
             previous_cube = current_cube
@@ -379,10 +375,10 @@ class AugmentedNxGraph(nx.Graph):
         self.connect_pipe(previous_cube, target_cube, final_pipe_type)
 
         pipe = (previous_cube, target_cube)
-        pipe_ids.append( pipe )
+        realisation.append( pipe )
 
-        # Associate the path as a realisation of the edge
-        self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE].realisation = pipe_ids
+        # Store the realisation of the edge
+        self.edges[source, target][AugmentedNxGraph.KEY_ZX_EDGE].realisation = realisation
 
         # One more edge has been realised
         self.__zx_edge_realisation_order.append( (source, target) )

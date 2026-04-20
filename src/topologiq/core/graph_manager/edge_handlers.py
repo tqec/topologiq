@@ -108,9 +108,7 @@ def handle_std_edge(
         # Note. Topologically correct but not necessarily smart paths
         clean_paths, pathfinder_vis_data = call_pathfinder(
             ang, src_id, tgt_id,
-            src_block_info,
             init_step,
-            src_tgt_ids=(src_id, tgt_id),
             **kwargs,
         )
 
@@ -301,10 +299,8 @@ def handle_cross_edge(
                 # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
                     ang, src_id, tgt_id,
-                    (src_coords, src_kind),
                     3,
                     critical_beams=critical_beams,
-                    src_tgt_ids=(src_id, tgt_id),
                     **kwargs,
                 )
 

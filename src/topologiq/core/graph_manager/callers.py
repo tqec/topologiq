@@ -29,10 +29,8 @@ from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 def call_pathfinder(
     # TODO-ANG: adapt to use ang to query revelant information
     ang: AugmentedNxGraph, source: NodeId, target: NodeId,
-    src_block_info: StandardBlock,
     init_step: int,
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
-    src_tgt_ids: tuple[NodeId, NodeId] | None = None,
     **kwargs,
 ) -> tuple[
     list[Any],
@@ -71,11 +69,13 @@ def call_pathfinder(
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
-    source_cube = ang.get_zx_node(source).realising_cube
-    target_cube = ang.get_zx_node(target).realising_cube
-    src_coords = ang.get_bg_cube(source_cube).position
-    tgt_coords = ang.get_bg_cube(target_cube).position if ang.is_node_realised(target) else None
-    tgt_type = ang.get_bg_cube(target_cube).kind.name.lower() if ang.is_node_realised(target) else None
+    source_cube = ang.get_bg_cube(ang.get_zx_node(source).realising_cube)
+    src_coords = source_cube.position
+    if ang.is_node_realised(target):
+        target_cube = ang.get_bg_cube(ang.get_zx_node(target).realising_cube)
+        tgt_coords = target_cube.position
+    else:
+        tgt_coords = None
 
     step = init_step
 
@@ -103,10 +103,8 @@ def call_pathfinder(
         if tent_coords:
             valid_paths, pathfinder_vis_data = pathfinder(
                 ang, source, target,
-                src_block_info,
                 tent_coords,
                 critical_beams=critical_beams,
-                src_tgt_ids=src_tgt_ids,
                 **kwargs,
             )
         else:
