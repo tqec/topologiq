@@ -4,7 +4,7 @@ from functools import total_ordering
 from topologiq.utils.classes import StandardCoord
 
 from topologiq.dzw.helpers.spacetime import Spacetime
-from topologiq.dzw.common.components_zx import NodeType
+from topologiq.dzw.common.attributes_zx import NodeType
 
 CubeId = int
 PipeId = tuple[CubeId, CubeId]

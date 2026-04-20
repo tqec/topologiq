@@ -3,6 +3,8 @@ import pyzx as zx
 
 NodeId = int
 EdgeId = tuple[NodeId, NodeId]
+QubitId = int
+LayerId = int
 
 class NodeType(Enum):
     O = 0 # Boundary

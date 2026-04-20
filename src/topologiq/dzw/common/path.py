@@ -1,8 +1,8 @@
 from topologiq.utils.classes import StandardCoord
 
 from topologiq.dzw.common.coordinates import Coordinates
-from topologiq.dzw.common.components_zx import EdgeType
-from topologiq.dzw.common.components_bg import CubeId, CubeKind
+from topologiq.dzw.common.attributes_zx import EdgeType
+from topologiq.dzw.common.attributes_bg import CubeId, CubeKind
 
 from logging import getLogger
 console = getLogger(__name__)

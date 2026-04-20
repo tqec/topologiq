@@ -45,7 +45,7 @@ from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
 
-from topologiq.dzw.common.components_zx import NodeId, EdgeType
+from topologiq.dzw.common.attributes_zx import NodeId, EdgeType
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 
 ############################
@@ -91,10 +91,10 @@ def pathfinder(
     t_1, _ = datetime_manager()
 
     # Retrieve attributes of source and target from the ANG
-    source_cube = ang.get_cube(source)
-    target_cube = ang.get_cube(target)
+    source_cube = ang.get_zx_node(source).realising_cube
+    target_cube = ang.get_zx_node(target).realising_cube
     source_position = ang.get_cube_position(source_cube)
-    target_node_type = ang.get_node_type(target).name
+    target_node_type = ang.get_zx_node(target).type.name
     target_cube_kind = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None
 
     taken_cc: list[StandardCoord] = list(ang.occupied)
@@ -114,7 +114,7 @@ def pathfinder(
         tent_coords,
         tent_tgt_kinds,
         taken = taken_cc,
-        hdm = ang.get_edge_type(source, target) == EdgeType.HADAMARD,
+        hdm = ang.get_zx_edge(source, target).type == EdgeType.HADAMARD,
         critical_beams = critical_beams,
         src_tgt_ids = src_tgt_ids,
         **kwargs,

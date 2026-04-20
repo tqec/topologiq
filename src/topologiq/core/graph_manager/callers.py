@@ -20,7 +20,7 @@ from topologiq.vis.animation import create_animation
 from topologiq.vis.blockgraph import vis_3d
 from topologiq.vis.common import lattice_to_g
 
-from topologiq.dzw.common.components_zx import NodeId
+from topologiq.dzw.common.attributes_zx import NodeId
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 
 ##############
@@ -71,8 +71,8 @@ def call_pathfinder(
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
-    source_cube = ang.get_cube(source)
-    target_cube = ang.get_cube(target)
+    source_cube = ang.get_zx_node(source).realising_cube
+    target_cube = ang.get_zx_node(target).realising_cube
     src_coords = ang.get_cube_position(source_cube)
     tgt_coords = ang.get_cube_position(target_cube) if ang.is_node_realised(target) else None
     tgt_type = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None

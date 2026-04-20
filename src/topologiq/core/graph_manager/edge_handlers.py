@@ -19,7 +19,7 @@ from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.core.paths import PathBetweenNodes
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.components_zx import EdgeType
+from topologiq.dzw.common.attributes_zx import EdgeType
 from topologiq.utils.classes import (
     Colors,
     StandardBlock,
@@ -83,7 +83,7 @@ def handle_std_edge(
     if not ang.is_node_realised(src_id):
         return nx_g, edge_paths, False
 
-    source_cube = ang.get_cube(src_id)
+    source_cube = ang.get_zx_node(src_id).realising_cube
     src_kind = ang.get_cube_kind(source_cube).name.lower()
     src_coords = ang.get_cube_position(source_cube)
     src_block_info: StandardBlock = (src_coords, src_kind)
@@ -93,10 +93,10 @@ def handle_std_edge(
 
     if not ang.is_node_realised(tgt_id):
         # Get target information
-        nxt_neigh_zx_type = ang.get_node_type(tgt_id).name
+        nxt_neigh_zx_type = ang.get_zx_node(tgt_id).type.name
 
         # Get edge information
-        zx_edge_type = "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
+        zx_edge_type = "SIMPLE" if ang.get_zx_edge(src_id, tgt_id).type == EdgeType.IDENTITY else "HADAMARD"
         hdm: bool = zx_edge_type == "HADAMARD"
 
         # Remove source coordinates from occupied coords
@@ -279,23 +279,23 @@ def handle_cross_edge(
     # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
     if ang.is_node_realised(src_id) and ang.is_node_realised(tgt_id):
         # Format adjustments to match existing operations
-        source_cube = ang.get_cube(src_id)
-        target_cube = ang.get_cube(tgt_id)
+        source_cube = ang.get_zx_node(src_id).realising_cube
+        target_cube = ang.get_zx_node(tgt_id).realising_cube
         src_coords = ang.get_cube_position( source_cube )
         src_kind = ang.get_cube_kind(source_cube).name.lower()
         tgt_coords = ang.get_cube_position( target_cube )
-        tgt_zx_type = ang.get_node_type(tgt_id).name
+        tgt_zx_type = ang.get_zx_node(tgt_id).type.name
 
         # Call pathfinder on any graph edge that does not have an entry in edge_paths
         if not ang.is_edge_realised(src_id, tgt_id): # edge not in edge_paths:
             critical_beams = _assemble_critical_beams(nx_g)
 
             # Check if edge is hadamard
-            zx_edge_type = "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
+            zx_edge_type = "SIMPLE" if ang.get_zx_edge(src_id, tgt_id).type == EdgeType.IDENTITY else "HADAMARD"
             hdm: bool = zx_edge_type == "HADAMARD"
 
             # Call pathfinder using optional parameters that flag second pass nature of operation
-            tgt_kind: str = ang.get_cube_kind( ang.get_cube(tgt_id) ).name.lower()
+            tgt_kind: str = ang.get_cube_kind( ang.get_zx_node(tgt_id).realising_cube ).name.lower()
 
             if ang.is_node_realised(tgt_id):
                 # TODO-ANG: adapt this to use ang

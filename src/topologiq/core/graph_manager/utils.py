@@ -15,7 +15,7 @@ import networkx as nx
 
 from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.paths import PathBetweenNodes
-from topologiq.dzw.common.components_zx import EdgeType
+from topologiq.dzw.common.attributes_zx import EdgeType
 from topologiq.input.simple_graphs import check_zx_types, get_zx_type_fam
 from topologiq.utils.classes import (
     Colors,
@@ -26,7 +26,7 @@ from topologiq.utils.classes import (
 
 
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.components_bg import CubeKind
+from topologiq.dzw.common.attributes_bg import CubeKind
 from topologiq.dzw.common.path import PathSpecification
 
 
@@ -272,7 +272,7 @@ def update_edge_paths(
 
     # ID edge as sorted to avoid duplicates
     edge = tuple(sorted((src_id, tgt_id)))
-    edge_type_match = zx_edge_type == "SIMPLE" if ang.get_edge_type(src_id, tgt_id) == EdgeType.IDENTITY else "HADAMARD"
+    edge_type_match = zx_edge_type == "SIMPLE" if ang.get_zx_edge(src_id, tgt_id).type == EdgeType.IDENTITY else "HADAMARD"
 
     # Assume failure
     edge_success = False
@@ -322,8 +322,8 @@ def update_edge_paths(
 
         # Prepare the proposal
         proposal = PathSpecification(
-            source_cube = ang.get_cube(src_id), target_cube = target_cube,
-            edge_type = ang.get_edge_type(src_id, tgt_id),
+            source_cube = ang.get_zx_node(src_id).realising_cube, target_cube = target_cube,
+            edge_type = ang.get_zx_edge(src_id, tgt_id).type,
             extra_cubes = [
                 (CubeKind[winner_path_standard_pass.all_nodes_in_path[idx][1].upper()],
                  winner_path_standard_pass.all_nodes_in_path[idx][0])
@@ -377,8 +377,8 @@ def update_edge_paths(
 
         # Prepare the proposed path
         proposed_path = PathSpecification(
-            source_cube = ang.get_cube(src_id), target_cube = ang.get_cube(tgt_id),
-            edge_type = ang.get_edge_type(src_id, tgt_id),
+            source_cube = ang.get_zx_node(src_id).realising_cube, target_cube = ang.get_zx_node(tgt_id).realising_cube,
+            edge_type = ang.get_zx_edge(src_id, tgt_id).type,
             extra_cubes = [
                 (CubeKind[winner_path_second_pass[idx][1].upper()],
                  winner_path_second_pass[idx][0])

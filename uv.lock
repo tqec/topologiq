@@ -2357,6 +2357,12 @@ wheels = [
 ]
 
 [[package]]
+name = "recordclass"
+version = "0.24"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b6/a0/a51274e80e2a796c19fa00e64fc33b90a2b707e495ccb7c2c799de152bd6/recordclass-0.24.tar.gz", hash = "sha256:dc6e46aec90d5b185576fce40ffc875488b04692a9259265c965fac150630d06", size = 1340150, upload-time = "2026-01-05T18:56:16.428Z" }
+
+[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3102,6 +3108,7 @@ dependencies = [
     { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "pyzx" },
     { name = "qiskit" },
+    { name = "recordclass" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.16.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
@@ -3139,6 +3146,7 @@ requires-dist = [
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
     { name = "pyzx", specifier = "==0.9.0" },
     { name = "qiskit", specifier = "==2.1.2" },
+    { name = "recordclass", specifier = "==0.24" },
     { name = "scipy", specifier = ">=1.15,<1.17" },
 ]
 

@@ -46,7 +46,7 @@ from topologiq.vis.blockgraph import vis_3d
 from topologiq.vis.common import lattice_to_g
 
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.components_bg import CubeId, CubeKind
+from topologiq.dzw.common.attributes_bg import CubeId, CubeKind
 from topologiq.dzw.helpers.spacetime import Spacetime
 
 #########

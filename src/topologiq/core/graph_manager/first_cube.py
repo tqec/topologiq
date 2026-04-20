@@ -13,7 +13,7 @@ from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.utils.classes import StandardBlock, StandardCoord
 
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.components_bg import CubeKind
+from topologiq.dzw.common.attributes_bg import CubeKind
 
 def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_random") -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
@@ -136,7 +136,7 @@ def get_first_cube(
     else:
         first_id = get_first_id(ang, first_id_strategy=first_id_strategy)
         deterministic = False if first_id_strategy == "centrality_random" else True
-        tentative_kinds = CubeKind.suitable_kinds(ang.get_node_type(first_id))
+        tentative_kinds = CubeKind.suitable_kinds(ang.get_zx_node(first_id).type)
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
         first_kind = first_kind.name.lower()
 
