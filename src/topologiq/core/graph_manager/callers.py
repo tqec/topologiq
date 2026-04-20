@@ -73,9 +73,9 @@ def call_pathfinder(
 
     source_cube = ang.get_zx_node(source).realising_cube
     target_cube = ang.get_zx_node(target).realising_cube
-    src_coords = ang.get_cube_position(source_cube)
-    tgt_coords = ang.get_cube_position(target_cube) if ang.is_node_realised(target) else None
-    tgt_type = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None
+    src_coords = ang.get_bg_cube(source_cube).position
+    tgt_coords = ang.get_bg_cube(target_cube).position if ang.is_node_realised(target) else None
+    tgt_type = ang.get_bg_cube(target_cube).kind.name.lower() if ang.is_node_realised(target) else None
 
     step = init_step
 

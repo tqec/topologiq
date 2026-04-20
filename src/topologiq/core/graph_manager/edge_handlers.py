@@ -84,8 +84,8 @@ def handle_std_edge(
         return nx_g, edge_paths, False
 
     source_cube = ang.get_zx_node(src_id).realising_cube
-    src_kind = ang.get_cube_kind(source_cube).name.lower()
-    src_coords = ang.get_cube_position(source_cube)
+    src_kind = ang.get_bg_cube(source_cube).kind.name.lower()
+    src_coords = ang.get_bg_cube(source_cube).position
     src_block_info: StandardBlock = (src_coords, src_kind)
 
     # Process targets that have yet to be placed in the 3D space
@@ -281,9 +281,9 @@ def handle_cross_edge(
         # Format adjustments to match existing operations
         source_cube = ang.get_zx_node(src_id).realising_cube
         target_cube = ang.get_zx_node(tgt_id).realising_cube
-        src_coords = ang.get_cube_position( source_cube )
-        src_kind = ang.get_cube_kind(source_cube).name.lower()
-        tgt_coords = ang.get_cube_position( target_cube )
+        src_coords = ang.get_bg_cube(source_cube).position
+        src_kind = ang.get_bg_cube(source_cube).kind.name.lower()
+        tgt_coords = ang.get_bg_cube(target_cube).position
         tgt_zx_type = ang.get_zx_node(tgt_id).type.name
 
         # Call pathfinder on any graph edge that does not have an entry in edge_paths
@@ -295,7 +295,7 @@ def handle_cross_edge(
             hdm: bool = zx_edge_type == "HADAMARD"
 
             # Call pathfinder using optional parameters that flag second pass nature of operation
-            tgt_kind: str = ang.get_cube_kind( ang.get_zx_node(tgt_id).realising_cube ).name.lower()
+            tgt_kind: str = ang.get_bg_cube( ang.get_zx_node(tgt_id).realising_cube ).kind.name.lower()
 
             if ang.is_node_realised(tgt_id):
                 # TODO-ANG: adapt this to use ang

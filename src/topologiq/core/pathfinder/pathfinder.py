@@ -93,9 +93,9 @@ def pathfinder(
     # Retrieve attributes of source and target from the ANG
     source_cube = ang.get_zx_node(source).realising_cube
     target_cube = ang.get_zx_node(target).realising_cube
-    source_position = ang.get_cube_position(source_cube)
+    source_position = ang.get_bg_cube(source_cube).position
     target_node_type = ang.get_zx_node(target).type.name
-    target_cube_kind = ang.get_cube_kind(target_cube).name.lower() if ang.is_node_realised(target) else None
+    target_cube_kind = ang.get_bg_cube(target_cube).kind.name.lower() if ang.is_node_realised(target) else None
 
     taken_cc: list[StandardCoord] = list(ang.occupied)
     if taken_cc:
