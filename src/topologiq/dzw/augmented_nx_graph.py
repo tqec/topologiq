@@ -5,6 +5,7 @@ from typing import Iterable
 import numpy as np
 import pyzx as zx
 import networkx as nx
+from ast import literal_eval as make_tuple
 
 from topologiq.utils.classes import StandardCoord
 from topologiq.utils.classes import SimpleDictGraph
@@ -72,7 +73,7 @@ class AugmentedNxGraph(nx.Graph):
                 self.add_edge(*edge)
                 self.edges[edge][AugmentedNxGraph.KEY_ZX_EDGE] = ZxEdge(source = edge[0], target = edge[1], type = edge_type)
 
-        self.__next_id = max(self.nodes.keys()) + 1
+        self.__next_cube_id = max(self.nodes.keys()) + 1 if len(self.nodes) > 0 else 0
 
         # TODO: split any spider with more than 4 edges (cfr. graph_manager.py; prep_3d_g)
         # TODO: does the choice of how to split such spiders affect the minimal achievable volume ?
@@ -100,8 +101,8 @@ class AugmentedNxGraph(nx.Graph):
             next(neighbors); next(neighbors); next(neighbors)
             previous = node
             while remaining_neighbors > 0:
-                extra_node_id = self.__next_id
-                self.__next_id += 1
+                extra_node_id = self.__next_cube_id
+                self.__next_cube_id += 1
 
                 self.add_node(extra_node_id)
                 extra_zx_node = ZxNode(id = extra_node_id, type = zx_node.type, qubit = zx_node.qubit, layer = zx_node.layer)
@@ -387,8 +388,8 @@ class AugmentedNxGraph(nx.Graph):
         if position in self.occupied:
             raise Exception(f"Proposed position for {kind}@{position} is already occupied by another cube.")
 
-        cube = self.__next_id
-        self.__next_id += 1
+        cube = self.__next_cube_id
+        self.__next_cube_id += 1
 
         self.__bg_graph.add_node(cube)
 
@@ -565,9 +566,7 @@ class AugmentedNxGraph(nx.Graph):
             print(f"Pipe {pipe}  : {self.get_bg_pipe(*pipe).type}")
 
     @staticmethod
-    def from_file(filepath: str):
-        cubes: dict[CubeId, tuple[CubeKind, StandardCoord]] = dict()
-        pipes: dict[PipeId, EdgeType] = dict()
+    def from_file(filepath: str, include_zx_graph: bool = False):
         with open(filepath, 'r') as file:
             # Read the blockgraph header
             header = file.readline()
@@ -577,19 +576,68 @@ class AugmentedNxGraph(nx.Graph):
             # Read the empty line between the blockgraph header and the cubes header
             file.readline()
 
+            # Instantiate the new ANG
+            ang = AugmentedNxGraph()
+
+            if include_zx_graph:
+                # Read the nodes header
+                header = file.readline()
+                if header != "NODES: id;type;qubit;layer;realising_cube\n":
+                    raise Exception(f"Invalid file format. Header for NODES not found [got={header}].")
+
+                zx_node_bg_cube: dict[ZxNode, CubeId] = dict()
+
+                # Read all the lines describing nodes
+                current_line = file.readline()
+                while current_line and current_line != "\n":
+                    if current_line != "":
+                        node_id, node_type, qubit, layer, realising_cube = current_line.split(';')
+                        node = int(node_id)
+                        ang.add_node(node)
+                        zx_node = ZxNode(id=node, type=NodeType[node_type], qubit=int(qubit), layer=int(layer))
+                        ang.nodes[node][AugmentedNxGraph.KEY_ZX_NODE] = zx_node
+                        zx_node_bg_cube[zx_node] = int(realising_cube)
+                        ang.__zx_qubits[int(qubit)].append(node)
+                        ang.__zx_layers[int(layer)].append(node)
+                    current_line = file.readline()
+
+                # Read the edges header
+                header = file.readline()
+                if header != "EDGES: source;target;type;realisation\n":
+                    raise Exception(f"Invalid file format. Header for EDGES not found [got={header}].")
+
+                zx_edge_bg_pipe: dict[ZxEdge, list[PipeId]] = dict()
+
+                # Read all the lines describing edges
+                current_line = file.readline()
+                while current_line and current_line != "\n":
+                    if current_line != "":
+                        source_id, target_id, edge_type, realisation = current_line.split(';')
+                        source = ang.get_zx_node(int(source_id))
+                        target = ang.get_zx_node(int(target_id))
+                        ang.add_edge(source.id, target.id)
+                        zx_edge = ZxEdge(source = source, target = target, type = EdgeType[edge_type])
+                        ang.edges[source.id, target.id][AugmentedNxGraph.KEY_ZX_EDGE] = zx_edge
+                        zx_edge_bg_pipe[zx_edge] = [ make_tuple(pair) for pair in realisation[1:-2].split(':') ]
+                    current_line = file.readline()
+
             # Read the cubes header
             header = file.readline()
             if header != "CUBES: index;x;y;z;kind;label;\n":
                 raise Exception(f"Invalid file format. Header for CUBES not found [got={header}].")
 
             # Read all the lines describing cubes
-            current_cube = file.readline()
-            while current_cube and current_cube != "\n":
-                print(f"Cube : {current_cube}")
-                if current_cube != "":
-                    cube_id, x, y, z, kind, _, _ = current_cube.split(';')
-                    cubes[ int(cube_id) ] = (CubeKind[kind.upper()], (int(x), int(y), int(z)))
-                current_cube = file.readline()
+            current_line = file.readline()
+            while current_line and current_line != "\n":
+                if current_line != "":
+                    cube_id, x, y, z, kind, realised_node, _ = current_line.split(';')
+                    cube = int(cube_id)
+                    ang.__bg_graph.add_node(cube)
+                    bg_cube = BgCube(
+                        id = cube, kind = CubeKind[kind.upper()], position = Coordinates(int(x), int(y), int(z)) / 3.0
+                    )
+                    ang.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE] = bg_cube
+                current_line = file.readline()
 
             # Read the pipes header
             header = file.readline()
@@ -597,29 +645,28 @@ class AugmentedNxGraph(nx.Graph):
                 raise Exception(f"Invalid file format. Header for PIPES not found [got={header}].")
 
             # Read all the lines describing pipes
-            current_pipe = file.readline()
-            while current_pipe and current_pipe != "\n":
-                if current_pipe != "":
-                    print(f"Pipe : {current_pipe}")
-                    src, tgt, kind, _ = current_pipe.split(';')
-                    pipes[ (int(src), int(tgt)) ] = EdgeType.IDENTITY if 'h' not in kind else EdgeType.HADAMARD
-                current_pipe = file.readline()
+            current_line = file.readline()
+            while current_line and current_line != "\n":
+                if current_line != "":
+                    source_id, target_id, pipe_kind, _ = current_line.split(';')
+                    source = int(source_id)
+                    target = int(target_id)
+                    ang.__bg_graph.add_edge(source, target)
+                    ang.__bg_graph.edges[source, target][AugmentedNxGraph.KEY_BG_PIPE] = BgPipe(
+                        source = source, target = target, type = EdgeType.HADAMARD if 'h' in pipe_kind else EdgeType.IDENTITY
+                    )
+                current_line = file.readline()
 
-            # Instantiate the new ANG
-            vzx = AugmentedNxGraph()
+            if include_zx_graph:
+                for zx_node, bg_cube_id in zx_node_bg_cube.items():
+                    bg_cube = ang.get_bg_cube(bg_cube_id)
+                    bg_cube.realised_node = zx_node
+                    zx_node.realising_cube = bg_cube
 
-            # Populate with cubes, storing the original ID to correctly connect the pipes
-            cube_new_ids: dict[CubeId, CubeId] = dict()
-            for cube, cube_attributes in cubes.items():
-                cube_kind, cube_position = cube_attributes
-                cube_new_ids[cube] = vzx.place_cube(cube_kind, cube_position)
+                for zx_edge, bg_pipe_ids in zx_edge_bg_pipe.items():
+                    zx_edge.realisation = list(map(lambda pp: ang.get_bg_pipe(*pp), bg_pipe_ids))
 
-            # Populate with pipes, using the correspondence between original IDs and new IDs
-            for pipe_id, pipe_type in pipes.items():
-                source, target = pipe_id
-                vzx.connect_pipe(cube_new_ids[source], cube_new_ids[target], pipe_type)
-
-            return vzx
+            return ang
 
     @staticmethod
     def __scaled_position(position: tuple[int,int,int]) -> str:
@@ -661,6 +708,25 @@ class AugmentedNxGraph(nx.Graph):
         with (open(filepath, 'w') as file):
             file.write(f"BLOCKGRAPH 0.1.0;\n")
 
+            if include_zx_graph:
+                # Store node information
+                file.write("\nNODES: id;type;qubit;layer;realising_cube\n")
+                file.writelines(
+                    [
+                        f"{node};{self.get_zx_node(node).type};{self.get_zx_node(node).qubit};{self.get_zx_node(node).layer};{self.get_zx_node(node).realising_cube}\n"
+                        for node in self.nodes
+                    ]
+                )
+
+                # Store edge information
+                file.write("\nEDGES: source;target;type;realisation\n")
+                file.writelines(
+                    [
+                        f"{src};{tgt};{self.get_zx_edge(src, tgt).type};[{':'.join(map(str, self.get_zx_edge(src, tgt).realisation))}]\n"
+                        for src, tgt in self.edges
+                    ]
+                )
+
             # Store cube information
             file.write("\nCUBES: index;x;y;z;kind;label;\n")
             file.writelines(
@@ -678,43 +744,6 @@ class AugmentedNxGraph(nx.Graph):
                     for src, tgt in self.get_pipes()
                 ]
             )
-
-            if include_zx_graph:
-                # Store node information
-                file.write("\nNODES: index;type;qubit;layer;\n")
-                file.writelines(
-                    [
-                        f"{node};{self.get_zx_node(node).type};{self.get_zx_node(node).qubit};{self.get_zx_node(node).layer};\n"
-                        for node in self.nodes
-                    ]
-                )
-
-                # Store edge information
-                file.write("\nEDGES: src;tgt;type;\n")
-                file.writelines(
-                    [
-                        f"{src};{tgt};{self.get_zx_edge(src, tgt).type};\n"
-                        for src, tgt in self.edges
-                    ]
-                )
-
-                # Store node-cube correspondence
-                file.write("\nNODES-CUBES: node_id;cube_id;\n")
-                file.writelines(
-                    [
-                        f"{node};{self.get_zx_node(node).realising_cube}\n"
-                        for node in self.nodes
-                    ]
-                )
-
-                # Store edge-pipes correspondence
-                file.write("\nEDGES-PIPES: edge;pipes;\n")
-                file.writelines(
-                    [
-                        f"{edge};{self.get_zx_edge(*edge).realisation}\n"
-                        for edge in self.edges
-                    ]
-                )
 
     def __identify_cube_at_position(self, position: StandardCoord) -> int:
         for cube in self.get_cubes():

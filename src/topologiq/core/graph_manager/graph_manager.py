@@ -324,7 +324,7 @@ def graph_manager_bfs(
         raise ValueError("ERROR. The graph_manager BFS crashed.", e, "\n")
 
     # ang.print_summary()
-    ang.into_file("../../assets/" + circuit_name + ".ang")
+    ang.into_file("../../assets/" + circuit_name + ".ang", include_zx_graph = True)
 
     return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
