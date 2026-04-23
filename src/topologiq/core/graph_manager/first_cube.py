@@ -10,6 +10,7 @@ import random
 import networkx as nx
 
 from topologiq.core.pathfinder.symbolic import check_exits
+from topologiq.dzw.common.attributes_zx import NodeType
 from topologiq.utils.classes import StandardBlock, StandardCoord
 
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
@@ -37,10 +38,7 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
     # ID of first non-boundary node
     if first_id_strategy == "first_spider":
         # Sort all IDS in graph excluding boundaries
-        all_node_ids = sorted([ node for node in ang.get_nodes() if not ang.is_boundary(node) ])
-
-        # Pick first
-        first_id = all_node_ids[0]
+        first_id = min(filter(lambda nd: nd.type != NodeType.O, ang.get_zx_nodes()), key = lambda nd: nd.id).id
 
     # Majority vote from applicable centrality measures
     elif first_id_strategy == "centrality_majority":

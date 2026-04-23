@@ -1,5 +1,6 @@
 from collections import deque, defaultdict
 from enum import Enum
+from itertools import chain
 from typing import Iterable
 
 import numpy as np
@@ -23,12 +24,24 @@ from topologiq.dzw.common.path import PathSpecification
 from logging import getLogger
 console = getLogger(__name__)
 
-class LayerTransitionType(Enum):
+class LayerTransition(Enum):
     EVERY = 0
     LOWER = 1
     INTRA = 2
     UPPER = 3
     OUTER = 4
+
+    def matches(self, source_layer: LayerId, target_layer: LayerId):
+        if self == LayerTransition.EVERY:
+            return True
+        elif self == LayerTransition.LOWER:
+            return target_layer < source_layer
+        elif self == LayerTransition.INTRA:
+            return source_layer == target_layer
+        elif self == LayerTransition.UPPER:
+            return source_layer < target_layer
+        else: # self == LayerTransition.OUTER
+            return False
 
 # TODO: figure out whether anything can be added as a node/edge in networkx
 # TODO: figure out what the other VertexType and EdgeType represent
@@ -180,51 +193,49 @@ class AugmentedNxGraph(nx.Graph):
     def get_bg_pipe(self, source: CubeId, target: CubeId) -> BgPipe:
         return self.__bg_graph.get_edge_data(source, target)[AugmentedNxGraph.KEY_BG_PIPE]
 
-    def get_nodes(self, node_type: NodeType | None = None, qubit: QubitId | None = None, layer: LayerId | None = None):
-        if node_type or qubit or layer:
-            return filter(
-                lambda node : (node_type is None or self.get_zx_node(node).type == node_type) and
-                              (qubit is None or self.get_zx_node(node).qubit == qubit) and
-                              (layer is None or self.get_zx_node(node).layer == layer),
-                self.nodes
-            )
+    def get_zx_nodes(self,
+        node_type: NodeType | None = None,
+        qubit: QubitId | None = None,
+        layer: LayerId | None = None
+    ) -> Iterable[ZxNode]:
+        return filter(
+            lambda node: (node_type is None or node.type == node_type) and
+                         (qubit is None or node.qubit == qubit) and
+                         (layer is None or node.layer == layer),
+            map(lambda nd: self.get_zx_node(nd), self.nodes)
+        )
+
+    def get_zx_edges(self, edge_type: EdgeType | None = None, layered: tuple[LayerId, LayerTransition] | None = None):
+        if layered is None:
+            edges = map(lambda edge: self.get_zx_edge(*edge), self.edges)
         else:
-            return self.nodes
+            layer, transition = layered
+            if len(self.__zx_layers) == 0:
+                console.warning(f"Requesting layered edges but VolumetricZxGraph does not contain layer information.")
+            edges = chain.from_iterable(map(
+                lambda zxn: map(
+                    lambda neighbor : self.get_zx_edge(zxn.id, neighbor.id),
+                    filter(
+                        lambda nb: transition != LayerTransition.INTRA or zxn.id < nb.id,
+                        self.get_zx_neighbors(zxn, transition)
+                    )
+                ),
+                self.get_zx_nodes(layer = layer)
+            ))
+
+        return filter(lambda edge: edge_type is None or edge.type == edge_type, edges)
+
+    def get_zx_neighbors(self, node: ZxNode, transition: LayerTransition = LayerTransition.EVERY):
+        return filter(
+            lambda neighbor: transition.matches(node.layer, neighbor.layer),
+            map(self.get_zx_node, self.neighbors(node.id))
+        )
 
     def get_depth(self):
         return len(self.__zx_layers)
 
-    def get_layers(self):
+    def get_zx_layers(self):
         return self.__zx_layers.keys()
-
-    def get_layer(self, layer) -> list[NodeId]:
-        return self.__zx_layers[layer]
-
-    def get_layer_density(self, layer: int) -> tuple[int,int]:
-        layer_nodes = list(self.get_nodes(layer = layer))
-        number_of_nodes = len(layer_nodes)
-        number_of_edges = 0
-        for node in layer_nodes:
-            number_of_edges += sum(1 for _ in self.get_node_neighbours(node, transition = LayerTransitionType.INTRA))
-        number_of_edges = number_of_edges // 2
-        return number_of_nodes, number_of_edges
-
-    def get_edges(self):
-        return self.edges()
-
-    def get_layered_edges(self, layer: int, transition: LayerTransitionType = LayerTransitionType.EVERY):
-        if transition == LayerTransitionType.LOWER:
-            filtering = lambda edge : self.get_zx_node(edge[0]).layer <  layer == self.get_zx_node(edge[1]).layer
-        elif transition == LayerTransitionType.INTRA:
-            filtering = lambda edge : self.get_zx_node(edge[0]).layer == layer == self.get_zx_node(edge[1]).layer
-        elif transition == LayerTransitionType.UPPER:
-            filtering = lambda edge : self.get_zx_node(edge[0]).layer == layer <  self.get_zx_node(edge[1]).layer
-        elif transition == LayerTransitionType.OUTER:
-            filtering = lambda edge : self.get_zx_node(edge[0]).layer <  layer <  self.get_zx_node(edge[1]).layer
-        else:
-            filtering = lambda edge : True
-
-        return filter(filtering, self.edges())
 
     def get_cubes(self, cube_kind: CubeKind | None = None):
         return filter(
@@ -241,15 +252,15 @@ class AugmentedNxGraph(nx.Graph):
         return self.__bg_graph.number_of_edges()
 
     def get_node_neighbours(self,
-        node: NodeId, transition: LayerTransitionType = LayerTransitionType.EVERY
+        node: NodeId, transition: LayerTransition = LayerTransition.EVERY
     ) -> Iterable[NodeId]:
-        if transition == LayerTransitionType.EVERY:
+        if transition == LayerTransition.EVERY:
             filtering = lambda other : True
-        elif transition == LayerTransitionType.LOWER:
+        elif transition == LayerTransition.LOWER:
             filtering = lambda other : self.get_zx_node(other).layer < self.get_zx_node(node).layer
-        elif transition == LayerTransitionType.INTRA:
+        elif transition == LayerTransition.INTRA:
             filtering = lambda other : self.get_zx_node(other).layer == self.get_zx_node(node).layer
-        elif transition == LayerTransitionType.UPPER:
+        elif transition == LayerTransition.UPPER:
             filtering = lambda other : self.get_zx_node(node).layer < self.get_zx_node(other).layer
         else: #transition == LayerTransitionType.OUTER
             raise Exception(f"Requesting OUTER transition type for node neighbours. Will always be empty.")
@@ -532,12 +543,11 @@ class AugmentedNxGraph(nx.Graph):
             content += f"{edge} "
         console.info(f"Edges   : {content}")
 
-        for layer in self.get_layers():
-            console.info(f"Layer {layer}  : {self.get_layer(layer)}")
+        for layer in self.get_zx_layers():
+            console.info(f"Layer {layer}  : {list(self.get_zx_nodes(layer = layer))}")
 
         for qubit in self.get_qubits():
-            nodes = filter(lambda nd: qubit == self.get_zx_node(nd).qubit, self.nodes)
-            console.info(f"Qubit {qubit}  : {list(nodes)}")
+            console.info(f"Qubit {qubit}  : {list(self.get_zx_nodes(qubit = qubit))}")
 
     def print_summary(self):
         for node_type in [NodeType.O, NodeType.X, NodeType.Y, NodeType.Z]:
@@ -552,12 +562,11 @@ class AugmentedNxGraph(nx.Graph):
             content += f"{edge} "
         print(f"Edges  : {content}")
 
-        for layer in self.get_layers():
-            print(f"Layer {layer}  : {self.get_layer(layer)}")
+        for layer in self.get_zx_layers():
+            print(f"Layer {layer}  : {list(self.get_zx_nodes(layer = layer))}")
 
         for qubit in self.get_qubits():
-            nodes = filter(lambda nd: qubit == self.get_zx_node(nd).qubit, self.nodes)
-            print(f"Qubit {qubit}  : {list(nodes)}")
+            print(f"Qubit {qubit}  : {list(self.get_zx_nodes(qubit = qubit))}")
 
         for cube in self.get_cubes():
             print(f"Cube {cube}  : {self.get_bg_cube(cube).kind}@{self.get_bg_cube(cube).position}")
