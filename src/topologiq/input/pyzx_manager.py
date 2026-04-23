@@ -214,10 +214,11 @@ class AugmentedZXGraph:
             if other and cube_id in other.zx_graph.vertex_set():
                 qubit = other.zx_graph.qubit(cube_id)
                 row = other.zx_graph.row(cube_id)
+            else:
+                qubit = -1
+                row = -1
 
-            vertex = zx_graph.add_vertex(
-                ty=zx_type, qubit=qubit if qubit else -1, row=row if row else -1
-            )
+            vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row, index=cube_id)
 
             zx_graph.set_vdata(vertex, "coords", coords)
             id_swaps[cube_id] = vertex
@@ -225,6 +226,12 @@ class AugmentedZXGraph:
         for (src_id, tgt_id), (kind, _) in blockgraph_pipes.items():
             zx_type = ZXEdgeTypes.from_str(kind_to_zx_type(kind))
             zx_graph.add_edge((id_swaps[src_id], id_swaps[tgt_id]), edgetype=zx_type)
+
+        if other.zx_graph.inputs():
+            zx_graph.set_inputs(other.zx_graph.inputs())
+
+        if other.zx_graph.outputs():
+            zx_graph.set_outputs(other.zx_graph.outputs())
 
         # Set graph in class
         return cls(zx_graph)
@@ -234,6 +241,7 @@ class AugmentedZXGraph:
         circuit_name: str = "primary",
         use_reduced: bool = False,
         final_vis=False,
+        **kwargs,
     ) -> tuple[
         dict[int, StandardBlock] | None,
         dict[tuple[int, int], list[str | tuple[int, int]]] | None,
@@ -244,11 +252,15 @@ class AugmentedZXGraph:
             circuit_name: The name of the circuit.
             use_reduced: Whether to use the full or reduced version of the ZX graph.
             final_vis: Trigger simple visualisation of output blockgraph.
+            **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+                NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
+                NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
         """
 
         # Choose if to show visualisation of outcome or not
-        kwargs = {"vis_options": ("final" if final_vis else None, None)}
+        if not kwargs:
+            kwargs = {"vis_options": ("final" if final_vis else None, None)}
 
         # Choose full or reduced ZX graph
         zx_graph = self.zx_graph_reduced if use_reduced else self.zx_graph
@@ -273,27 +285,35 @@ class AugmentedZXGraph:
         # Needs to be revisited when I/O labels are added to
         # blockgraph
 
-        # Attempt to verify circuit equality (faster)
-        self_reduced = self.zx_graph_reduced.copy()
-        other_reduced = other.zx_graph_reduced.copy()
-
         try:
-            self_as_circuit = zx.extract_circuit(self_reduced)
-            other_as_circuit = zx.extract_circuit(other_reduced)
-            return self_as_circuit.verify_equality(other_as_circuit)
-        # Fallback to tensor comparison with full graph (very slow)
+            zx_graph_in = self.zx_graph_reduced.copy()
+            zx_graph_out = other.zx_graph_reduced.copy()
+
+            for zx_graph in [zx_graph_in, zx_graph_out]:
+                if not zx_graph.inputs():
+                    dummy = zx_graph.add_vertex(ty=0)
+                    dummy_z = zx_graph.add_vertex(ty=1)
+                    zx_graph.add_edge((dummy, dummy_z))
+                    zx_graph.set_inputs(tuple([dummy]))
+                if not zx_graph.outputs():
+                    dummy = zx_graph.add_vertex(ty=0)
+                    dummy_z = zx_graph.add_vertex(ty=1)
+                    zx_graph.add_edge((dummy, dummy_z))
+                    zx_graph.set_outputs(tuple([dummy]))
+            print(
+                "\nVerifying equality. Input ZX (reduced) v. Output BGRAPH->ZX (reduced).",
+                f"\nIn: {zx_graph_in}, i: {zx_graph_in.inputs()}, o: {zx_graph_in.outputs()}",
+                f"\nOut: {zx_graph_in}, i: {zx_graph_out.inputs()}, o: {zx_graph_out.outputs()}",
+            )
+
+            g1 = zx_graph_in.to_tensor(preserve_scalar=False)
+            g2 = zx_graph_out.to_tensor(preserve_scalar=False)
+            return zx.compare_tensors(g1, g2)
         except Exception as e:
-            print(f"Extract circuit failed while trying to verify: {e}")
+            print(f"Compare tensors failed during verification: {e}")
 
-        try:
-            g1_t = self_reduced.to_tensor()
-            g2_t = other_reduced.to_tensor()
-            return zx.compare_tensors(g1_t, g2_t)
-        except Exception as e:
-            print(f"Compare tensors failed while trying to verify: {e}")
-
-        return True
-
+        print("\nVerification inconclusive. Method returns False as default.")
+        return False
 
     def get_native_visualisation(self, use_reduced: bool = False) -> Any:
         """Convert PyZX graph into a positioned NX graph that allows 3D visualisation."""
@@ -384,7 +404,6 @@ class AugmentedZXGraph:
                     if neigh_neigh_ids[0] == in_id:
                         lonely_spider_ids.extend([in_id, neigh_ids[0]])
         zx_graph.remove_vertices(lonely_spider_ids)
-
         return zx_graph
 
     @staticmethod

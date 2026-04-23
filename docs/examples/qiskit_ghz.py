@@ -50,9 +50,7 @@ def ghz_encoding(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -
 
 # ...
 if __name__ == "__main__":
-    # Create circuit
-    # Example uses in-script circuit for clarity,
-    # but it is also possible to import it from wherever.
+    # Create circuit or import it from somewhere
     n_qubits = 16
     circuit_name = f"ghz_{n_qubits}"
     ghz_circuit = ghz_encoding(n_qubits, circuit_name)
@@ -65,11 +63,23 @@ if __name__ == "__main__":
     zx_graph_manager = ZXGraphManager()
     aug_zx = zx_graph_manager.add_graph_from_qasm(qasm_str=qasm_str, graph_key=circuit_name)
 
+    # Get inputs
+    print(aug_zx.zx_graph_reduced.inputs(), aug_zx.zx_graph_reduced.outputs())
+
     # Draw ZX graph
-    zx.draw(aug_zx.zx_graph)
-    zx.draw(aug_zx.zx_graph_reduced)
+    zx.draw(aug_zx.zx_graph, labels=True)
+    zx.draw(aug_zx.zx_graph_reduced, labels=True)
 
     # Run Topologiq
     lattice_nodes, lattice_edges = aug_zx.get_blockgraph(
         circuit_name=circuit_name, use_reduced=True, final_vis=True
     )
+
+    aug_zx_out = zx_graph_manager.add_graph_from_blockgraph(
+        blockgraph_cubes=lattice_nodes,
+        blockgraph_pipes=lattice_edges,
+        graph_key=f"{circuit_name}_out",
+        other=aug_zx,
+    )
+
+    #aug_zx.check_equality(aug_zx_out)
