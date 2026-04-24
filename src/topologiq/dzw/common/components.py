@@ -49,12 +49,12 @@ class BgCube(RecordClass):
         return str(self)
 
 class BgPipe(RecordClass):
-    source: CubeId
-    target: CubeId
+    source: BgCube
+    target: BgCube
     type: EdgeType
 
     def __str__(self):
-        return f"#{self.source}-{self.type.name[0]}-#{self.target}"
+        return f"#{self.source.id}-{self.type.name[0]}-#{self.target.id}"
 
     def __repr__(self):
         return str(self)

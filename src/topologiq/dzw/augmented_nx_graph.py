@@ -385,32 +385,34 @@ class AugmentedNxGraph(nx.Graph):
 
         return cube
 
-    def connect_pipe(self, source_cube: CubeId, target_cube: CubeId, pipe_type : EdgeType):
-        if not self.__bg_graph.has_node(source_cube):
-            raise Exception(f"Cube #{source_cube} not found in the BG-graph.")
+    def connect_pipe(self, source_cube_id: CubeId, target_cube_id: CubeId, pipe_type : EdgeType):
+        if not self.__bg_graph.has_node(source_cube_id):
+            raise Exception(f"Cube #{source_cube_id} not found in the BG-graph.")
 
-        if not self.__bg_graph.has_node(target_cube):
-            raise Exception(f"Cube #{target_cube} not found in the BG-graph.")
+        if not self.__bg_graph.has_node(target_cube_id):
+            raise Exception(f"Cube #{target_cube_id} not found in the BG-graph.")
 
-        if self.__bg_graph.has_edge(source_cube, target_cube):
-            raise Exception(f"Cubes #{source_cube} and #{target_cube} are already connected by a pipe.")
+        if self.__bg_graph.has_edge(source_cube_id, target_cube_id):
+            raise Exception(f"Cubes #{source_cube_id} and #{target_cube_id} are already connected by a pipe.")
 
-        source_kind = self.get_bg_cube(source_cube).kind
-        target_kind = self.get_bg_cube(target_cube).kind
+        source_cube = self.get_bg_cube(source_cube_id)
+        target_cube = self.get_bg_cube(target_cube_id)
+        source_kind = source_cube.kind
+        target_kind = target_cube.kind
         if not pipe_type in BlockGraphHelper.infer_pipe_type(source_kind, target_kind):
             raise Exception(f"Pipe type {pipe_type} is incompatible with source and target kinds [{source_kind}-{target_kind}].")
 
         # TODO: validate with respect to inferred pipe type between source and target cubes
 
-        source_position = self.get_bg_cube(source_cube).position
-        target_position = self.get_bg_cube(target_cube).position
+        source_position = source_cube.position
+        target_position = target_cube.position
         # TODO: replace 3 with 1 once the pathfinder has been rewritten
         if get_manhattan(source_position, target_position) != 3:
-            raise Exception(f"Cubes #{source_cube}@{source_position} and #{target_cube}@{target_position} are not at adjacent positions.")
+            raise Exception(f"Cubes #{source_cube_id}@{source_position} and #{target_cube_id}@{target_position} are not at adjacent positions.")
 
-        self.__bg_graph.add_edge(source_cube, target_cube)
-        bg_pipe = BgPipe(source = source_cube, target = target_cube, type = pipe_type)
-        self.__bg_graph.get_edge_data(source_cube, target_cube)[AugmentedNxGraph.KEY_BG_PIPE] = bg_pipe
+        self.__bg_graph.add_edge(source_cube.id, target_cube.id)
+        bg_pipe = BgPipe(source_cube, target_cube, pipe_type)
+        self.__bg_graph.get_edge_data(source_cube.id, target_cube.id)[AugmentedNxGraph.KEY_BG_PIPE] = bg_pipe
 
     def is_path_valid(self, path: PathSpecification, edge_type: EdgeType) -> bool:
         is_hadamard_path = False
@@ -631,11 +633,11 @@ class AugmentedNxGraph(nx.Graph):
             while current_line and current_line != "\n":
                 if current_line != "":
                     source_id, target_id, pipe_kind, _ = current_line.split(';')
-                    zx_source = int(source_id)
-                    zx_target = int(target_id)
-                    ang.__bg_graph.add_edge(zx_source, zx_target)
-                    ang.__bg_graph.edges[zx_source, zx_target][AugmentedNxGraph.KEY_BG_PIPE] = BgPipe(
-                        source = zx_source, target = zx_target, type = EdgeType.HADAMARD if 'h' in pipe_kind else EdgeType.IDENTITY
+                    bg_source = ang.get_bg_cube(int(source_id))
+                    bg_target = ang.get_bg_cube(int(target_id))
+                    ang.__bg_graph.add_edge(bg_source.id, bg_target.id)
+                    ang.__bg_graph.edges[bg_source.id, bg_target.id][AugmentedNxGraph.KEY_BG_PIPE] = BgPipe(
+                        source = bg_source, target = bg_target, type = EdgeType.HADAMARD if 'h' in pipe_kind else EdgeType.IDENTITY
                     )
                 current_line = file.readline()
 
@@ -654,24 +656,22 @@ class AugmentedNxGraph(nx.Graph):
     def __scaled_position(position: tuple[int,int,int]) -> str:
         return '(' + ','.join(str(int(p / 3.0)) for p in position) + ')'
 
-    def __infer_pipe_kind(self, src: CubeId, tgt: CubeId) -> str:
-        # cellcolors are for faces (+X, -X, +Y, -Y, +Z, -Z)
+    def __infer_pipe_kind(self, source: BgCube, target: BgCube) -> str:
+        # cellcolors are for faces (X, Y, Z) +  'h' if Hadamard pipe
         colors = ""
-        src_kind = self.get_bg_cube(src).kind
-        tgt_kind = self.get_bg_cube(tgt).kind
-        src_position = Coordinates.from_tuple(self.get_bg_cube(src).position)
-        tgt_position = Coordinates.from_tuple(self.get_bg_cube(tgt).position)
+        src_position = Coordinates.from_tuple(source.position)
+        tgt_position = Coordinates.from_tuple(target.position)
         step_taken = tgt_position - src_position
         distances = step_taken.as_tuple()
         for c in range(3):
             if distances[c] == 0 and (
-                    src_kind not in [CubeKind.OOO, CubeKind.YYY] or tgt_kind not in [CubeKind.OOO, CubeKind.YYY]):
-                color = src_kind.name[c] if src_kind not in [CubeKind.OOO, CubeKind.YYY] else tgt_kind.name[c]
+                    source.kind not in [CubeKind.OOO, CubeKind.YYY] or target.kind not in [CubeKind.OOO, CubeKind.YYY]):
+                color = source.kind.name[c] if source.kind not in [CubeKind.OOO, CubeKind.YYY] else target.kind.name[c]
             else:
                 color = 'o'
             colors += color
 
-        if self.get_bg_pipe(src, tgt).type == EdgeType.HADAMARD:
+        if self.get_bg_pipe(source.id, target.id).type == EdgeType.HADAMARD:
             colors += 'h'
 
         return colors.lower()
@@ -722,7 +722,7 @@ class AugmentedNxGraph(nx.Graph):
             file.write("\nPIPES: src;tgt;kind;\n")
             file.writelines(
                 [
-                    f"{pipe.source};{pipe.target};{self.__infer_pipe_kind(pipe.source, pipe.target)};\n"
+                    f"{pipe.source.id};{pipe.target.id};{self.__infer_pipe_kind(pipe.source, pipe.target)};\n"
                     for pipe in self.get_bg_pipes()
                 ]
             )
