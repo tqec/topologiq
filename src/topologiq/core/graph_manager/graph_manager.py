@@ -37,6 +37,7 @@ from topologiq.core.graph_manager.utils import (
     rm_temp_files,
     validity_checks,
 )
+from topologiq.dzw.common.components import ZxNode
 from topologiq.input.simple_graphs import break_single_spider_graph, strip_boundaries
 from topologiq.utils.classes import Colors, SimpleDictGraph, StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
@@ -259,10 +260,13 @@ def graph_manager_bfs(
 
     # First spider/cube
     nx_g = prep_3d_g(simple_graph)
-    root = first_cube if first_cube is not None else get_first_cube(ang, strategy = kwargs["first_id_strategy"])
+    root_id, root_kind = first_cube if first_cube is not None else get_first_cube(ang, strategy = kwargs["first_id_strategy"])
+    root_node = ang.get_zx_node(root_id)
 
     # BFS management
-    queue, visited, edge_paths, run_success = init_bfs(root)
+    queue: deque[ ZxNode ] = deque([ root_node ])
+    visited: set[ZxNode] = { root_node }
+    edge_paths: dict = {}
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
@@ -270,14 +274,13 @@ def graph_manager_bfs(
 
     # 2. Validity checks
     # Health check depating point
-    if not validity_checks(simple_graph, ( (0,0,0), root[1] )):
+    if not validity_checks(simple_graph, ( (0,0,0), root_kind )):
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    node, cube_kind = root
-    cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
-    nx_g = place_first_cube(nx_g, ang, root)
+    cube = ang.realise_node(root_id, CubeKind[root_kind.upper()], Spacetime.ORIGIN)
+    nx_g = place_first_cube(nx_g, ang, (root_id, root_kind))
 
     # 4. Graph manager BFS
     # Group parameters for readability
@@ -334,8 +337,8 @@ def graph_manager_bfs(
 def do_bfs(
     ang: AugmentedNxGraph,
     nx_g: nx.Graph, # TODO-ANG: replace with AugmentedNxGraph
-    queue: deque,
-    visited: set,
+    queue: deque[ZxNode],
+    visited: set[ZxNode],
     circuit_name: str,
     edge_paths: dict, # TODO-ANG: drop
     trackers: list[any],
@@ -384,28 +387,26 @@ def do_bfs(
             hold_for_edge_removal = []
 
         # Get first cube from queue
-        src_id: int = queue.popleft()
+        source: ZxNode = queue.popleft()
 
         # Iterate over neighbours of current source
-        for tgt_id in ang.get_node_neighbours(src_id):
+        for target in ang.get_zx_neighbors(source):
             # Handle cubes that need to be placed for the first time
-            if tgt_id not in visited:
+            if target not in visited:
                 # Start iteration timer
                 t_1_std_edge_iter, _ = datetime_manager()
 
                 # Add/append ID to visited and queue
-                queue.append(tgt_id)
-                visited.add(tgt_id)
+                queue.append(target)
+                visited.add(target)
 
                 # Try to place blocks as close to one another as as possible
                 step, max_step = (3, 15)
                 while step <= max_step:
                     nx_g, edge_paths, edge_success = handle_std_edge(
-                        src_id,
-                        tgt_id,
+                        ang, source, target,
                         nx_g,       # TODO-ANG: replace with ang
                         edge_paths, # TODO-ANG: drop
-                        ang,
                         circuit_name=circuit_name,
                         init_step=step,
                         fig_data=fig_data,
@@ -476,18 +477,16 @@ def do_bfs(
                     break
 
             # TODO-ANG: adapt this condition to use ang.is_edge_realised(..)
-            elif not ang.is_edge_realised(src_id, tgt_id):
+            elif not ang.is_edge_realised(source.id, target.id):
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
                 # Trigger connection for previously placed cubes
                 # TODO-ANG: adapt this to use ang, drop taken & edge_paths
                 nx_g, edge_paths, edge_success = handle_cross_edge(
-                    src_id,
-                    tgt_id,
+                    ang, source, target,
                     nx_g,
                     edge_paths,
-                    ang,
                     circuit_name=circuit_name,
                     fig_data=fig_data,
                     **kwargs,
