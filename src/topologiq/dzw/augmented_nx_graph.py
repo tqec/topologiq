@@ -88,7 +88,10 @@ class AugmentedNxGraph(nx.Graph):
                 self.add_edge(*edge)
                 self.edges[edge][AugmentedNxGraph.KEY_ZX_EDGE] = ZxEdge(zx_source, zx_target, edge_type)
 
-        self.__next_cube_id = max(self.nodes.keys()) + 1 if len(self.nodes) > 0 else 0
+        # Assume that the nodes and cubes are identified by random numbers, not necessarily consecutive ones
+        zx_max_id = max(self.nodes) if len(self.nodes) > 0 else 0
+        bg_max_id = max(self.__bg_graph.nodes) if len(self.__bg_graph.nodes) > 0 else 0
+        self.__next_id = max(zx_max_id, bg_max_id) + 1
 
         # TODO: split any spider with more than 4 edges (cfr. graph_manager.py; prep_3d_g)
         # TODO: does the choice of how to split such spiders affect the minimal achievable volume ?
@@ -107,38 +110,34 @@ class AugmentedNxGraph(nx.Graph):
         """
 
         # Process all zx-nodes with more than four zx-edges
-        for node in filter(lambda nd: self.degree[nd] > 4, self.nodes):
-            neighbor_ids = self.neighbors(node)
-            degree = self.degree[node]
-            zx_node = self.get_zx_node(node)
+        for node in filter(lambda nd: self.get_zx_degree(nd) > 4, self.get_zx_nodes()):
+            neighbors = iter(self.get_zx_neighbors(node))
 
-            remaining_neighbors = degree - 3
-            next(neighbor_ids); next(neighbor_ids); next(neighbor_ids)
-            previous = node
+            remaining_neighbors = self.get_zx_degree(node) - 3
+            next(neighbors); next(neighbors); next(neighbors)
+            previous: ZxNode = node
             while remaining_neighbors > 0:
-                extra_node_id = self.__next_cube_id
-                self.__next_cube_id += 1
+                extra = ZxNode(id = self.__next_id, type = node.type, qubit = node.qubit, layer = node.layer)
+                self.__next_id += 1
 
-                self.add_node(extra_node_id)
-                extra_zx_node = ZxNode(id = extra_node_id, type = zx_node.type, qubit = zx_node.qubit, layer = zx_node.layer)
-                self.nodes[extra_node_id][AugmentedNxGraph.KEY_ZX_NODE] = extra_zx_node
+                self.add_node(extra.id)
+                self.nodes[extra.id][AugmentedNxGraph.KEY_ZX_NODE] = extra
 
                 # Make zx-edge between previous node of chain and new extra_node
-                self.add_edge(previous, extra_node_id)
+                self.add_edge(previous.id, extra.id)
 
                 neighbors_to_graft = remaining_neighbors if remaining_neighbors <= 3 else 2
                 for _ in range(neighbors_to_graft):
-                    neighbor_id = next(neighbor_ids)
-                    neighbor = self.get_zx_node(neighbor_id)
-                    edge_type = self.get_zx_edge(extra_node_id, neighbor_id).type
+                    neighbor = next(neighbors)
+                    edge_type = self.get_zx_edge(extra.id, neighbor.id).type
 
-                    self.remove_edge(node, neighbor_id)
-                    self.add_edge(extra_node_id, neighbor_id)
-                    extra_zx_edge = ZxEdge(source = extra_zx_node, target = neighbor, type = edge_type)
-                    self.get_edge_data(extra_node_id, extra_zx_edge)[AugmentedNxGraph.KEY_ZX_EDGE] = extra_zx_edge
+                    self.remove_edge(node.id, neighbor.id)
+                    self.add_edge(extra.id, neighbor.id)
+                    extra_zx_edge = ZxEdge(source = extra, target = neighbor, type = edge_type)
+                    self.get_edge_data(extra.id, extra_zx_edge)[AugmentedNxGraph.KEY_ZX_EDGE] = extra_zx_edge
 
                 remaining_neighbors -= neighbors_to_graft
-                previous = extra_node_id
+                previous = extra
 
     @staticmethod
     def from_pyzx_graph(zx_graph: zx.graph.base.BaseGraph):
@@ -227,8 +226,8 @@ class AugmentedNxGraph(nx.Graph):
             map(self.get_zx_node, self.neighbors(node.id))
         )
 
-    def get_zx_degree(self, node: NodeId) -> float:
-        return self.degree[node]
+    def get_zx_degree(self, node: ZxNode) -> int:
+        return int(self.degree[node.id])
 
     def get_depth(self):
         return len(self.__zx_layers)
@@ -272,8 +271,11 @@ class AugmentedNxGraph(nx.Graph):
     ) -> Iterable[NodeId]:
         return map(lambda zxn: zxn.id, self.get_zx_neighbors(self.get_zx_node(node), transition))
 
-    def get_cube_neighbours(self, cube: CubeId):
-        return self.__bg_graph.neighbors(cube)
+    def get_bg_neighbours(self, cube: BgCube, pipe_type: EdgeType | None = None) -> Iterable[BgCube]:
+        return filter(
+            lambda nb : (pipe_type is None or self.get_bg_pipe(cube.id, nb.id).type == pipe_type),
+            map(self.get_bg_cube, self.__bg_graph.neighbors(cube.id))
+        )
 
     def is_cube_placed(self, cube: CubeId) -> bool:
         return cube in self.__bg_graph
@@ -372,8 +374,8 @@ class AugmentedNxGraph(nx.Graph):
         if position in self.occupied:
             raise Exception(f"Proposed position for {kind}@{position} is already occupied by another cube.")
 
-        cube = self.__next_cube_id
-        self.__next_cube_id += 1
+        cube = self.__next_id
+        self.__next_id += 1
 
         self.__bg_graph.add_node(cube)
 

@@ -115,7 +115,7 @@ def handle_std_edge(
         # Assemble a preliminary dictionary of viable paths
         # Note. A smart subset of clean paths
         viable_paths = []
-        tgt_degree = int(ang.get_zx_degree(tgt_id))
+        tgt_degree = int(ang.get_zx_degree(ang.get_zx_node(tgt_id)))
         for clean_path in clean_paths:
             # Extract key path information
             tgt_coords, tgt_kind = clean_path[-1]

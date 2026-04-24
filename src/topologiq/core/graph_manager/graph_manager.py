@@ -71,7 +71,7 @@ def runner(
     SimpleDictGraph,
     None | dict,
     None | dict[int, StandardBlock],
-    None | dict[tuple[int, int], list[str]],
+    None | dict[tuple[int, int], list[str]]
 ]:
     """Run Topologiq on an arbitrary circuit provided as `simple_graph`.
 
@@ -135,6 +135,8 @@ def runner(
                 pyzx_graph = pyzx_graph,
                 **kwargs,
             )
+            # TODO: return ANG and adapt all scripts using runner(..)
+            ang.into_file("../../assets/ang/" + circuit_name + ".ang", include_zx_graph=True)
         except ValueError as e:
             print("ERROR. Graph manager failed", e)
 
@@ -321,9 +323,6 @@ def graph_manager_bfs(
     except Exception as e:
         traceback.print_exc()
         raise ValueError("ERROR. The graph_manager BFS crashed.", e, "\n")
-
-    # ang.print_summary()
-    ang.into_file("../../assets/" + circuit_name + ".ang", include_zx_graph = True)
 
     return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
