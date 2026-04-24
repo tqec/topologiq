@@ -274,8 +274,8 @@ def update_edge_paths(
     """
 
     # ID edge as sorted to avoid duplicates
-    edge = tuple(sorted((source.id, target.id)))
-    edge_type_match = zx_edge_type == "SIMPLE" if ang.get_zx_edge(source.id, target.id).type == EdgeType.IDENTITY else "HADAMARD"
+    edge = ang.get_zx_edge(source.id, target.id)
+    edge_type_match = zx_edge_type == "SIMPLE" if edge.type == EdgeType.IDENTITY else "HADAMARD"
 
     # Assume failure
     edge_success = False
@@ -286,7 +286,7 @@ def update_edge_paths(
         edge_success = True
 
         # Update edge paths
-        edge_paths[edge] = {
+        edge_paths[source.id, target.id] = {
             "src_tgt_ids": (source.id, target.id),
             "path_coordinates": winner_path_standard_pass.coords_in_path,
             "path_nodes": winner_path_standard_pass.all_nodes_in_path,
@@ -302,12 +302,12 @@ def update_edge_paths(
         nx_g.nodes[target.id]["completed"] += 1
         nx_g.nodes[target.id]["beams"] = (
             []
-            if nx_g.nodes[target.id]["completed"] >= get_node_degree(nx_g, target.id)
+            if nx_g.nodes[target.id]["completed"] >= ang.get_zx_degree(target) #get_node_degree(nx_g, target.id)
             else winner_path_standard_pass.tgt_beams
         )
         nx_g.nodes[target.id]["beams_short"] = (
             []
-            if nx_g.nodes[target.id]["completed"] >= get_node_degree(nx_g, target.id)
+            if nx_g.nodes[target.id]["completed"] >= ang.get_zx_degree(target) #get_node_degree(nx_g, target.id)
             else winner_path_standard_pass.tgt_beams_short
         )
 
@@ -317,16 +317,16 @@ def update_edge_paths(
         # TODO: update beams
 
         # Realise the target node
-        target_cube_id = ang.realise_node(
-            node = target.id,
+        target_cube = ang.realise_node(
+            node = target,
             kind = CubeKind[winner_path_standard_pass.tgt_kind.upper()],
             position = winner_path_standard_pass.tgt_coords
         )
 
         # Prepare the proposal
         proposal = PathSpecification(
-            source_cube = source.realising_cube.id, target_cube = target_cube_id,
-            edge_type = ang.get_zx_edge(source.id, target.id).type,
+            source_cube = source.realising_cube.id, target_cube = target_cube.id,
+            edge_type = edge.type,
             extra_cubes = [
                 (CubeKind[winner_path_standard_pass.all_nodes_in_path[idx][1].upper()],
                  winner_path_standard_pass.all_nodes_in_path[idx][0])
@@ -339,14 +339,14 @@ def update_edge_paths(
         )
 
         # Update the ANG with the path realising the edge
-        ang.realise_edge(source = source.id, target = target.id, proposal = proposal)
+        ang.realise_edge(source, target, proposal)
 
     elif second_pass and winner_path_second_pass and edge_type_match:
         # Log as success
         edge_success = True
 
         # Update edge paths
-        edge_paths[edge] = {
+        edge_paths[source.id, target.id] = {
             "src_tgt_ids": (source.id, target.id),
             "path_coordinates": [p[0] for p in winner_path_second_pass],
             "path_nodes": winner_path_second_pass,
@@ -360,12 +360,12 @@ def update_edge_paths(
         nx_g.nodes[target.id]["completed"] += 1
         nx_g.nodes[target.id]["beams"] = (
             []
-            if nx_g.nodes[target.id]["completed"] >= get_node_degree(nx_g, target.id)
+            if nx_g.nodes[target.id]["completed"] >= ang.get_zx_degree(target) #get_node_degree(nx_g, target.id)
             else nx_g.nodes[target.id]["beams"]
         )
         nx_g.nodes[target.id]["beams_short"] = (
             []
-            if nx_g.nodes[target.id]["completed"] >= get_node_degree(nx_g, target.id)
+            if nx_g.nodes[target.id]["completed"] >= ang.get_zx_degree(target) #get_node_degree(nx_g, target.id)
             else nx_g.nodes[target.id]["beams_short"]
         )
 
@@ -377,7 +377,7 @@ def update_edge_paths(
         # Prepare the proposed path
         proposed_path = PathSpecification(
             source_cube = source.realising_cube.id, target_cube = target.realising_cube.id,
-            edge_type = ang.get_zx_edge(source.id, target.id).type,
+            edge_type = edge.type,
             extra_cubes = [
                 (CubeKind[winner_path_second_pass[idx][1].upper()],
                  winner_path_second_pass[idx][0])
@@ -390,15 +390,11 @@ def update_edge_paths(
         )
 
         # Update the ANG with the path realising the edge
-        ang.realise_edge(
-            source = source.id,
-            target = target.id,
-            proposal = proposed_path
-        )
+        ang.realise_edge(source, target, proposed_path)
 
     # Fill edge_paths with error if no paths available
     else:
-        edge_paths[edge] = {
+        edge_paths[source.id, target.id] = {
             "src_tgt_ids": "error",
             "path_coordinates": "error",
             "path_nodes": "error",

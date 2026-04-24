@@ -134,7 +134,7 @@ class AugmentedNxGraph(nx.Graph):
                     self.remove_edge(node.id, neighbor.id)
                     self.add_edge(extra.id, neighbor.id)
                     extra_zx_edge = ZxEdge(source = extra, target = neighbor, type = edge_type)
-                    self.get_edge_data(extra.id, extra_zx_edge)[AugmentedNxGraph.KEY_ZX_EDGE] = extra_zx_edge
+                    self.edges[extra.id, neighbor.id][AugmentedNxGraph.KEY_ZX_EDGE] = extra_zx_edge
 
                 remaining_neighbors -= neighbors_to_graft
                 previous = extra
@@ -210,7 +210,7 @@ class AugmentedNxGraph(nx.Graph):
         return self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE]
 
     def get_zx_edge(self, source: NodeId, target: NodeId) -> ZxEdge:
-        return self.get_edge_data(source, target)[AugmentedNxGraph.KEY_ZX_EDGE]
+        return self.edges[source, target][AugmentedNxGraph.KEY_ZX_EDGE]
 
     def get_zx_nodes(
             self, node_type: NodeType | None = None, qubit: QubitId | None = None, layer: LayerId | None = None
@@ -309,45 +309,45 @@ class AugmentedNxGraph(nx.Graph):
     def is_node_realised(self, node: NodeId) -> bool:
         return self.get_zx_node(node).is_realised()
 
-    def realise_node(self, node: NodeId, kind: CubeKind, position: StandardCoord) -> CubeId:
+    def realise_node(self, node: ZxNode, kind: CubeKind, position: StandardCoord) -> BgCube:
         """Realise the node as a cube of the given kind placed at the given coordinates."""
-        if kind not in CubeKind.suitable_kinds(self.get_zx_node(node).type):
-            raise Exception(f"Requested {kind} is not compatible with {self.get_zx_node(node).type}")
+        if kind not in CubeKind.suitable_kinds(node.type):
+            raise Exception(f"Requested {kind} is not suitable for {node}")
 
-        if not self.has_node(node):
-            raise Exception(f"Node #{node} not found in the ZX-graph.")
+        if not self.has_node(node.id):
+            raise Exception(f"Node {node} not found in the ZX-graph.")
 
         cube = self.place_cube(kind, position)
-        self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE].realised_node = self.get_zx_node(node)
-        self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE].realising_cube = self.get_bg_cube(cube)
+        cube.realised_node = node
+        node.realising_cube = cube
 
-        console.info(f"Realising node #{node} [{self.get_zx_node(node).type}] as cube #{cube} [{kind}@{position}]")
-        self.__zx_node_realisation_order.append(node)
+        console.info(f"Realising node {node} as cube {cube}.")
+        self.__zx_node_realisation_order.append(node.id)
 
         return cube
 
-    def is_edge_realised(self, source: NodeId, target: NodeId) -> bool:
-        return len(self.edges[source, target][AugmentedNxGraph.KEY_ZX_EDGE].realisation) > 0
+    def is_edge_realised(self, source: ZxNode, target: ZxNode) -> bool:
+        return len(self.edges[source.id, target.id][AugmentedNxGraph.KEY_ZX_EDGE].realisation) > 0
 
-    def realise_edge(self, source: NodeId, target: NodeId, proposal: PathSpecification):
-        if not self.is_node_realised(source):
+    def realise_edge(self, source: ZxNode, target: ZxNode, proposal: PathSpecification):
+        if not source.is_realised():
             raise Exception(f"{source} is not placed; cannot connect with a path.")
 
-        if not self.is_node_realised(target):
+        if not target.is_realised():
             raise Exception(f"{target} is not placed; cannot connect with a path.")
 
-        if not self.has_edge(source, target):
+        if not self.has_edge(source.id, target.id):
             raise Exception(f"No edge {source}-{target} found in the ZX-graph.")
 
         if self.is_edge_realised(source, target):
             raise Exception(f"{source}-{target} is already realized by a path.")
 
-        source_cube = self.get_zx_node(source).realising_cube
-        target_cube = self.get_zx_node(target).realising_cube
-        edge_type = self.get_zx_edge(source, target).type
+        source_cube = source.realising_cube
+        target_cube = target.realising_cube
+        edge = self.get_zx_edge(source.id, target.id)
 
-        # # Reject path if it is invalid.
-        if not self.is_path_valid(proposal, edge_type):
+        # Reject path if it is invalid.
+        if not self.is_path_valid(proposal, edge.type):
             raise Exception(f"Proposed path to realise edge {source}-{target} is invalid.")
 
         if not proposal:
@@ -356,13 +356,13 @@ class AugmentedNxGraph(nx.Graph):
             sequence = ""
             for position, kind in proposal.get_extra_cubes():
                 sequence += f"{kind}@{position}"
-        console.info(f"Realising edge {source}-{target} [type={self.get_zx_edge(source, target).type}] with extra cubes : {sequence}")
+        console.info(f"Realising edge {edge} with extra cubes : {sequence}")
 
         # The sequence of pipes ids will serve as the realisation of the edge
         realisation = []
 
         # Add all the extra cubes and pipes of the path to the BlockGraph
-        previous_cube: int = source_cube.id
+        previous_cube: BgCube = source_cube
 
         proposed_cubes = proposal.get_cubes()
         proposed_pipes = proposal.get_pipes()
@@ -374,10 +374,10 @@ class AugmentedNxGraph(nx.Graph):
 
             # Place the current cube and connect it to the previous cube.
             current_cube = self.place_cube(current_kind, current_position)
-            self.connect_pipe(previous_cube, current_cube, current_pipe_type)
+            self.connect_pipe(previous_cube.id, current_cube.id, current_pipe_type)
 
             # Extend the sequence of extra node ids
-            pipe = (previous_cube, current_cube)
+            pipe = (previous_cube.id, current_cube.id)
             realisation.append( pipe )
 
             # Prepare for the next iteration
@@ -385,28 +385,26 @@ class AugmentedNxGraph(nx.Graph):
 
         # Make the final connection
         final_pipe_type = proposed_pipes[-1]
-        self.connect_pipe(previous_cube, target_cube.id, final_pipe_type)
+        self.connect_pipe(previous_cube.id, target_cube.id, final_pipe_type)
 
-        pipe = (previous_cube, target_cube.id)
+        pipe = (previous_cube.id, target_cube.id)
         realisation.append( pipe )
 
         # Store the realisation of the edge
-        self.edges[source, target][AugmentedNxGraph.KEY_ZX_EDGE].realisation = realisation
+        edge.realisation = realisation
 
         # One more edge has been realised
-        self.__zx_edge_realisation_order.append( (source, target) )
+        self.__zx_edge_realisation_order.append( (source.id, target.id) )
 
-    def place_cube(self, kind: CubeKind, position: StandardCoord) -> CubeId:
+    def place_cube(self, kind: CubeKind, position: StandardCoord) -> BgCube:
         if position in self.occupied:
             raise Exception(f"Proposed position for {kind}@{position} is already occupied by another cube.")
 
-        cube = self.__next_id
+        cube = BgCube(id = self.__next_id, kind = kind, position = position)
         self.__next_id += 1
 
-        self.__bg_graph.add_node(cube)
-
-        self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE] = BgCube(id = cube, kind = kind, position = position)
-
+        self.__bg_graph.add_node(cube.id)
+        self.__bg_graph.nodes[cube.id][AugmentedNxGraph.KEY_BG_CUBE] = cube
         self.occupied.add(position)
 
         return cube

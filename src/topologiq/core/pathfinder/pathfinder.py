@@ -41,7 +41,7 @@ from topologiq.core.pathfinder.utils import (
     get_max_manhattan,
     init_bfs,
 )
-from topologiq.dzw.common.components import BgCube
+from topologiq.dzw.common.components import BgCube, ZxNode
 from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.core import datetime_manager
 from topologiq.utils.read_write import prep_stats_n_log
@@ -54,7 +54,7 @@ from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 ############################
 # TODO-ANG: adapt to use ang
 def pathfinder(
-    ang: AugmentedNxGraph, source: NodeId, target: NodeId,
+    ang: AugmentedNxGraph, source: ZxNode, target: ZxNode,
     tent_coords: list[StandardCoord],
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     **kwargs,
@@ -71,11 +71,11 @@ def pathfinder(
     """Call core pathfinder after generating list of possible kinds for the given operation.
 
     Args:
-        src_block_info: The coords and kind of the source block.
+        ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
+        source: the source of the path we are looking for
+        target: the target of the path we are looking for
         tent_coords: A list of tentative target coordinates to find paths to.
-        hdm (optional): If True, it indicates that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
-        src_tgt_ids (optional): The exact IDs of the source and target cubes.
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -90,15 +90,11 @@ def pathfinder(
     t_1, _ = datetime_manager()
 
     # Retrieve attributes of source and target from the ANG
-    source_cube = ang.get_zx_node(source).realising_cube
+    source_cube = source.realising_cube
     src_block_info = (source_cube.position, source_cube.kind.name.lower())
-    src_tgt_ids = (source, target)
-    target_node_type = ang.get_zx_node(target).type.name
-    if ang.is_node_realised(target):
-        target_cube = ang.get_zx_node(target).realising_cube
-        target_cube_kind = target_cube.kind.name.lower()
-    else:
-        target_cube_kind = None
+    src_tgt_ids = (source.id, target.id)
+    target_node_type = target.type.name
+    target_cube_kind = target.realising_cube.kind.name.lower() if target.is_realised() else None
 
     taken_cc: list[StandardCoord] = list(ang.occupied)
     if taken_cc:
@@ -109,7 +105,7 @@ def pathfinder(
     # Note. When handling many tent_coords, the kind for a given ZX type might differ
     tent_tgt_kinds = gen_tent_tgt_kinds(
         target_node_type,
-        tgt_kind = target_cube_kind if target_cube_kind else None,
+        tgt_kind = target_cube_kind,
     )
     # Call pathfinder
     valid_paths, all_search_paths, visit_stats = core_pathfinder_bfs(
@@ -117,7 +113,7 @@ def pathfinder(
         tent_coords,
         tent_tgt_kinds,
         taken = taken_cc,
-        hdm = ang.get_zx_edge(source, target).type == EdgeType.HADAMARD,
+        hdm = ang.get_zx_edge(source.id, target.id).type == EdgeType.HADAMARD,
         critical_beams = critical_beams,
         src_tgt_ids = src_tgt_ids,
         **kwargs,

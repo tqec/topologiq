@@ -109,7 +109,7 @@ def handle_std_edge(
         # Get clean candidate paths
         # Note. Topologically correct but not necessarily smart paths
         clean_paths, pathfinder_vis_data = call_pathfinder(
-            ang, source.id, target.id,
+            ang, source, target,
             init_step,
             **kwargs,
         )
@@ -219,7 +219,7 @@ def handle_std_edge(
                 else 0
             )
             print(
-                f"ADD CUBE: {source} -> {target}.",
+                f"ADD CUBE: {source.realising_cube.id} -> {target.realising_cube.id}.",
                 (Colors.GREEN + "Success." + Colors.RESET)
                 if edge_success
                 else f"{(Colors.YELLOW + 'Increasing search distance.' + Colors.RESET) if init_step < 15 else (Colors.RED + 'FAIL.' + Colors.RESET)}",
@@ -285,7 +285,7 @@ def handle_cross_edge(
         src_kind = source_cube.kind.name.lower()
 
         # Call pathfinder on any graph edge that does not have an entry in edge_paths
-        if not ang.is_edge_realised(source.id, target.id): # edge not in edge_paths:
+        if not ang.is_edge_realised(source, target): # edge not in edge_paths:
             critical_beams = _assemble_critical_beams(nx_g)
 
             # Check if edge is hadamard
@@ -298,7 +298,7 @@ def handle_cross_edge(
             if target.is_realised():
                 # TODO-ANG: adapt this to use ang
                 clean_paths, pathfinder_vis_data = call_pathfinder(
-                    ang, source.id, target.id,
+                    ang, source, target,
                     3,
                     critical_beams=critical_beams,
                     **kwargs,
@@ -347,7 +347,7 @@ def handle_cross_edge(
                         len([i for i in clean_paths[0] if "o" not in i[1]]) if edge_success else 0
                     )
                     print(
-                        f"CONNECT PRE-EXISTING CUBES: {source} -> {target}.",
+                        f"CONNECT PRE-EXISTING CUBES: {source.realising_cube.id} -> {target.realising_cube.id}.",
                         (Colors.GREEN + "Success." + Colors.RESET)
                         if edge_success
                         else Colors.RED + "FAIL." + Colors.RESET,

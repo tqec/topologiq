@@ -14,6 +14,7 @@ from topologiq.core.beams import CubeBeams
 from topologiq.core.graph_manager.utils import reindex_path_dict
 from topologiq.core.pathfinder.pathfinder import pathfinder
 from topologiq.core.paths import PathBetweenNodes
+from topologiq.dzw.common.components import ZxNode
 from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.read_write import prep_stats_n_log
 from topologiq.vis.animation import create_animation
@@ -28,7 +29,7 @@ from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 ##############
 def call_pathfinder(
     # TODO-ANG: adapt to use ang to query revelant information
-    ang: AugmentedNxGraph, source: NodeId, target: NodeId,
+    ang: AugmentedNxGraph, source: ZxNode, target: ZxNode,
     init_step: int,
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
     **kwargs,
@@ -46,14 +47,11 @@ def call_pathfinder(
     amongst all surviving paths.
 
     Args:
-        src_block_info: The information of the source cube including its position in the 3D space and its kind.
-        tgt_zx_type: The ZX type of the target spider/cube.
+        ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
+        source: the source of the path we are looking for
+        target: the target of the path we are looking for
         init_step: The ideal/intended (Manhattan) distance between source and target blocks.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        tgt_block_info (optional): An optional parameter to send the information of a node that has already been placed in the 3D space.
-        hdm (optional): If True, it tells the inner pathfinding algorithm that the original ZX-edge is a Hadamard edge.
         critical_beams (optional): Annotated beams object with details about minimum number of beams needed per node.
-        src_tgt_ids (optional): The exact IDs of the source and target cubes.
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -69,13 +67,8 @@ def call_pathfinder(
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
-    source_cube = ang.get_zx_node(source).realising_cube
-    src_coords = source_cube.position
-    if ang.is_node_realised(target):
-        target_cube = ang.get_zx_node(target).realising_cube
-        tgt_coords = target_cube.position
-    else:
-        tgt_coords = None
+    src_coords = source.realising_cube.position
+    tgt_coords = target.realising_cube.position if target.is_realised() else None
 
     step = init_step
 
@@ -87,7 +80,7 @@ def call_pathfinder(
         taken_cc.remove(tgt_coords)
 
     # Loop call the inner pathfinder in case there is a need to re-run the pathfinder
-    max_step = init_step if ang.is_node_realised(target) else 15
+    max_step = init_step if target.is_realised() else 15
     while step <= max_step:
         # Generate tentative coordinates for current step or use target node
         if tgt_coords:

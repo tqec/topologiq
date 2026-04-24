@@ -261,11 +261,11 @@ def graph_manager_bfs(
     # First spider/cube
     nx_g = prep_3d_g(simple_graph)
     root_id, root_kind = first_cube if first_cube is not None else get_first_cube(ang, strategy = kwargs["first_id_strategy"])
-    root_node = ang.get_zx_node(root_id)
+    root = ang.get_zx_node(root_id)
 
     # BFS management
-    queue: deque[ ZxNode ] = deque([ root_node ])
-    visited: set[ZxNode] = { root_node }
+    queue: deque[ ZxNode ] = deque([ root ])
+    visited: set[ZxNode] = { root }
     edge_paths: dict = {}
 
     # Outputs
@@ -279,7 +279,7 @@ def graph_manager_bfs(
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    cube = ang.realise_node(root_id, CubeKind[root_kind.upper()], Spacetime.ORIGIN)
+    cube = ang.realise_node(root, CubeKind[root_kind.upper()], Spacetime.ORIGIN)
     nx_g = place_first_cube(nx_g, ang, (root_id, root_kind))
 
     # 4. Graph manager BFS
@@ -477,7 +477,7 @@ def do_bfs(
                     break
 
             # TODO-ANG: adapt this condition to use ang.is_edge_realised(..)
-            elif not ang.is_edge_realised(source.id, target.id):
+            elif not ang.is_edge_realised(source, target):
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
