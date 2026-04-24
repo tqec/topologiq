@@ -19,13 +19,13 @@ class ZxNode(RecordClass):
         return str(self)
 
 class ZxEdge(RecordClass):
-    source: NodeId
-    target: NodeId
+    source: ZxNode
+    target: ZxNode
     type: EdgeType
     realisation: list[PipeId] = []
 
     def __str__(self):
-        return f"N{self.source}-{self.type.name[0]}-N{self.target}"
+        return f"N{self.source.id}-{self.type.name[0]}-N{self.target.id}"
 
     def __repr__(self):
         return str(self)

@@ -83,8 +83,10 @@ class AugmentedNxGraph(nx.Graph):
 
         if edges is not None:
             for edge, edge_type in edges:
+                zx_source = self.get_zx_node(min(edge))
+                zx_target = self.get_zx_node(max(edge))
                 self.add_edge(*edge)
-                self.edges[edge][AugmentedNxGraph.KEY_ZX_EDGE] = ZxEdge(source = edge[0], target = edge[1], type = edge_type)
+                self.edges[edge][AugmentedNxGraph.KEY_ZX_EDGE] = ZxEdge(zx_source, zx_target, edge_type)
 
         self.__next_cube_id = max(self.nodes.keys()) + 1 if len(self.nodes) > 0 else 0
 
@@ -106,12 +108,12 @@ class AugmentedNxGraph(nx.Graph):
 
         # Process all zx-nodes with more than four zx-edges
         for node in filter(lambda nd: self.degree[nd] > 4, self.nodes):
-            neighbors = self.neighbors(node)
+            neighbor_ids = self.neighbors(node)
             degree = self.degree[node]
             zx_node = self.get_zx_node(node)
 
             remaining_neighbors = degree - 3
-            next(neighbors); next(neighbors); next(neighbors)
+            next(neighbor_ids); next(neighbor_ids); next(neighbor_ids)
             previous = node
             while remaining_neighbors > 0:
                 extra_node_id = self.__next_cube_id
@@ -126,12 +128,13 @@ class AugmentedNxGraph(nx.Graph):
 
                 neighbors_to_graft = remaining_neighbors if remaining_neighbors <= 3 else 2
                 for _ in range(neighbors_to_graft):
-                    neighbor = next(neighbors)
-                    edge_type = self.get_zx_edge(extra_node_id, neighbor).type
+                    neighbor_id = next(neighbor_ids)
+                    neighbor = self.get_zx_node(neighbor_id)
+                    edge_type = self.get_zx_edge(extra_node_id, neighbor_id).type
 
-                    self.remove_edge(node, neighbor)
-                    self.add_edge(extra_node_id, neighbor)
-                    extra_zx_edge = ZxEdge(source = extra_node_id, target = neighbor, type = edge_type)
+                    self.remove_edge(node, neighbor_id)
+                    self.add_edge(extra_node_id, neighbor_id)
+                    extra_zx_edge = ZxEdge(source = extra_zx_node, target = neighbor, type = edge_type)
                     self.get_edge_data(extra_node_id, extra_zx_edge)[AugmentedNxGraph.KEY_ZX_EDGE] = extra_zx_edge
 
                 remaining_neighbors -= neighbors_to_graft
@@ -529,7 +532,7 @@ class AugmentedNxGraph(nx.Graph):
 
         content = ""
         for edge in self.get_zx_edges():
-            content += f"({edge.source},{edge.target}) "
+            content += f"({edge.source.id},{edge.target.id}) "
         print(f"Edges  : {content}")
 
         for layer in self.get_zx_layers():
@@ -592,11 +595,11 @@ class AugmentedNxGraph(nx.Graph):
                 while current_line and current_line != "\n":
                     if current_line != "":
                         source_id, target_id, edge_type, realisation = current_line.split(';')
-                        source = ang.get_zx_node(int(source_id))
-                        target = ang.get_zx_node(int(target_id))
-                        ang.add_edge(source.id, target.id)
-                        zx_edge = ZxEdge(source = source, target = target, type = EdgeType[edge_type])
-                        ang.edges[source.id, target.id][AugmentedNxGraph.KEY_ZX_EDGE] = zx_edge
+                        zx_source = ang.get_zx_node(int(source_id))
+                        zx_target = ang.get_zx_node(int(target_id))
+                        ang.add_edge(zx_source.id, zx_target.id)
+                        zx_edge = ZxEdge(source = zx_source, target = zx_target, type = EdgeType[edge_type])
+                        ang.edges[zx_source.id, zx_target.id][AugmentedNxGraph.KEY_ZX_EDGE] = zx_edge
                         zx_edge_bg_pipe[zx_edge] = [ make_tuple(pair) for pair in realisation[1:-2].split(':') ]
                     current_line = file.readline()
 
@@ -628,11 +631,11 @@ class AugmentedNxGraph(nx.Graph):
             while current_line and current_line != "\n":
                 if current_line != "":
                     source_id, target_id, pipe_kind, _ = current_line.split(';')
-                    source = int(source_id)
-                    target = int(target_id)
-                    ang.__bg_graph.add_edge(source, target)
-                    ang.__bg_graph.edges[source, target][AugmentedNxGraph.KEY_BG_PIPE] = BgPipe(
-                        source = source, target = target, type = EdgeType.HADAMARD if 'h' in pipe_kind else EdgeType.IDENTITY
+                    zx_source = int(source_id)
+                    zx_target = int(target_id)
+                    ang.__bg_graph.add_edge(zx_source, zx_target)
+                    ang.__bg_graph.edges[zx_source, zx_target][AugmentedNxGraph.KEY_BG_PIPE] = BgPipe(
+                        source = zx_source, target = zx_target, type = EdgeType.HADAMARD if 'h' in pipe_kind else EdgeType.IDENTITY
                     )
                 current_line = file.readline()
 
@@ -701,7 +704,7 @@ class AugmentedNxGraph(nx.Graph):
                 file.write("\nEDGES: source;target;type;realisation\n")
                 file.writelines(
                     [
-                        f"{edge.source};{edge.target};{edge.type};[{':'.join(map(str, edge.realisation))}]\n"
+                        f"{edge.source.id};{edge.target.id};{edge.type};[{':'.join(map(str, edge.realisation))}]\n"
                         for edge in self.get_zx_edges()
                     ]
                 )
