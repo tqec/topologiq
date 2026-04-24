@@ -69,10 +69,10 @@ def call_pathfinder(
     valid_paths: dict[StandardBlock, list[StandardBlock]] | None = None
     clean_paths = []
 
-    source_cube = ang.get_bg_cube(ang.get_zx_node(source).realising_cube)
+    source_cube = ang.get_zx_node(source).realising_cube
     src_coords = source_cube.position
     if ang.is_node_realised(target):
-        target_cube = ang.get_bg_cube(ang.get_zx_node(target).realising_cube)
+        target_cube = ang.get_zx_node(target).realising_cube
         tgt_coords = target_cube.position
     else:
         tgt_coords = None

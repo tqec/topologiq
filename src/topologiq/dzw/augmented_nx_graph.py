@@ -279,7 +279,7 @@ class AugmentedNxGraph(nx.Graph):
         return cube in self.__bg_graph
 
     def is_node_realised(self, node: NodeId) -> bool:
-        return self.get_zx_node(node).realising_cube != -1
+        return self.get_zx_node(node).is_realised()
 
     def realise_node(self, node: NodeId, kind: CubeKind, position: StandardCoord) -> CubeId:
         """Realise the node as a cube of the given kind placed at the given coordinates."""
@@ -291,7 +291,7 @@ class AugmentedNxGraph(nx.Graph):
 
         cube = self.place_cube(kind, position)
         self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE].realised_node = node
-        self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE].realising_cube = cube
+        self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE].realising_cube = self.get_bg_cube(cube)
 
         console.info(f"Realising node #{node} [{self.get_zx_node(node).type}] as cube #{cube} [{kind}@{position}]")
         self.__zx_node_realisation_order.append(node)
@@ -316,7 +316,6 @@ class AugmentedNxGraph(nx.Graph):
 
         source_cube = self.get_zx_node(source).realising_cube
         target_cube = self.get_zx_node(target).realising_cube
-
         edge_type = self.get_zx_edge(source, target).type
 
         # # Reject path if it is invalid.
@@ -335,7 +334,7 @@ class AugmentedNxGraph(nx.Graph):
         realisation = []
 
         # Add all the extra cubes and pipes of the path to the BlockGraph
-        previous_cube: int = source_cube
+        previous_cube: int = source_cube.id
 
         proposed_cubes = proposal.get_cubes()
         proposed_pipes = proposal.get_pipes()
@@ -357,11 +356,10 @@ class AugmentedNxGraph(nx.Graph):
             previous_cube = current_cube
 
         # Make the final connection
-        target_cube = self.get_zx_node(target).realising_cube
         final_pipe_type = proposed_pipes[-1]
-        self.connect_pipe(previous_cube, target_cube, final_pipe_type)
+        self.connect_pipe(previous_cube, target_cube.id, final_pipe_type)
 
-        pipe = (previous_cube, target_cube)
+        pipe = (previous_cube, target_cube.id)
         realisation.append( pipe )
 
         # Store the realisation of the edge
@@ -695,7 +693,7 @@ class AugmentedNxGraph(nx.Graph):
                 file.write("\nNODES: id;type;qubit;layer;realising_cube\n")
                 file.writelines(
                     [
-                        f"{node.id};{node.type};{node.qubit};{node.layer};{node.realising_cube}\n"
+                        f"{node.id};{node.type};{node.qubit};{node.layer};{node.realising_cube.id}\n"
                         for node in self.get_zx_nodes()
                     ]
                 )

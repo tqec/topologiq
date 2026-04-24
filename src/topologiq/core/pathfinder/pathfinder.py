@@ -90,12 +90,12 @@ def pathfinder(
     t_1, _ = datetime_manager()
 
     # Retrieve attributes of source and target from the ANG
-    source_cube: BgCube = ang.get_bg_cube(ang.get_zx_node(source).realising_cube)
+    source_cube = ang.get_zx_node(source).realising_cube
     src_block_info = (source_cube.position, source_cube.kind.name.lower())
     src_tgt_ids = (source, target)
     target_node_type = ang.get_zx_node(target).type.name
     if ang.is_node_realised(target):
-        target_cube: BgCube = ang.get_bg_cube(ang.get_zx_node(target).realising_cube)
+        target_cube = ang.get_zx_node(target).realising_cube
         target_cube_kind = target_cube.kind.name.lower()
     else:
         target_cube_kind = None

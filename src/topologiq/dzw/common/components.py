@@ -1,5 +1,7 @@
 from recordclass import RecordClass  # type: ignore[import-untyped]
 
+from typing import cast
+
 from topologiq.utils.classes import StandardCoord
 
 from topologiq.dzw.common.attributes_zx import NodeId, NodeType, QubitId, LayerId, EdgeType
@@ -10,7 +12,21 @@ class ZxNode(RecordClass):
     type: NodeType
     qubit: QubitId = -1
     layer: LayerId = -1
-    realising_cube: CubeId = -1
+    __realising_cube: object = None
+
+    def is_realised(self):
+        return self.realising_cube is not None
+
+    @property
+    def realising_cube(self):
+        return cast(BgCube, self.__realising_cube)
+
+    @realising_cube.setter
+    def realising_cube(self, value):
+        if isinstance(value, BgCube):
+            self.__realising_cube = value
+        else:
+            raise ValueError(f"realising_cube(..) parameter is not a BgCube.")
 
     def __str__(self):
         return f"N{self.id}:{self.type}"

@@ -314,7 +314,7 @@ def update_edge_paths(
         # TODO: update beams
 
         # Realise the target node
-        target_cube = ang.realise_node(
+        target_cube_id = ang.realise_node(
             node = tgt_id,
             kind = CubeKind[winner_path_standard_pass.tgt_kind.upper()],
             position = winner_path_standard_pass.tgt_coords
@@ -322,7 +322,7 @@ def update_edge_paths(
 
         # Prepare the proposal
         proposal = PathSpecification(
-            source_cube = ang.get_zx_node(src_id).realising_cube, target_cube = target_cube,
+            source_cube = ang.get_zx_node(src_id).realising_cube.id, target_cube = target_cube_id,
             edge_type = ang.get_zx_edge(src_id, tgt_id).type,
             extra_cubes = [
                 (CubeKind[winner_path_standard_pass.all_nodes_in_path[idx][1].upper()],
@@ -377,7 +377,7 @@ def update_edge_paths(
 
         # Prepare the proposed path
         proposed_path = PathSpecification(
-            source_cube = ang.get_zx_node(src_id).realising_cube, target_cube = ang.get_zx_node(tgt_id).realising_cube,
+            source_cube = ang.get_zx_node(src_id).realising_cube.id, target_cube = ang.get_zx_node(tgt_id).realising_cube.id,
             edge_type = ang.get_zx_edge(src_id, tgt_id).type,
             extra_cubes = [
                 (CubeKind[winner_path_second_pass[idx][1].upper()],
