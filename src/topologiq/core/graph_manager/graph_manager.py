@@ -136,7 +136,8 @@ def runner(
                 **kwargs,
             )
             # TODO: return ANG and adapt all scripts using runner(..)
-            ang.into_file("../../assets/ang/" + circuit_name + ".ang", include_zx_graph=True)
+            ang.into_file(filepath = "../../assets/ang/" + circuit_name + ".ang", include_zx_graph=True)
+            ang.to_pyzx_graph(filepath = "../../assets/pyzx/" + circuit_name + ".json")
         except ValueError as e:
             print("ERROR. Graph manager failed", e)
 

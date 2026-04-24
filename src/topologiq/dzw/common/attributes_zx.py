@@ -1,5 +1,5 @@
 from enum import Enum
-import pyzx as zx
+import pyzx
 
 NodeId = int
 EdgeId = tuple[NodeId, NodeId]
@@ -13,21 +13,32 @@ class NodeType(Enum):
     Z = 3 # Z-Spider
 
     @staticmethod
-    def convert(vertex_type: zx.VertexType):
-        if vertex_type == zx.VertexType.Z:
+    def convert_from_pyzx(vertex_type: pyzx.VertexType):
+        if vertex_type == pyzx.VertexType.Z:
             return NodeType.Z
-        elif vertex_type == zx.VertexType.X:
+        elif vertex_type == pyzx.VertexType.X:
             return NodeType.X
-        elif vertex_type == zx.VertexType.BOUNDARY:
+        elif vertex_type == pyzx.VertexType.BOUNDARY:
             return NodeType.O
         else:
             raise ValueError(f"Unsupported vertex type: {vertex_type}")
 
     @staticmethod
+    def convert_into_pyzx(self):
+        if self == NodeType.Z:
+            return pyzx.VertexType.Z
+        elif self == NodeType.X:
+            return pyzx.VertexType.X
+        elif self == NodeType.O:
+            return pyzx.VertexType.BOUNDARY
+        else:
+            raise ValueError(f"Unsupported conversion for node type: {self}")
+
+    @staticmethod
     def convert_simple(vertex_type: str):
-        if vertex_type == zx.VertexType.Z.name:
+        if vertex_type == pyzx.VertexType.Z.name:
             return NodeType.Z
-        elif vertex_type == zx.VertexType.X.name:
+        elif vertex_type == pyzx.VertexType.X.name:
             return NodeType.X
         elif vertex_type == 'O': # zx.VertexType.BOUNDARY.name:
             return NodeType.O
@@ -43,19 +54,26 @@ class EdgeType(Enum):
     HADAMARD = 1
 
     @staticmethod
-    def convert(edge_type: zx.EdgeType):
-        if edge_type == zx.EdgeType.SIMPLE:
+    def convert_from_pyzx(edge_type: pyzx.EdgeType):
+        if edge_type == pyzx.EdgeType.SIMPLE:
             return EdgeType.IDENTITY
-        elif edge_type == zx.EdgeType.HADAMARD:
+        elif edge_type == pyzx.EdgeType.HADAMARD:
             return EdgeType.HADAMARD
         else:
             raise ValueError(f"Unsupported edge type: {edge_type}")
 
     @staticmethod
+    def convert_into_pyzx(self):
+        if self == EdgeType.IDENTITY:
+            return pyzx.EdgeType.SIMPLE
+        else: # self == EdgeType.HADAMARD:
+            return pyzx.EdgeType.HADAMARD
+
+    @staticmethod
     def convert_simple(edge_type: str):
-        if edge_type == zx.EdgeType.SIMPLE.name:
+        if edge_type == pyzx.EdgeType.SIMPLE.name:
             return EdgeType.IDENTITY
-        elif edge_type == zx.EdgeType.HADAMARD.name:
+        elif edge_type == pyzx.EdgeType.HADAMARD.name:
             return EdgeType.HADAMARD
         else:
             raise ValueError(f"Unsupported edge type: {edge_type}")

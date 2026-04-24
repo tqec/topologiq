@@ -4,7 +4,7 @@ from itertools import chain
 from typing import Iterable
 
 import numpy as np
-import pyzx as zx
+import pyzx
 import networkx as nx
 from ast import literal_eval as make_tuple
 
@@ -140,14 +140,14 @@ class AugmentedNxGraph(nx.Graph):
                 previous = extra
 
     @staticmethod
-    def from_pyzx_graph(zx_graph: zx.graph.base.BaseGraph):
+    def from_pyzx_graph(zx_graph: pyzx.graph.base.BaseGraph):
         nodes: list[tuple[NodeId, NodeType]] = []
         for node in zx_graph.vertices():
-            nodes.append( (node, NodeType.convert(zx_graph.type(node))) )
+            nodes.append((node, NodeType.convert_from_pyzx(zx_graph.type(node))))
 
         edges: list[tuple[EdgeId, EdgeType]] = []
         for edge in zx_graph.edges():
-            edges.append( ( edge , EdgeType.convert(zx_graph.edge_type(edge))) )
+            edges.append(( edge , EdgeType.convert_from_pyzx(zx_graph.edge_type(edge))))
 
         ang = AugmentedNxGraph(nodes, edges)
 
@@ -162,6 +162,32 @@ class AugmentedNxGraph(nx.Graph):
             ang.__zx_layers[node_layer].append(node)
 
         return ang
+
+    def to_pyzx_graph(self, filepath: str = None, planar_scale: int = 8):
+        pyzx_graph = pyzx.Graph()
+        if len(self.get_zx_qubits()) == 0 or len(self.get_zx_layers()) == 0:
+            layout = nx.planar_layout(self.__bg_graph, scale = planar_scale)
+        else:
+            # TODO: infer row and qubit of added cubes
+            layout = dict()
+            for cube in self.get_bg_cubes():
+                layout[cube.id] = (
+                    cube.realised_node.layer if cube.realised_node else -1,
+                    cube.realised_node.qubit if cube.realised_node else -1
+                )
+        for cube in self.get_bg_cubes():
+            layer, qubit = layout[cube.id]
+            pyzx_graph.add_vertex(
+                index = cube.id, ty = NodeType.convert_into_pyzx(cube.kind.get_type()), row = layer, qubit = qubit
+            )
+        for pipe in self.get_bg_pipes():
+            pyzx_graph.add_edge((pipe.source.id, pipe.target.id), EdgeType.convert_into_pyzx(pipe.type))
+
+        if filepath is not None:
+            with open(filepath, 'w') as file:
+                file.write(pyzx_graph.to_json())
+
+        return pyzx_graph
 
     @staticmethod
     def from_simple_graph(simple_graph: SimpleDictGraph):
