@@ -18,7 +18,7 @@ Notes:
 import traceback
 from collections import deque
 from pathlib import Path
-from typing import cast
+import random
 
 import matplotlib.figure
 import networkx as nx
@@ -249,17 +249,17 @@ def graph_manager_bfs(
 
     print(f"First cube : {first_cube}")
 
+    # TODO: move this out of the graph_manager into the running script
+    random_seed = kwargs["seed"]
+    if random_seed is not None:
+        random.seed(random_seed)
+
     # First spider/cube
     nx_g = prep_3d_g(simple_graph)
-    root_cube = get_first_cube(
-        ang,
-        first_cube=first_cube,
-        first_id_strategy=kwargs["first_id_strategy"],
-        random_seed=kwargs["seed"],
-    )
+    root = first_cube if first_cube is not None else get_first_cube(ang, strategy = kwargs["first_id_strategy"])
 
     # BFS management
-    queue, visited, edge_paths, run_success = init_bfs(root_cube)
+    queue, visited, edge_paths, run_success = init_bfs(root)
 
     # Outputs
     lat_nodes: dict[int, StandardBlock] | None = None
@@ -267,15 +267,14 @@ def graph_manager_bfs(
 
     # 2. Validity checks
     # Health check depating point
-    first_cube_nx = ( (0,0,0), root_cube[1] )
-    if not validity_checks(simple_graph, first_cube_nx):
+    if not validity_checks(simple_graph, ( (0,0,0), root[1] )):
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
     # TODO-ANG: replace this with ang.place_cube(..)
-    node, cube_kind = root_cube
+    node, cube_kind = root
     cube = ang.realise_node(node, CubeKind[cube_kind.upper()], Spacetime.ORIGIN)
-    nx_g = place_first_cube(nx_g, ang, root_cube)
+    nx_g = place_first_cube(nx_g, ang, root)
 
     # 4. Graph manager BFS
     # Group parameters for readability

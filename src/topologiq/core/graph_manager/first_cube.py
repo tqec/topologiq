@@ -105,16 +105,13 @@ def get_first_id(ang: AugmentedNxGraph, first_id_strategy: str = "centrality_ran
 
 def get_first_cube(
     ang: AugmentedNxGraph, # TODO-ANG: replace with ang
-    first_cube: tuple[int, str] | None = None,
-    first_id_strategy: str = "centrality_random",
-    random_seed: int | None = None,
+    strategy: str = "centrality_random"
 ) -> tuple[int, str]:
     """Determine the iID and kind of the first block to place in 3D space.
 
     Args:
         ang: The AugmentedNxGraph which will track the construction process, relating the ZX-graph to the BG-graph.
-        first_cube (optional): Override ID and kind (used to replicate specific cases).
-        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+        strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
             centrality_majority: Use a majority vote from several centrality measures (deterministic).
             centrality_random: Pick randomly from a list of central spiders (probabilistic).
             first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
@@ -126,17 +123,11 @@ def get_first_cube(
 
     """
 
-    if first_cube:
-        first_id, first_kind = first_cube
-
-        if (not first_id or not first_kind) and random_seed:
-            random.seed(random_seed)
-    else:
-        first_id = get_first_id(ang, first_id_strategy=first_id_strategy)
-        deterministic = False if first_id_strategy == "centrality_random" else True
-        tentative_kinds = CubeKind.suitable_kinds(ang.get_zx_node(first_id).type)
-        first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
-        first_kind = first_kind.name.lower()
+    first_id = get_first_id(ang, first_id_strategy=strategy)
+    deterministic = False if strategy == "centrality_random" else True
+    tentative_kinds = CubeKind.suitable_kinds(ang.get_zx_node(first_id).type)
+    first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
+    first_kind = first_kind.name.lower()
 
     return first_id, first_kind
 
