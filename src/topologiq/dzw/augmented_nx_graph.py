@@ -290,7 +290,7 @@ class AugmentedNxGraph(nx.Graph):
             raise Exception(f"Node #{node} not found in the ZX-graph.")
 
         cube = self.place_cube(kind, position)
-        self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE].realised_node = node
+        self.__bg_graph.nodes[cube][AugmentedNxGraph.KEY_BG_CUBE].realised_node = self.get_zx_node(node)
         self.nodes[node][AugmentedNxGraph.KEY_ZX_NODE].realising_cube = self.get_bg_cube(cube)
 
         console.info(f"Realising node #{node} [{self.get_zx_node(node).type}] as cube #{cube} [{kind}@{position}]")
@@ -676,8 +676,8 @@ class AugmentedNxGraph(nx.Graph):
 
     def __format_label(self, cube: BgCube):
         label = ""
-        if cube.kind == CubeKind.OOO:
-            zx_node = self.get_zx_node(cube.realised_node)
+        if cube.kind == CubeKind.OOO and cube.realised_node is not None:
+            zx_node = cube.realised_node
             if zx_node.layer == 0:
                 label = f"in_{zx_node.qubit}"
             elif zx_node.layer == self.get_depth() - 1:

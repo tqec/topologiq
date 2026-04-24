@@ -40,6 +40,9 @@ class ZxEdge(RecordClass):
     type: EdgeType
     realisation: list[PipeId] = []
 
+    def is_realised(self):
+        return len(self.realisation) > 0
+
     def __str__(self):
         return f"N{self.source.id}-{self.type.name[0]}-N{self.target.id}"
 
@@ -50,14 +53,22 @@ class BgCube(RecordClass):
     kind: CubeKind
     position: StandardCoord
     id: CubeId = -1
-    realised_node: NodeId = -1
+    __realised_node: object = None
+
+    @property
+    def realised_node(self):
+        return cast(ZxNode, self.__realised_node)
+
+    @realised_node.setter
+    def realised_node(self, value: ZxNode):
+        self.__realised_node = value
 
     def __str__(self):
         content = ""
         if self.id != -1:
             content += f"#{self.id}:"
-        if self.realised_node != -1:
-            content += f"N{self.realised_node}:"
+        if self.realised_node is not None:
+            content += f"N{self.realised_node.id}:"
         content += f"{self.kind}@{self.position}"
         return content
 
