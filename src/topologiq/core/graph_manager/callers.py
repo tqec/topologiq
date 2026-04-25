@@ -28,7 +28,6 @@ from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
 # PATHFINDER #
 ##############
 def call_pathfinder(
-    # TODO-ANG: adapt to use ang to query revelant information
     ang: AugmentedNxGraph, source: ZxNode, target: ZxNode,
     init_step: int,
     critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]] = {},
@@ -73,7 +72,7 @@ def call_pathfinder(
     step = init_step
 
     # Copy taken to avoid accidental overwrites
-    taken_cc = list(ang.occupied)
+    taken_cc = set(ang.occupied)
     if src_coords in taken_cc:
         taken_cc.remove(src_coords)
     if tgt_coords:

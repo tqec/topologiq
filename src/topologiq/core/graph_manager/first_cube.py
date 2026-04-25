@@ -143,7 +143,7 @@ def place_first_cube(
 
     Args:
         nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
+        ang: The AugmentedNxGraph which contains the construction, relating the ZX-graph to the BG-graph.
         first_cube: ID and kind for the very first spider/cube to place in 3D space.
         log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
         debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).

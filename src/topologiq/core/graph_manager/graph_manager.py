@@ -19,10 +19,11 @@ import traceback
 from collections import deque
 from pathlib import Path
 import random
+from typing import Any
 
-import matplotlib.figure
+import pyzx
 import networkx as nx
-import pyzx as zx
+import matplotlib.figure
 
 from topologiq.core.graph_manager.beams import check_need_for_twins
 from topologiq.core.graph_manager.callers import call_logger
@@ -62,11 +63,12 @@ TEMP_DIR_PATH = REPO_ROOT / "output/temp"
 # RUNNER #
 ##########
 def runner(
+    # TODO: drop the simple_graph and rewrite the scripts calling the runner to pass a pyzx_graph
     simple_graph: SimpleDictGraph,
     circuit_name: str,
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: tuple[int, str] | None = None,
-    pyzx_graph: zx.graph.base.BaseGraph | None = None,
+    pyzx_graph: pyzx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
     SimpleDictGraph,
@@ -85,6 +87,7 @@ def runner(
         circuit_name: The name of the ZX circuit.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): The ID and kind of the first cube to place in 3D space (used to replicate specific cases).
+        pyzx_graph: the input PyZX graph from which to build the Blockgraph
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -136,7 +139,7 @@ def runner(
                 pyzx_graph = pyzx_graph,
                 **kwargs,
             )
-            # TODO: return ANG and adapt all scripts using runner(..)
+            # TODO: return the ANG upwards and adapt all scripts calling runner(..)
             ang.into_file(filepath = "../../assets/ang/" + circuit_name + ".ang", include_zx_graph=True)
             ang.to_pyzx_graph(filepath = "../../assets/pyzx/" + circuit_name + ".json")
         except ValueError as e:
@@ -147,7 +150,8 @@ def runner(
 
         # Return result if any
         if lat_nodes and lat_edges:
-            lat_volume = sum([1 for node in lat_nodes.values() if node[1] != "ooo"])
+            # TODO-ANG: replace this with ang.volume()
+            lat_volume = sum(1 for node in lat_nodes.values() if node[1] != "ooo")
             print(
                 Colors.GREEN + "SUCCESS!!!" + Colors.RESET,
                 f"Volume: {lat_volume}. Duration: {duration_iter:.2f}s (attempt), {duration_all:.2f}s (total).",
@@ -204,7 +208,7 @@ def graph_manager_bfs(
     circuit_name: str = "circuit",
     fig_data: matplotlib.figure.Figure | None = None,
     first_cube: tuple[int, str] | None = None,
-    pyzx_graph: zx.graph.base.BaseGraph | None = None,
+    pyzx_graph: pyzx.graph.base.BaseGraph | None = None,
     **kwargs,
 ) -> tuple[
     nx.Graph, #TODO-ANG: Replace this with AugmentedNxGraph
@@ -226,6 +230,7 @@ def graph_manager_bfs(
         circuit_name: The name of the ZX circuit.
         fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
         first_cube (optional): the ID and kind of the first cube to place in 3D space (used to replicate specific cases).
+        pyzx_graph: the input PyZX graph from which to build the Blockgraph
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -260,6 +265,7 @@ def graph_manager_bfs(
 
     # First spider/cube
     nx_g = prep_3d_g(simple_graph)
+    # TODO: moving first cube selection out of the graph_manager and runner would simplify things
     root_id, root_kind = first_cube if first_cube is not None else get_first_cube(ang, strategy = kwargs["first_id_strategy"])
     root = ang.get_zx_node(root_id)
 
@@ -278,7 +284,6 @@ def graph_manager_bfs(
         return nx_g, edge_paths, lat_nodes, lat_edges, ang
 
     # 3. Place first spider/cube
-    # TODO-ANG: replace this with ang.place_cube(..)
     cube = ang.realise_node(root, CubeKind[root_kind.upper()], Spacetime.ORIGIN)
     nx_g = place_first_cube(nx_g, ang, (root_id, root_kind))
 
@@ -289,7 +294,7 @@ def graph_manager_bfs(
     trackers = duration_trackers, edge_trackers
 
     try:
-        # TODO-ANG: Replace nx_g with ang. Drop taken, edge_paths
+        # TODO-ANG: Drop nx_g, edge_paths
         edge_paths, run_success, trackers, _ = do_bfs(
             ang,
             nx_g,
@@ -336,12 +341,12 @@ def graph_manager_bfs(
 #######
 def do_bfs(
     ang: AugmentedNxGraph,
-    nx_g: nx.Graph, # TODO-ANG: replace with AugmentedNxGraph
+    nx_g: nx.Graph, # TDOO-ANG: drop
     queue: deque[ZxNode],
     visited: set[ZxNode],
     circuit_name: str,
     edge_paths: dict, # TODO-ANG: drop
-    trackers: list[any],
+    trackers: list[Any],
     fig_data: matplotlib.figure.Figure | None = None,
     **kwargs,
 ):
@@ -392,7 +397,7 @@ def do_bfs(
         # Iterate over neighbours of current source
         for target in ang.get_zx_neighbors(source):
             # Handle cubes that need to be placed for the first time
-            if target not in visited:
+            if not target.is_realised():
                 # Start iteration timer
                 t_1_std_edge_iter, _ = datetime_manager()
 
@@ -400,7 +405,7 @@ def do_bfs(
                 queue.append(target)
                 visited.add(target)
 
-                # Try to place blocks as close to one another as as possible
+                # Try to place blocks as close to one another as possible
                 step, max_step = (3, 15)
                 while step <= max_step:
                     nx_g, edge_paths, edge_success = handle_std_edge(
@@ -424,7 +429,7 @@ def do_bfs(
                         num_edges_processed += 1
 
                         # # Check move didn't cause problems elsewhere
-                        # # TODO-ANG: replace nx_g with ang, drop taken
+                        # # TODO-ANG: replace nx_g with ANG, drop taken
                         # priority_ids = check_need_for_twins(
                         #     nx_g, src_id, tgt_id, taken, priority_ids=[], strict=True
                         # )
@@ -437,7 +442,7 @@ def do_bfs(
                         #             "==> Adding twin nodes for IDs:" + Colors.RESET,
                         #             priority_ids,
                         #         )
-                        #     # TODO-ANG: adapt all this to use ang
+                        #     # TODO-ANG: adapt all this to use ANG
                         #     (
                         #         nx_g,
                         #         queue,
@@ -473,16 +478,15 @@ def do_bfs(
                     step += 3
 
                 # Exit BFS loop if a single edge fails to build
-                if run_success is False:
+                if not run_success:
                     break
 
-            # TODO-ANG: adapt this condition to use ang.is_edge_realised(..)
-            elif not ang.is_edge_realised(source, target):
+            elif not ang.get_zx_edge(source.id, target.id).is_realised():
                 # Start iteration timer for 2st pass iteration
                 t_1_cross_edge_iter, _ = datetime_manager()
 
                 # Trigger connection for previously placed cubes
-                # TODO-ANG: adapt this to use ang, drop taken & edge_paths
+                # TODO-ANG: drop nx_g, taken & edge_paths
                 nx_g, edge_paths, edge_success = handle_cross_edge(
                     ang, source, target,
                     nx_g,
@@ -542,7 +546,7 @@ def do_bfs(
             if repeat_current_src:
                 break
 
-        if run_success is False:
+        if not run_success:
             break
 
     duration_trackers = t_std_edges, t_cross_edges

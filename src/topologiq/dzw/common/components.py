@@ -38,16 +38,27 @@ class ZxEdge(RecordClass):
     source: ZxNode
     target: ZxNode
     type: EdgeType
-    realisation: list[PipeId] = []
+    __realisation: list[object] = []
 
     def is_realised(self):
-        return len(self.realisation) > 0
+        return len(self.__realisation) > 0
+
+    @property
+    def realisation(self):
+        return map(lambda pp: cast(BgPipe, pp), self.__realisation)
+
+    @realisation.setter
+    def realisation(self, value: list[object]):
+        if all(isinstance(pp, BgPipe) for pp in value):
+            self.__realisation = value
+        else:
+            raise ValueError(f"realisation(..) parameter is not a list[BgPipe].")
 
     def __str__(self):
-        return f"N{self.source.id}-{self.type.name[0]}-N{self.target.id}"
+        return f"({self.source.id},{self.target.id})"
 
     def __repr__(self):
-        return str(self)
+        return f"N{self.source.id}-{self.type.name[0]}-N{self.target.id}"
 
 class BgCube(RecordClass):
     kind: CubeKind
@@ -81,7 +92,7 @@ class BgPipe(RecordClass):
     type: EdgeType
 
     def __str__(self):
-        return f"#{self.source.id}-{self.type.name[0]}-#{self.target.id}"
+        return f"({self.source.id},{self.target.id})"
 
     def __repr__(self):
-        return str(self)
+        return f"#{self.source.id}-{self.type.name[0]}-#{self.target.id}"

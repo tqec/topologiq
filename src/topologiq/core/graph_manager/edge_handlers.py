@@ -19,7 +19,7 @@ from topologiq.core.pathfinder.spatial import get_taken_coords
 from topologiq.core.pathfinder.symbolic import check_exits
 from topologiq.core.paths import PathBetweenNodes
 from topologiq.dzw.augmented_nx_graph import AugmentedNxGraph
-from topologiq.dzw.common.attributes_zx import EdgeType
+from topologiq.dzw.common.attributes_zx import EdgeType, NodeType
 from topologiq.dzw.common.components import ZxNode
 from topologiq.utils.classes import (
     Colors,
@@ -81,28 +81,19 @@ def handle_std_edge(
     # Always prune beams to ensure recent placements are accounted for
     nx_g = prune_beams(nx_g, ang.occupied)
 
-    # Get source cube data
+    # TODO: raise Exception if handle_std_edge(..) is called with an unrealised source
     if not source.is_realised():
         return nx_g, edge_paths, False
 
     source_cube = source.realising_cube
-    src_kind = source_cube.kind.name.lower()
     src_coords = source_cube.position
-    src_block_info: StandardBlock = (src_coords, src_kind)
 
     # Process targets that have yet to be placed in the 3D space
     edge_success = False
 
     if not target.is_realised():
-        # Get target information
-        nxt_neigh_zx_type = target.type.name
-
-        # Get edge information
-        zx_edge_type = "SIMPLE" if ang.get_zx_edge(source.id, target.id).type == EdgeType.IDENTITY else "HADAMARD"
-        hdm: bool = zx_edge_type == "HADAMARD"
-
         # Remove source coordinates from occupied coords
-        taken_coords_c = list(ang.occupied)
+        taken_coords_c = ang.occupied.copy()
         if src_coords in taken_coords_c:
             taken_coords_c.remove(src_coords)
 
@@ -130,7 +121,7 @@ def handle_std_edge(
 
             # Check path doesn't obstruct an absolutely necessary exit for a pre-existing cube
             # Reset # of unobstructed exits and node beams if target is a boundary
-            if nxt_neigh_zx_type == "O":
+            if target.type == NodeType.O:
                 tgt_unobstr_exit_n, tgt_beams = (6, [])
 
             if tgt_unobstr_exit_n >= tgt_degree - 1:
@@ -161,7 +152,7 @@ def handle_std_edge(
                     all_nodes_in_path = [p for p in clean_path]
 
                     # Re-write type of boundary nodes for consistency
-                    if nxt_neigh_zx_type == "O":
+                    if target.type == NodeType.O:
                         tgt_kind = "ooo"
                         all_nodes_in_path[-1] = (all_nodes_in_path[-1][0], tgt_kind)
 
@@ -191,6 +182,7 @@ def handle_std_edge(
 
         # Call visualisation if applicable
         if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
+            src_block_info: StandardBlock = (src_coords, source_cube.kind.name.lower())
             call_debug_vis(
                 circuit_name,
                 nx_g, # TODO-ANG: replace with ang
@@ -206,9 +198,9 @@ def handle_std_edge(
 
         # Write to edge_paths if winner is found
         if winner_path:
-            # TODO-ANG: adapt to use ang, drop taken, edge_paths
+            # TODO-ANG: drop nx_g, edge_paths
             nx_g, edge_paths, edge_success = update_edge_paths(
-                ang, source, target, nx_g, edge_paths, winner_path, clean_paths, zx_edge_type
+                ang, source, target, nx_g, edge_paths, winner_path, clean_paths
             )
 
         # Update user
@@ -278,22 +270,13 @@ def handle_cross_edge(
     # Process edge only if both src_id and tgt_id have already been placed in the 3D space
     # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
     if source.is_realised() and target.is_realised():
-        # Format adjustments to match existing operations
-        source_cube = source.realising_cube
-        target_cube = target.realising_cube
-        src_coords = source_cube.position
-        src_kind = source_cube.kind.name.lower()
+        # Retrieve the edge and the source_cube
+        edge = ang.get_zx_edge(source.id, target.id)
 
-        # Call pathfinder on any graph edge that does not have an entry in edge_paths
-        if not ang.is_edge_realised(source, target): # edge not in edge_paths:
+        # Call pathfinder on the edge if it is not realised.
+        # TODO-ANG: raise Exception(..) if edge.is_realised(..) ?
+        if not edge.is_realised():
             critical_beams = _assemble_critical_beams(nx_g)
-
-            # Check if edge is hadamard
-            zx_edge_type = "SIMPLE" if ang.get_zx_edge(source.id, target.id).type == EdgeType.IDENTITY else "HADAMARD"
-            hdm: bool = zx_edge_type == "HADAMARD"
-
-            # Call pathfinder using optional parameters that flag second pass nature of operation
-            tgt_kind: str = target.realising_cube.kind.name.lower()
 
             if target.is_realised():
                 # TODO-ANG: adapt this to use ang
@@ -323,7 +306,7 @@ def handle_cross_edge(
                         None,
                         clean_paths[0] if clean_paths else None,
                         (source.id, target.id),
-                        (src_coords, src_kind),
+                        (source.realising_cube.position, source.realising_cube.kind.name.lower()),
                         pathfinder_vis_data,
                         fig_data=fig_data,
                         **kwargs,
@@ -337,7 +320,6 @@ def handle_cross_edge(
                     edge_paths,
                     None,
                     clean_paths[0] if clean_paths else None,
-                    zx_edge_type,
                     second_pass=True,
                 )
 
@@ -355,7 +337,7 @@ def handle_cross_edge(
                         f"Runtime: ~{int(t_total_iter * 1000)}ms.",
                     )
 
-    # TODO-ANG: adapt to use ang
+    # TODO-ANG: adapt prune_beams(..) to use ANG
     nx_g = prune_beams(nx_g, ang.occupied)
     return nx_g, edge_paths, edge_success
 

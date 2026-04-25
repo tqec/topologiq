@@ -249,7 +249,6 @@ def update_edge_paths(
     edge_paths: dict,
     winner_path_standard_pass: PathBetweenNodes | None,
     winner_path_second_pass: list[StandardBlock] | None,
-    zx_edge_type: str,
     second_pass: bool = False,
 ):
     """Write the result of a pathfinder iteration to edge_paths.
@@ -275,13 +274,12 @@ def update_edge_paths(
 
     # ID edge as sorted to avoid duplicates
     edge = ang.get_zx_edge(source.id, target.id)
-    edge_type_match = zx_edge_type == "SIMPLE" if edge.type == EdgeType.IDENTITY else "HADAMARD"
 
     # Assume failure
     edge_success = False
 
     # Write edge information if available
-    if not second_pass and winner_path_standard_pass and edge_type_match:
+    if not second_pass and winner_path_standard_pass:
         # Log as success
         edge_success = True
 
@@ -290,7 +288,7 @@ def update_edge_paths(
             "src_tgt_ids": (source.id, target.id),
             "path_coordinates": winner_path_standard_pass.coords_in_path,
             "path_nodes": winner_path_standard_pass.all_nodes_in_path,
-            "edge_type": zx_edge_type,
+            "edge_type": "SIMPLE" if edge.type == EdgeType.IDENTITY else "HADAMARD",
         }
 
         # Update source cube info
@@ -341,7 +339,7 @@ def update_edge_paths(
         # Update the ANG with the path realising the edge
         ang.realise_edge(source, target, proposal)
 
-    elif second_pass and winner_path_second_pass and edge_type_match:
+    elif second_pass and winner_path_second_pass:
         # Log as success
         edge_success = True
 
@@ -350,7 +348,7 @@ def update_edge_paths(
             "src_tgt_ids": (source.id, target.id),
             "path_coordinates": [p[0] for p in winner_path_second_pass],
             "path_nodes": winner_path_second_pass,
-            "edge_type": zx_edge_type,
+            "edge_type": "SIMPLE" if edge.type == EdgeType.IDENTITY else "HADAMARD",
         }
 
         # Update source cube info

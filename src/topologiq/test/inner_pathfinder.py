@@ -63,6 +63,8 @@ def test_pathfinder(src_kinds: list[str], tgt_zx_types: list[str], step: int = 3
                 t_1, _ = datetime_manager()
                 print("===> Testing", src_block, "-->", tgt_zx_type)
 
+                # TODO-ANG: the call below is broken and must be fixed to pass an ANG (or work without one)
+                raise NotImplementedError("test_pathfinder(..) must be adapted to pass an ANG to pathfinder(..)")
                 valid_paths, _ = pathfinder(
                     src_block,
                     tent_coords,
