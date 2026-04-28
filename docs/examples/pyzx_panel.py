@@ -159,8 +159,8 @@ if __name__ == "__main__":
     # --> Augmented ZX Graph
     zx_graph_manager = ZXGraphManager()
     aug_zx = zx_graph_manager.add_graph_from_pyzx(zx_graph=zx_graph, graph_key=circuit_name)
-    #zx.draw(aug_zx.zx_graph, labels=True)
-    #zx.draw(aug_zx.zx_graph_reduced, labels=True)
+    zx.draw(aug_zx.zx_graph, labels=True)
+    zx.draw(aug_zx.zx_graph_reduced, labels=True)
 
     # Check if tags were preserved
     print("REDUCED")
@@ -190,8 +190,8 @@ if __name__ == "__main__":
         graph_key=f"{circuit_name}_out",
         other=aug_zx,
     )
-    #zx.draw(aug_zx_out.zx_graph, labels=True)
-    #zx.draw(aug_zx_out.zx_graph_reduced, labels=True)
+    zx.draw(aug_zx_out.zx_graph, labels=True)
+    zx.draw(aug_zx_out.zx_graph_reduced, labels=True)
 
     # Compare inputs
     for ele in (aug_zx, aug_zx_out):

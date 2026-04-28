@@ -16,10 +16,10 @@ from topologiq.ux.base_pane import BasePane
 
 
 class SimulatePane(BasePane):
-    """Simulation of the lattice surgery produced by Topologiq."""
+    """Topologiq -> TQEC simulations."""
 
     def __init__(self, manager, parent=None):
-        """Initialise SIMULATE section."""
+        """Initialise SIMULATE pane."""
         super().__init__(manager, "SIMULATE", parent)
         self.manager = manager
 

@@ -1,4 +1,4 @@
-"""UX blockgraph canvas.
+"""UX blockgraph verification canvas.
 
 AI disclaimer:
     category: Coding partner (see CONTRIBUTING.md for details).
@@ -16,20 +16,24 @@ from vispy import scene
 
 
 class VerifyCanvas(QFrame):
-    """Logical Audit Station: Displays ZX equality results between Input and Output."""
+    """I/O ZX equality verification visualiser."""
 
-    def __init__(self, parent=None):  # noqa: D107
+    def __init__(self, parent=None):
+        """Initialise verification canvas."""
+
+        # Init
         super().__init__(parent)
         self.setFixedSize(280, 200)
         self.setObjectName("VerifyPiP")
         self.setAttribute(Qt.WA_StyledBackground, True)
 
-        # Internal State
+        # Internal state
         self.items = []
         self.graph_in = None
         self.graph_out = None
         self.is_showing_out = False  # Toggle state: False = In, True = Out
 
+        # Styles
         self.setStyleSheet("""
             QWidget#VerifyPiP {
                 background-color: #f8f9fa;
@@ -39,7 +43,7 @@ class VerifyCanvas(QFrame):
             }
         """)
 
-        # Layout Setup
+        # Layout
         self.outer_layout = QVBoxLayout(self)
         self.outer_layout.setContentsMargins(2, 2, 2, 2)
         self.canvas_container = QWidget()
@@ -53,7 +57,7 @@ class VerifyCanvas(QFrame):
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = "turntable"
 
-        # --- UI Elements ---
+        # Internal controls
         pill_style = """
             QPushButton {
                 background: #ffffff;
@@ -71,9 +75,11 @@ class VerifyCanvas(QFrame):
         self.btn_toggle_io.setStyleSheet(pill_style)
         self.btn_toggle_io.clicked.connect(self._handle_io_toggle)
 
+        # Status
         self.status_pill = QFrame(self)
         self.status_pill.setFixedSize(110, 24)
 
+        # Add to layout
         pill_layout = QHBoxLayout(self.status_pill)
         self.verify_badge = QLabel("WAITING...")
         self.verify_badge.setAlignment(Qt.AlignCenter)
@@ -82,14 +88,14 @@ class VerifyCanvas(QFrame):
         self._set_pill_color("unknown")
 
     def set_verification_state(self, graph_in, graph_out, match):
-        """Manage initial call by CompilePane's retrieve_and_render."""
+        """Manage initial call."""
         self.graph_in = graph_in
         self.graph_out = graph_out
         self.update_verification_badge(match)
         self._refresh_render()
 
     def update_verification_badge(self, success: bool):
-        """Update the visual status indicator based on match result."""
+        """Update visual status indicator based on match result."""
         if success is True:
             self.verify_badge.setText("VALID MATCH")
             self._set_pill_color("verified")
@@ -101,27 +107,38 @@ class VerifyCanvas(QFrame):
             self._set_pill_color("unknown")
 
     def _set_pill_color(self, status):
+        """Update pill color based on match result."""
         colors = {"verified": "#2ecc71", "failed": "#e74c3c", "unknown": "#95a5a6"}
         self.status_pill.setStyleSheet(f"background-color: {colors[status]}; border-radius: 12px;")
 
     def _handle_io_toggle(self):
+        """Handle toggle between input and output visuals."""
         self.is_showing_out = self.btn_toggle_io.isChecked()
         self.btn_toggle_io.setText("VIEW: OUT" if self.is_showing_out else "VIEW: IN")
         self._refresh_render()
 
     def _refresh_render(self):
+        """Refresh canvas."""
         target = self.graph_out if self.is_showing_out else self.graph_in
         if target:
             # Strictly use reduced view for verification clarity
             nx_data = target.get_visual_data(use_reduced=True)
             self.render_zx(nx_data)
 
-    def render_zx(self, nx_graph):  # noqa: D102
+    def render_zx(self, nx_graph):
+        """Render a single NX representation of a ZX graph."""
+
+        # Clear scene on every run to start fresh.
         self._clear_scene()
+
+        # Return if no graph
         if not nx_graph:
             return
 
+        # Render loops
         node_pos_map = {}
+
+        # Edges
         for u, v, data in nx_graph.edges(data=True):
             p1, p2 = np.array(nx_graph.nodes[u].get("pos")), np.array(nx_graph.nodes[v].get("pos"))
             node_pos_map[u], node_pos_map[v] = p1, p2
@@ -130,6 +147,7 @@ class VerifyCanvas(QFrame):
             )
             self.items.append(line)
 
+        # Nodes
         for node_id, data in nx_graph.nodes(data=True):
             pos = node_pos_map.get(node_id, np.array(data.get("pos", (0, 0, 0))))
             node_vis = scene.visuals.Markers()
@@ -137,9 +155,11 @@ class VerifyCanvas(QFrame):
             node_vis.parent = self.view.scene
             self.items.append(node_vis)
 
+        # Reset camera
         self._reset_camera(list(node_pos_map.values()))
 
     def _reset_camera(self, points):
+        """Reset camera to match contents."""
         if not points:
             return
         pts = np.array(points)
@@ -148,11 +168,13 @@ class VerifyCanvas(QFrame):
         self.view.camera.elevation, self.view.camera.azimuth = 90, 0
 
     def _clear_scene(self):
+        """Clear scene on request."""
         for item in self.items:
             item.parent = None
         self.items = []
 
-    def resizeEvent(self, event):  # noqa: D102, N802
+    def resizeEvent(self, event):  # noqa: N802 (native method)
+        """Handle resize events."""
         super().resizeEvent(event)
         self.btn_toggle_io.move(self.width() - 80, 10)
         self.status_pill.move(10, self.height() - 34)

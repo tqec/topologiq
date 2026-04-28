@@ -34,12 +34,12 @@ from topologiq.ux.utils.highlighter import PygmentsHighlighter
 
 
 class CircuitIDE(QWidget):
-    """The self-contained Editor, Inspector, and Footer unit."""
+    """Self-contained IDE canvas."""
 
     toggle_requested = Signal(str)
 
     def __init__(self, manager, parent=None):
-        """Initialise Circuit IDE pane."""
+        """Initialise IDE canvas."""
         super().__init__(parent)
         self.manager = manager
         self.current_file_path = None
@@ -48,17 +48,18 @@ class CircuitIDE(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        """Define the layout for the circuit IDE."""
+        """Define the IDE layout."""
+
+        # Main layout
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(5)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
 
-        # 1. Vertical Splitter: Editor / Inspector
+        # Vertical splitter: Editor / Inspector
         self.v_splitter = QSplitter(Qt.Vertical)
         self.v_splitter.setObjectName("IDEVerticalSplitter")
-        # Target only the vertical handle for a TOP border
         self.v_splitter.setStyleSheet("""
             QSplitter#IDEVerticalSplitter::handle {
                 height: 4px;
@@ -75,7 +76,7 @@ class CircuitIDE(QWidget):
             }
         """)
 
-        # --- TOP: Editor ---
+        # Editor (Top)
         self.editor_container = QFrame()
         ed_layout = QVBoxLayout(self.editor_container)
         ed_layout.setContentsMargins(0, 0, 0, 5)
@@ -97,7 +98,7 @@ class CircuitIDE(QWidget):
         self.var_input.setFixedWidth(150)
         self.var_input.setStyleSheet(
             "background: #121212; color: #fbff00; border: 1px solid #444; font-weight: bold;"
-        )  # Highlighted yellow text
+        )
 
         self.btn_draw_only = QPushButton("↓↓↓ DRAW ASCII ↓↓↓")
         self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
@@ -111,7 +112,7 @@ class CircuitIDE(QWidget):
         ed_layout.addWidget(self.code_editor)
         ed_layout.addWidget(self.var_row)
 
-        # --- BOTTOM: Inspector ---
+        # Inspector (Bottom)
         self.inspector_tabs = QTabWidget()
         self.inspector_tabs.setStyleSheet(
             "QTabBar::tab { height: 25px; font-size: 10px; background: #1a1a1a; color: #999; padding: 0 15px; } "
@@ -134,14 +135,17 @@ class CircuitIDE(QWidget):
         self.v_splitter.addWidget(self.inspector_tabs)
         self.v_splitter.setSizes([650, 350])
 
-        # 2. Footer
+        # Footer
         self.footer_bar = self._create_footer_bar()
 
         self.layout.addWidget(self.v_splitter)
         self.layout.addWidget(self.footer_bar)
-        self.setMinimumWidth(0)  # Critical for the "Crush" logic
+        self.setMinimumWidth(0)
 
     def _create_header_bar(self):
+        """Create IDE's editor top menu bar."""
+
+        # Layout
         bar = QFrame()
         bar.setStyleSheet("background: #222;")
 
@@ -149,10 +153,9 @@ class CircuitIDE(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)  # Left margin for title/file buttons
         layout.setSpacing(5)
 
-        # 1. NEW LEFT: File Actions (Moved from right)
+        # File Actions
         self.btn_load = QPushButton("📁")
         self.btn_save = QPushButton("💾")
-
         for btn in [self.btn_load, self.btn_save]:
             btn.setStyleSheet(styles.ACTION_BTN + "font-size: 21px;")
             layout.addWidget(btn)
@@ -161,8 +164,7 @@ class CircuitIDE(QWidget):
 
         layout.addStretch()
 
-        # 2. NEW RIGHT: Layout Controls (The "Windows" Cluster)
-        # Updated to use "X" instead of "CLOSE IDE"
+        # Layout controls
         self.toggle_buttons = create_split_controls(
             self, ["◫", "□", "✕"], self.toggle_requested.emit
         )
@@ -171,46 +173,57 @@ class CircuitIDE(QWidget):
         return bar
 
     def _create_footer_bar(self):
+        """Create IDE's bottom action bar."""
+
+        # Layout
         bar = QFrame()
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(3, 0, 0, 0)
 
-        # Label no longer shown, but legacy requirement or buttons will not know type of content
+        # Label (not shown but functionally required: buttons get content-type from it)
         self.mode_label = QLabel("SOURCE: TEXT")
 
         # ZX graph generation
         self.btn_to_zx = QPushButton("GENERATE ZX GRAPH →")
         self.btn_to_zx.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
         self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
-
         layout.addStretch()
+
+        # Add to layout
         layout.addWidget(self.btn_to_zx)
+
         return bar
 
     def _handle_open_file(self):
-        """Unified loader: Determines mode by extension (.py or .qasm)."""
+        """Load file by extension (.py or .qasm)."""
+
+        # Open dialogue
         file_filter = "Quantum Source (*.py *.qasm);;Python (*.py);;OpenQASM (*.qasm)"
         path, _ = QFileDialog.getOpenFileName(self, "Open Circuit Source", "", file_filter)
 
+        # Handle file
         if path:
+            # Map mode
             self.current_file_path = Path(path)
             ext = self.current_file_path.suffix.lower()
-
-            # Map extension to mode
             mode = "python" if ext == ".py" else "qasm"
 
+            # Set mode
             self.code_editor.setPlainText(self.current_file_path.read_text())
             self.mode_label.setText(f"SOURCE: {mode.upper()}")
 
+            # Code highlights
             if self.highlighter:
                 self.highlighter.setDocument(None)
             self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
 
     def _handle_save_file(self):
         """Save current editor content to disk."""
+
+        # Path
         path = self.current_file_path
 
-        # If no file is open, or if user wants a new location, trigger Save As
+        # If no file is open, Save As
         if not path:
             mode = "python" if "PYTHON" in self.mode_label.text() else "qasm"
             ext = "Python (*.py)" if mode == "python" else "OpenQASM (*.qasm)"
@@ -220,6 +233,7 @@ class CircuitIDE(QWidget):
             path = Path(path_str)
             self.current_file_path = path
 
+        # Try write
         try:
             path.write_text(self.code_editor.toPlainText())
             self.window().status_bar.showMessage(f"Saved: {path.name}", 3000)
@@ -227,6 +241,7 @@ class CircuitIDE(QWidget):
             self.window().status_bar.showMessage(f"Save failed: {e}", 5000)
 
     def _handle_selection_sync(self):
+        """Sync variable name highligth/selection."""
         cursor = self.code_editor.textCursor()
         if cursor.hasSelection():
             text = cursor.selectedText().strip()
@@ -234,24 +249,24 @@ class CircuitIDE(QWidget):
                 self.var_input.setText(text)
 
     def _connect_internal_signals(self):
-        """Link the local IDE buttons to the Manager logic."""
-        # The 'Draw' button (No pane switch)
+        """Link local IDE buttons to Manager."""
+        # Draw button (no pane switch)
         self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
-        # The 'Generate ZX' button (Pane switch)
+        # Generate ZX (switch pane)
         self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
 
     def _process_and_emit(self, switch_pane: bool):
+        """Process circuit and emit results."""
         code = self.code_editor.toPlainText()
         mode = "python" if "PYTHON" in self.mode_label.text().upper() else "qasm"
 
-        # 1. Get the Key (Circuit Name)
+        # Get key (circuit name)
         circuit_key = self.var_input.text().strip()
         if not circuit_key:
             circuit_key = "untitled_circuit"
             self.var_input.setText(circuit_key)
 
-        # 2. Trigger the Manager
-        # Note: handle_load_source_circuit handles the background surgery trigger now
+        # Trigger Manager
         task = asyncio.ensure_future(
             self.manager.handle_load_source_circuit(
                 source_design=code, mode=mode, var_name=circuit_key, switch_to_transform=switch_pane

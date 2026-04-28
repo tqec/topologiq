@@ -36,13 +36,19 @@ from topologiq.ux.utils import styles
 from topologiq.ux.utils.aux import create_split_controls
 
 
-class ZXCanvas(QWidget):  # noqa: D101
+class ZXCanvas(QWidget):
+    """Self-contained ZX canvas."""
+
     toggle_requested = Signal(str)
     compile_requested = Signal(str)
 
-    def __init__(self, manager, parent=None):  # noqa: D107
+    def __init__(self, manager, parent=None):
+        """Initialise ZX canvas."""
+
+        # Manager & state trackers
         super().__init__(parent)
         self.manager = manager
+
         self.current_aug_zx = None
         self.experimental_zx = None
         self.items = []
@@ -52,32 +58,31 @@ class ZXCanvas(QWidget):  # noqa: D101
         self.hovered_node_idx = None
         self.toggle_buttons = None
 
-        # 1. Main Container Style
+        # Main container
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(0)
         self.setStyleSheet("ZXCanvas { background: #1a1a1a; }")
 
-        # 2. The Styled Frame Wrapper
+        # Styled frame
         self.canvas_frame = QFrame()
         self.canvas_frame.setObjectName("MainCanvasFrame")
         self.canvas_frame.setStyleSheet("""
-        #MainCanvasFrame {
-        border: 1px solid #999;
-        background: #a3a3a3;
-        }
+            #MainCanvasFrame {
+            border: 1px solid #999;
+            background: #a3a3a3;
+            }
         """)
 
-        # 3. VisPy Integration
+        # VisPy integration
         self.canvas = scene.SceneCanvas(
             keys="interactive",
             show=True,
             bgcolor="#909090",
             config={"depth_size": 24},
         )
-
-        # Ensure the native widget itself doesn't have a background/border conflict
         self.canvas.native.setStyleSheet("border: none; background: transparent;")
+
         frame_layout = QVBoxLayout(self.canvas_frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.addWidget(self.canvas.native)
@@ -91,7 +96,8 @@ class ZXCanvas(QWidget):  # noqa: D101
         self.canvas.events.mouse_move.connect(self.on_mouse_move)
         self._setup_hud_anchors()
 
-    def manage_aug_zx(self, aug_zx_graph: AugmentedZXGraph, key: str = "Graph"):  # noqa: D102
+    def manage_aug_zx(self, aug_zx_graph: AugmentedZXGraph, key: str = "Graph"):
+        """Manage the incoming Augmented ZX graph."""
         try:
             # Update registry dropdown selector
             self.current_aug_zx = aug_zx_graph

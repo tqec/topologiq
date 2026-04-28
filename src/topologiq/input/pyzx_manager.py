@@ -308,6 +308,7 @@ class AugmentedZXGraph:
 
             g1 = zx_graph_in.to_tensor(preserve_scalar=False)
             g2 = zx_graph_out.to_tensor(preserve_scalar=False)
+            zx.draw(zx_graph_out, labels=True)
             return zx.compare_tensors(g1, g2)
         except Exception as e:
             print(f"Compare tensors failed during verification: {e}")

@@ -16,9 +16,9 @@ from topologiq.ux.base_pane import BasePane
 
 
 class StatsPane(BasePane):
-    """Final output and execution management."""
+    """Stats gathering and reporting."""
 
     def __init__(self, manager, parent=None):
-        """Initialise STATS section."""
+        """Initialise STATS pane."""
         super().__init__(manager, "STATS", parent)
         self.manager = manager

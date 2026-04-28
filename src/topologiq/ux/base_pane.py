@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
 class BasePane(QWidget):
-    """Base class for all UX sections.
+    """Base widget for all UX panes.
 
     Provides a standardized layout and access to the UXManager
     for signal/slot synchronization across the app.
@@ -28,12 +28,12 @@ class BasePane(QWidget):
         self.pane_id = name
         self.setMinimumHeight(0)
 
-        # 1. Standard Layout Configuration
+        # Layout
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
-        # 2. Trigger the UI build (to be overridden by children)
+        # Trigger UX build (to be overridden by children)
         self.setup_ui()
 
     def setup_ui(self):

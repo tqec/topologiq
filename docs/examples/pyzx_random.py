@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # Circuit
     qubit_n = 5
-    depth = 50
+    depth = 5
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph, fig_data = random_graph(qubit_n, depth, graph_type="cnot", **kwargs)
 

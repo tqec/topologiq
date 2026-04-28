@@ -1,8 +1,9 @@
-"""Layout for the DESIGN section.
+"""DESIGN pane.
 
-Integrates Monaco editor for circuit coding and buttons
-for importing/exporting circuit diagrams into qBraid and exporting
-QASM and PyZX-compatible formats.
+Manages circuit consumption from traditional circuit design frameworks (e.g., Qiskit,
+pytket, and Qrisp, and their conversion into ZX graphs. Enables direct consumption
+of ZX graphs (bypass circuit->ZX transpilation if ZX graph is given as Python code, or
+upload ZX from QASM or JSON if ZX exists in a file).
 
 AI disclaimer:
     category: Coding partner (see CONTRIBUTING.md for details).
@@ -13,7 +14,7 @@ AI disclaimer:
 
 """
 
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QSplitter
 
 from topologiq.ux.base_pane import BasePane
@@ -24,7 +25,7 @@ from topologiq.ux.widgets.zx_canvas import ZXCanvas
 
 
 class DesignPane(BasePane):
-    """Orchestrate circuit design section."""
+    """Circuit design and --> ZX transpilation."""
 
     def __init__(self, manager, parent=None):
         """Initialise DESIGN pane."""
@@ -35,18 +36,21 @@ class DesignPane(BasePane):
 
     def setup_ui(self):
         """Define the layout for DESIGN pane."""
+
+        # Margins
         self.layout.setContentsMargins(0, 0, 0, 0)
 
-        # 1. Simplified Horizontal Splitter
+        # Horizontal splitter
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.main_splitter.setObjectName("DesignMainSplitter")
         self.main_splitter.setHandleWidth(4)
         self.main_splitter.setStyleSheet(styles.MAIN_SPLITTER_STYLE)
-        # 2. Instantiate components
+
+        # Main components
         self.ide = CircuitIDE(self.manager)
         self.zx_canvas = ZXCanvas(self.manager)
 
-        # 3. Assembly (No Rail)
+        # Assembly
         self.main_splitter.addWidget(self.ide)
         self.main_splitter.addWidget(self.zx_canvas)
         self.main_splitter.setStretchFactor(0, 2)
@@ -54,35 +58,27 @@ class DesignPane(BasePane):
 
         self.layout.addWidget(self.main_splitter)
 
-        # 4. Connect the new "Internal" toggle signals
-        # These will be emitted by the child widgets themselves
+        # Internal toggle signals (emitted by child widgets)
         self.ide.toggle_requested.connect(lambda mode: self._trigger_layout_change("LEFT", mode))
         self.zx_canvas.toggle_requested.connect(
             lambda mode: self._trigger_layout_change("RIGHT", mode)
         )
 
-    def showEvent(self, event):  # noqa: D102, N802
+    def showEvent(self, event):  # noqa: N802 (native method)
+        """Handle show events."""
         super().showEvent(event)
-        # Use a very short delay to ensure the OS has painted the window
-        # and reported a non-zero width.
         QTimer.singleShot(50, self._apply_initial_layout)
 
     def _apply_initial_layout(self):
-        """Force a 40/60 split on startup."""
+        """Apply 40/60 split on startup."""
         self._trigger_layout_change("LEFT", "40/60")
 
     def _trigger_layout_change(self, side, mode):
-        """Bridge to the external utility."""
+        """Bridge toggle event with external handler."""
         handle_splitter_toggle(
             splitter=self.main_splitter, total_width=self.width(), side=side, mode=mode
         )
 
-    @Slot(str, str)
-    def update_visuals(self, qasm, ascii_art):
-        """Pass data from Manager to the IDE component."""
-        self.ide.ascii_viewer.setPlainText(ascii_art)
-        # Tab logic...
-
     def handle_zx_input(self, aug_zx):
-        """Pass data from Manager to the Canvas component."""
+        """Pass data from Manager to Canvas."""
         self.zx_canvas.manage_aug_zx(aug_zx)
