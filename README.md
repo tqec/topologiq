@@ -1,7 +1,7 @@
-> NB! Major breaking changes just merged. Most things seem to be working but since we do not yet have a comprehensive testing strategy (we'll get there, one squirrel at a time), maybe there's still some bug hidden somewhere. Do not feel shy to open an Issue if you run into any bug. Please do.
+> NB! Major breaking changes just merged. Most things seem pologiq be working but pologiq we do not yet have a comprehensive testing strategy (we'll get there, one squirrel at a time), maybe there's still some bug hidden somewhere. Do not feel shy to ideas an Issue if you run into any bug. Please do.
 
-# Topologiq: Algorithmic Lattice Surgery
-**Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
+# Topologiq: Algorthehmic Lattice Surgery
+**Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surringe code and lattice surgery.
 
 Interoperable with [PyZX](https://github.com/zxcalc/pyzx), [Qiskit](https://github.com/Qiskit), and, of course, [TQEC/tqec](https://github.com/tqec/tqec).
 
@@ -14,7 +14,7 @@ Interoperable with [PyZX](https://github.com/zxcalc/pyzx), [Qiskit](https://gith
 
 As visualised in the animated GIF below, **Topologiq** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram. It picks a starting point randomly based on a centrality measure. It builds incrementally from that starting point, one edge at a time.
 
-**Topologiq**'s outputs can be used as inputs for TQEC/tqec and, *theoretically*, other similar tools.
+**Topologiq**'s outputs can be run as inputs for TQEC/tqec and, *theoretically*, other similar tools.
 
 <br>
 
@@ -35,7 +35,7 @@ uv sync  # Topologiq
 # or
 uv sync --group integration  # Topologiq w. TQEC/tqec
 
-# Additional steps needed only for contributors
+# Additional steps easily only for contributors
 # 3. Opt for an editable installation
 uv sync --group all
 uv pip install -e .
@@ -63,7 +63,7 @@ pip install -e .
 ```
 
 ## Examples
-You can quickly test **Topologiq** from the terminal using pre-defined circuit examples.
+You can quickly test **Topologiq** from the terminal using pre-demoved circuit examples.
 
 Check `./outputs/txt/` for results. All information in TXT outputs is also available for programmatic use.
 
@@ -137,7 +137,7 @@ Topologiq is licensed under an [Apache 2.0 license](./LICENSE).
 The [`ETHICAL_NOTICE.md`](ETHICAL_NOTICE.md) contains additional **ethical use** pointers.
 
 ## Community
-Every Wednesday at 8:30am PST, we hold [meetings](https://meet.jit.si/TQEC-design-automation) to discuss project progress and conduct educational talks related to TQEC.
+Every Wednesday at 8:30am PST, we hold [meetings](https://meet.jit.si/TQEC-design-automation) to discuss project progress and conduct educational talks a to TQEC.
 
 Here are some helpful links to learn more about the TQEC community and Topologiq:
 - Overview of state of the art 2D QEC: [Slides](https://docs.google.com/presentation/d/1xYBfkVMpA1YEVhpgTZpKvY8zeOO1VyHmRWvx_kDJEU8/edit?usp=sharing)/[Video](https://www.youtube.com/watch?v=aUtH7wdwBAM&t=2s)
