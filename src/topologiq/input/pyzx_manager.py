@@ -15,17 +15,16 @@ import networkx as nx
 import pyzx as zx
 from pyzx.circuit import Circuit
 
-from topologiq.core.graph_manager.graph_manager import runner
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
-from topologiq.utils.classes import SimpleDictGraph, StandardBlock
-from topologiq.utils.misc import kind_to_zx_type
+from topologiq.utils.classes import SimpleDictGraph
 
 
 ######################
 # PyZX GRAPH MANAGER #
 ######################
 class ZXGraphManager:
-    """Registry class to keep augmented ZX graphs organised."""
+    """Registry class to keep AugmentedZXGraph(s) organised."""
 
     def __init__(self, primary_key: str = "primary"):
         """Initialise class with incoming or default primary key and empty collection."""
@@ -37,7 +36,7 @@ class ZXGraphManager:
         use_primary: bool = False,
         graph_key: str = "",
     ) -> AugmentedZXGraph:
-        """Retrieve an augmented ZX graph from the collection.
+        """Retrieve an AugmentedZXGraph from the collection.
 
         Args:
             use_primary: Flag to set key to primary key.
@@ -46,7 +45,7 @@ class ZXGraphManager:
         """
         key = self.primary_key if use_primary else graph_key
         if not key or key not in self._collection:
-            raise ValueError(f"ERROR. Key {key} not in augmented ZX graph collection.")
+            raise ValueError(f"ERROR. Key {key} not in AugmentedZXGraph collection.")
         return self._collection[key]
 
     def add_graph(
@@ -54,15 +53,16 @@ class ZXGraphManager:
         aug_zx_graph: AugmentedZXGraph,
         graph_key: str,
     ):
-        """Add an augmented ZX graph to the collection.
+        """Add an AugmentedZXGraph to the collection.
 
         Args:
-            aug_zx_graph: The augmented ZX graph to preserve.
+            aug_zx_graph: The AugmentedZXGraph to preserve.
+            use_primary: Flag to set key to primary key.
             graph_key: String to use as collection key.
 
         """
         if not graph_key:
-            raise ValueError("ERROR. A key is needed to add an augmented ZX graph to collection.")
+            raise ValueError("ERROR. A key is needed to add an AugmentedZXGraph to collection.")
         self._collection[graph_key] = aug_zx_graph
 
     def add_graph_from_pyzx(
@@ -71,7 +71,7 @@ class ZXGraphManager:
         use_primary: bool = False,
         graph_key: str = "",
     ) -> AugmentedZXGraph:
-        """Add an augmented ZX graph to the collection starting with a standard PyZX graph.
+        """Add an AugmentedZXGraph to the collection starting with a standard PyZX graph.
 
         Args:
             zx_graph: The PyZX graph.
@@ -90,7 +90,7 @@ class ZXGraphManager:
         use_primary: bool = False,
         graph_key: str = "",
     ) -> AugmentedZXGraph:
-        """Add an augmented ZX graph to the collection from a QASM string or file.
+        """Add an AugmentedZXGraph to the collection from a QASM string or file.
 
         Args:
             qasm_str: A quantum circuit encoded as a QASM string.
@@ -108,33 +108,28 @@ class ZXGraphManager:
 
     def add_graph_from_blockgraph(
         self,
-        blockgraph_cubes: dict[int, StandardBlock],
-        blockgraph_pipes: dict[tuple[int, int], list[str | tuple[int, int]]],
+        bgraph_manager: BlockGraphManager,
         use_primary: bool = False,
         graph_key: str = "",
-        other: AugmentedZXGraph | None = None,
     ) -> AugmentedZXGraph:
-        """Add an augmented ZX graph to the collection from a blockgraph.
+        """Add an AugmentedZXGraph to the collection from a blockgraph.
 
         Args:
+            bgraph_manager: The BlockGraph manager with the BlockGraph to be transformed back into ZX.
             use_primary: Flag to set key to primary key.
             graph_key: Open key string to save intermediate/modified ZX graphs.
-            blockgraph_cubes: The cubes of the blockgraph.
-            blockgraph_pipes: The pipes of the blockgraph.
             other: A separate ZX graph against which to compare.
 
         """
         key = self.primary_key if use_primary else graph_key
-        aug_zx_graph = AugmentedZXGraph.from_blockgraph(
-            blockgraph_cubes=blockgraph_cubes, blockgraph_pipes=blockgraph_pipes, other=other
-        )
+        aug_zx_graph = AugmentedZXGraph.from_blockgraph(bgraph_manager)
         self.add_graph(aug_zx_graph, graph_key=key)
         return self._collection[key]
 
     def set_primary(self, graph_key: str):
-        """Switch the key designating the primary augmented ZX graph."""
+        """Switch the key designating the primary AugmentedZXGraph."""
         if graph_key not in self._collection:
-            raise ValueError(f"ERROR. Key {graph_key} not found in augmented ZX graph collection.")
+            raise ValueError(f"ERROR. Key {graph_key} not found in AugmentedZXGraph collection.")
         self.primary_key = graph_key
 
 
@@ -192,28 +187,25 @@ class AugmentedZXGraph:
     @classmethod
     def from_blockgraph(
         cls,
-        blockgraph_cubes: dict[int, StandardBlock],
-        blockgraph_pipes: dict[tuple[int, int], list[str | tuple[int, int]]],
-        other: AugmentedZXGraph | None = None,
+        bgraph_manager: BlockGraphManager,
     ) -> AugmentedZXGraph:
         """Create ZX graph from an blockgraph.
 
         Args:
-            path_to_input_file: The path to the input `.bgraph` file.
-            blockgraph_cubes: The cubes of the blockgraph.
-            blockgraph_pipes: The pipes of the blockgraph.
+            bgraph_manager: The blockgraph to be transformed back into ZX.
             other: A separate ZX graph against which to compare.
 
         """
         zx_graph = zx.Graph()
-        id_swaps = {}
 
-        for cube_id, (coords, kind) in blockgraph_cubes.items():
-            zx_type = ZXTypes.from_str(kind_to_zx_type(kind))
+        for cube_id, attrs in bgraph_manager.bgraph.nodes(data=True):
+            zx_block = attrs.get("zx_block")
+            zx_type = ZXTypes.from_str(zx_block.zx_type)
+            coords = attrs.get("coords")
 
-            if other and cube_id in other.zx_graph.vertex_set():
-                qubit = other.zx_graph.qubit(cube_id)
-                row = other.zx_graph.row(cube_id)
+            if cube_id in bgraph_manager.in_ids:
+                qubit = bgraph_manager.in_qubits[cube_id]
+                row = bgraph_manager.in_rows[cube_id]
             else:
                 qubit = -1
                 row = -1
@@ -221,17 +213,16 @@ class AugmentedZXGraph:
             vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row, index=cube_id)
 
             zx_graph.set_vdata(vertex, "coords", coords)
-            id_swaps[cube_id] = vertex
 
-        for (src_id, tgt_id), (kind, _) in blockgraph_pipes.items():
-            zx_type = ZXEdgeTypes.from_str(kind_to_zx_type(kind))
-            zx_graph.add_edge((id_swaps[src_id], id_swaps[tgt_id]), edgetype=zx_type)
+        for u, v, attrs in bgraph_manager.bgraph.edges(data=True):
+            zx_type = ZXEdgeTypes.from_str(attrs.get("edge_type"))
+            zx_graph.add_edge((u, v), edgetype=zx_type)
 
-        if other.zx_graph.inputs():
-            zx_graph.set_inputs(other.zx_graph.inputs())
+        if bgraph_manager.in_inputs:
+            zx_graph.set_inputs(bgraph_manager.in_inputs)
 
-        if other.zx_graph.outputs():
-            zx_graph.set_outputs(other.zx_graph.outputs())
+        if bgraph_manager.in_outputs:
+            zx_graph.set_outputs(bgraph_manager.in_outputs)
 
         # Set graph in class
         return cls(zx_graph)
@@ -242,10 +233,7 @@ class AugmentedZXGraph:
         use_reduced: bool = False,
         final_vis=False,
         **kwargs,
-    ) -> tuple[
-        dict[int, StandardBlock] | None,
-        dict[tuple[int, int], list[str | tuple[int, int]]] | None,
-    ]:
+    ) -> BlockGraphManager | None:
         """Perform algorithmic lattice surgery on ZX graph.
 
         Args:
@@ -265,25 +253,14 @@ class AugmentedZXGraph:
         # Choose full or reduced ZX graph
         zx_graph = self.zx_graph_reduced if use_reduced else self.zx_graph
 
-        # Move into Topologiq's native format
-        simple_graph = pyzx_g_to_simple_g(zx_graph)
-
         # Perform lattice surgery
-        _, _, blockgraph_cubes, blockgraph_pipes = runner(
-            simple_graph,  # The simple_graph to be processed by Topologiq
-            circuit_name,  # Name of the circuit
-            **kwargs,
-        )
+        bgraph_manager = BlockGraphManager(zx_graph, **kwargs)
+        bgraph_manager.build()
 
-        return blockgraph_cubes, blockgraph_pipes
+        return bgraph_manager
 
     def check_equality(self, other: AugmentedZXGraph) -> bool:
         """Check if two PyZX graphs are equivalent."""
-
-        # NB! None of this is currently working because blockgraph
-        # does not yet come with explicit input/output labels.
-        # Needs to be revisited when I/O labels are added to
-        # blockgraph
 
         try:
             zx_graph_in = self.zx_graph_reduced.copy()
@@ -300,15 +277,9 @@ class AugmentedZXGraph:
                     dummy_z = zx_graph.add_vertex(ty=1)
                     zx_graph.add_edge((dummy, dummy_z))
                     zx_graph.set_outputs(tuple([dummy]))
-            print(
-                "\nVerifying equality. Input ZX (reduced) v. Output BGRAPH->ZX (reduced).",
-                f"\nIn: {zx_graph_in}, i: {zx_graph_in.inputs()}, o: {zx_graph_in.outputs()}",
-                f"\nOut: {zx_graph_in}, i: {zx_graph_out.inputs()}, o: {zx_graph_out.outputs()}",
-            )
 
             g1 = zx_graph_in.to_tensor(preserve_scalar=False)
             g2 = zx_graph_out.to_tensor(preserve_scalar=False)
-            zx.draw(zx_graph_out, labels=True)
             return zx.compare_tensors(g1, g2)
         except Exception as e:
             print(f"Compare tensors failed during verification: {e}")

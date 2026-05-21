@@ -69,12 +69,12 @@ def get_zx_type_fam(zx_type: str) -> list[str | None]:
     """
 
     fams: dict[str, list[str]] = {
-        "X": ["zxz", "zzx", "xzz"],
-        "Y": ["yyy"],
-        "Z": ["xzx", "xxz", "zxx"],
-        "O": ["ooo"],
-        "SIMPLE": ["zxo", "xzo", "oxz", "ozx", "xoz", "zox"],
-        "HADAMARD": ["zxoh", "xzoh", "oxzh", "ozxh", "xozh", "zoxh"],
+        "X": ["ZXZ", "ZZX", "XZZ"],
+        "Y": ["YOY"],
+        "Z": ["XZX", "XXZ", "ZXX"],
+        "O": ["OOO"],
+        "SIMPLE": ["ZXO", "XZO", "OXZ", "OZX", "XOZ", "ZOX"],
+        "HADAMARD": ["ZXOH", "XZOH", "OXZH", "OZXH", "XOZH", "ZOXH"],
     }
 
     if zx_type not in fams:

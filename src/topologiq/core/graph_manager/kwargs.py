@@ -14,7 +14,9 @@ Usage:
 from topologiq.kwargs import (
     BEAMS_SHORT_LEN,
     DEBUG,
+    FIRST_CUBE,
     FIRST_ID_STRATEGY,
+    GRAPH_TRAVERSE_MODE,
     HIDE_PORTS,
     LOG_STATS,
     MAX_ATTEMPTS,
@@ -23,6 +25,7 @@ from topologiq.kwargs import (
     STOP_ON_FIRST_SUCCESS,
     STRIP_PORTS,
     VALUE_FUNCTION_HYPERPARAMS,
+    VIS_OPTIONS,
 )
 from topologiq.utils.core import datetime_manager
 
@@ -46,7 +49,7 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
             "first_id_strategy": FIRST_ID_STRATEGY,
             "beams_len_short": BEAMS_SHORT_LEN,
             "seed": SEED,
-            "vis_options": (None, None),
+            "vis_options": VIS_OPTIONS,
             "max_attempts": MAX_ATTEMPTS,
             "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
             "min_succ_rate": MIN_SUCC_RATE,
@@ -55,6 +58,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
             "log_stats": LOG_STATS,
             "log_stats_id": None,
             "debug": DEBUG,
+            "first_cube": FIRST_CUBE,
+            "graph_traversing_mode": GRAPH_TRAVERSE_MODE,
         }
 
     if "weights" not in kwargs:
@@ -66,7 +71,7 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
     if "seed" not in kwargs:
         kwargs["seed"] = SEED
     if "vis_options" not in kwargs:
-        kwargs["vis_options"] = (None, None)
+        kwargs["vis_options"] = VIS_OPTIONS
     if "max_attempts" not in kwargs:
         kwargs["max_attempts"] = MAX_ATTEMPTS
     if "stop_on_first_success" not in kwargs:
@@ -83,6 +88,10 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
         kwargs["log_stats_id"] = None
     if "debug" not in kwargs:
         kwargs["debug"] = DEBUG
+    if "first_cube" not in kwargs:
+        kwargs["first_cube"] = FIRST_CUBE
+    if "graph_traversing_mode" not in kwargs:
+        kwargs["graph_traversing_mode"] = GRAPH_TRAVERSE_MODE
 
     # Create unique run ID if stats logging is on
     if kwargs["log_stats"]:

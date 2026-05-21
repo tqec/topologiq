@@ -1,18 +1,12 @@
-"""Example of how to use Topologiq to perform LS on a 16-qubit GHZ designed in Qiskit.
+"""Example of how to use Topologiq to perform algorithmic lattice surgery (LS) on a Qiskit circuit.
 
-This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery (LS) on a 16-qubit GHZ circuit originally designed in Qiskit.
+This script contains an example of how to use Topologiq to perform algorithmic LS on a
+16-qubit GHZ circuit originally designed in Qiskit. Please note, for documentation purposes,
+the LS is performed on both the full (unreduced) and the reduced version of the circuit.
+In real terms, one would only produce one LS.
 
 Usage:
     Run script as given.
-
-Notes:
-    There is a critical step not shown in visualisations. The reduced PyZX graph contains
-        one colour spider an many boundaries, which violates the max_edges == 4 constraint
-        needed to perform lattice surgery based on the surface code. Topologiq has in-built
-        subroutines to handle these situations. In particular, for single_spider graphs,
-        Topologiq calculates the optimal number of spiders needed to have a graph where all
-        spiders have the maximum number of edges allowed but not more than possible.
 
 """
 
@@ -23,6 +17,9 @@ from topologiq.input.pyzx_manager import ZXGraphManager
 from topologiq.input.qbraid_manager import CircuitManager
 
 
+############
+# ENCODING #
+############
 def ghz_encoding(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -> str:
     """Create a GHZ circuit with n-qubits.
 
@@ -48,7 +45,9 @@ def ghz_encoding(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -
     return qc
 
 
-# ...
+############
+# MAIN RUN #
+############
 if __name__ == "__main__":
     # Create circuit or import it from somewhere
     n_qubits = 16
@@ -59,27 +58,29 @@ if __name__ == "__main__":
     qbraid_circuit_manager = CircuitManager()
     qasm_str = qbraid_circuit_manager.add_qiskit_circuit(ghz_circuit, key=circuit_name)
 
-    # QASM -> PyZX
-    zx_graph_manager = ZXGraphManager()
-    aug_zx = zx_graph_manager.add_graph_from_qasm(qasm_str=qasm_str, graph_key=circuit_name)
-
-    # Get inputs
-    print(aug_zx.zx_graph_reduced.inputs(), aug_zx.zx_graph_reduced.outputs())
-
-    # Draw ZX graph
-    zx.draw(aug_zx.zx_graph, labels=True)
-    zx.draw(aug_zx.zx_graph_reduced, labels=True)
-
-    # Run Topologiq
-    lattice_nodes, lattice_edges = aug_zx.get_blockgraph(
-        circuit_name=circuit_name, use_reduced=True, final_vis=True
+    # QASM -> ZX manager
+    in_zx_graph_manager = ZXGraphManager()
+    augmented_zx_graph_in = in_zx_graph_manager.add_graph_from_qasm(
+        qasm_str=qasm_str, graph_key=circuit_name
     )
+    zx.draw(augmented_zx_graph_in.zx_graph, labels=True)
 
-    aug_zx_out = zx_graph_manager.add_graph_from_blockgraph(
-        blockgraph_cubes=lattice_nodes,
-        blockgraph_pipes=lattice_edges,
-        graph_key=f"{circuit_name}_out",
-        other=aug_zx,
+    # Run Topologiq on full (unreduced graph)
+    bgraph_manager_full = augmented_zx_graph_in.get_blockgraph()
+    bgraph_manager_full.draw_blockgraph()
+
+    # Run Topologiq on reduced graph (Augmented ZX Graph always contains the reduced version of the graph)
+    zx.draw(augmented_zx_graph_in.zx_graph, labels=True)
+    zx.draw(augmented_zx_graph_in.zx_graph_reduced, labels=True)
+    bgraph_manager_reduced = augmented_zx_graph_in.get_blockgraph(use_reduced=True)
+    bgraph_manager_reduced.draw_blockgraph()
+
+    # Note that you can also confirm equality using the Augmented ZX Graph
+    out_zx_graph_manager = ZXGraphManager()
+    augmented_zx_graph_out = out_zx_graph_manager.add_graph_from_blockgraph(
+        bgraph_manager_reduced, graph_key="ghz_out"
     )
+    zx.draw(augmented_zx_graph_out.zx_graph)
 
-    #aug_zx.check_equality(aug_zx_out)
+    equality = augmented_zx_graph_in.check_equality(augmented_zx_graph_out)
+    print(equality)

@@ -7,9 +7,9 @@ Usage:
 
 from collections import deque
 
-import numpy as np
-
+from topologiq.core.blocks import PositionedZXBlock
 from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.utils.misc import get_max_manhattan
 
 #################
 # HEALTH CHECKS #
@@ -20,7 +20,7 @@ from topologiq.utils.classes import StandardBlock, StandardCoord
 # INIT #
 ########
 def init_bfs(
-    src_block_info: StandardBlock,
+    src_block_positioned: PositionedZXBlock,
 ) -> tuple[
     deque,
     dict[tuple[StandardBlock, StandardCoord], int],
@@ -29,27 +29,18 @@ def init_bfs(
     dict[StandardBlock, list[StandardBlock]],
     dict[StandardBlock, list[StandardBlock]],
     dict[StandardBlock, list[StandardBlock]],
-    list[tuple[int, int, int]],
 ]:
     """Initialise BFS variables."""
 
-    queue = deque([src_block_info])
-    visited = {(src_block_info, (0, 0, 0)): 0}
+    queue = deque([src_block_positioned])
+    visited = {(src_block_positioned, (0, 0, 0)): 0}
     visit_attempts = 0
-    path_len = {src_block_info: 0}
-    path = {src_block_info: [src_block_info]}
+    path_len = {src_block_positioned: 0}
+    path = {src_block_positioned: [src_block_positioned]}
     valid_paths = {}
     all_search_paths = {}
-    moves = [
-        (1, 0, 0),
-        (0, 1, 0),
-        (0, 0, 1),
-        (-1, 0, 0),
-        (0, -1, 0),
-        (0, 0, -1),
-    ]
 
-    return queue, visited, visit_attempts, path_len, path, valid_paths, all_search_paths, moves
+    return queue, visited, visit_attempts, path_len, path, valid_paths, all_search_paths
 
 
 def gen_exit_conditions(
@@ -132,36 +123,3 @@ def check_run_mode(src_coords, taken, tgt_coords, tent_tgt_kinds):
             taken.remove(tgt_coords[0])
 
     return second_pass, taken
-
-
-def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
-    """Calculate the Manhattan distance between any two (x, y, z) coordinates.
-
-    Args:
-        src_coords: The (x, y, z) coordinates for the source block.
-        tgt_coords: The (x, y, z) coordinates for the target block.
-
-    Returns:
-        int: The Manhattan distance between the given coordinates.
-
-    """
-
-    return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
-
-
-def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
-    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
-
-    Args:
-        src_coord: The (x, y, z) coordinates for the source block.
-        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
-
-    Returns:
-        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
-
-    """
-
-    if all_coords:
-        return max([get_manhattan(src_coord, c) for c in all_coords])
-
-    return 0

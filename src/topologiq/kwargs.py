@@ -57,7 +57,7 @@ VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 FIRST_ID_STRATEGY = "first_spider"
 
 # Deterministic or randomised running mode
-BEAMS_SHORT_LEN = 7
+BEAMS_SHORT_LEN = 2
 
 # Single seed to use across any randomised operations
 SEED = None
@@ -82,3 +82,12 @@ LOG_STATS = False
 
 # Turn debug mode on, with increasing level of stringency: 0 -> 4
 DEBUG = 0
+
+# Override value for first cube placement
+FIRST_CUBE = (None, None)
+
+# Default vis options
+VIS_OPTIONS = (None, None)
+
+# Strategy for graph traversing (bfs, bfs-cross, bfs-rows)
+GRAPH_TRAVERSE_MODE = "bfs-cross"

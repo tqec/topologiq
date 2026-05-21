@@ -6,15 +6,19 @@ Usage:
 """
 
 import random
+from fractions import Fraction
 
 import matplotlib
 import matplotlib.figure
 import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
-from pyzx.utils import EdgeType, VertexType
+from pyzx.utils import EdgeType
 
 
+######################
+# ENCODING FUNCTIONS #
+######################
 def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
     """Produce a PyZX graph corresponding to a CNOT.
 
@@ -27,19 +31,9 @@ def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figur
 
     """
 
-    #pyzx_circuit = zx.Circuit(2)
-    #pyzx_circuit.add_gate("CNOT", 1, 0)
-    #pyzx_graph = pyzx_circuit.to_graph()
-
-    pyzx_graph = zx.Graph()
-    pyzx_graph.add_vertex(ty=VertexType.BOUNDARY, qubit=1, row=1)
-    pyzx_graph.add_vertex(ty=VertexType.X, qubit=1, row=1)
-    pyzx_graph.add_vertex(ty=VertexType.Z, qubit=1, row=1)
-    pyzx_graph.add_vertex(ty=VertexType.BOUNDARY, qubit=1, row=1)
-
-    pyzx_graph.add_edge((0,1))
-    pyzx_graph.add_edge((1,2),edgetype=EdgeType.HADAMARD)
-    pyzx_graph.add_edge((1,3))
+    pyzx_circuit = zx.Circuit(2)
+    pyzx_circuit.add_gate("CNOT", 1, 0)
+    pyzx_graph = pyzx_circuit.to_graph()
 
     fig = None
     if draw_graph:
@@ -90,10 +84,10 @@ def simple_mess(
 
     pyzx_circuit = zx.Circuit(3)
     pyzx_circuit.add_gate("CNOT", 1, 2)
-    pyzx_circuit.add_gate("S", 2)
+    pyzx_circuit.add_gate("Z", 2)
     pyzx_circuit.add_gate("CNOT", 1, 0)
     pyzx_circuit.add_gate("CNOT", 0, 1)
-    pyzx_circuit.add_gate("S", 2)
+    pyzx_circuit.add_gate("Z", 2)
     pyzx_circuit.add_gate("CNOT", 0, 2)
 
     pyzx_graph = pyzx_circuit.to_graph()
@@ -105,10 +99,10 @@ def simple_mess(
     return pyzx_graph, fig
 
 
-def steane_pyzx(
+def steane(
     draw_graph: bool = False,
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
-    """Return an full (unreduced) PyZX graph of a Steane encoding.
+    """Return a PyZX graph of a Steane code.
 
     Args:
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
@@ -135,6 +129,234 @@ def steane_pyzx(
     num_apply_state = pyzx_graph.num_inputs()
     pyzx_graph.apply_state("0" * num_apply_state)
     pyzx_graph.apply_effect("000///////")
+
+    # Reduction
+    zx.full_reduce(pyzx_graph)
+    zx.to_rg(pyzx_graph)
+    zx.phase_free_simp(pyzx_graph)
+
+    # Re-organise rows
+    rows = {0: [43, 44, 45, 47], 1: [11, 13, 15, 25], 2: [10, 20, 30], 3: [46, 48, 49]}
+    for r, spider_ids in rows.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_row(spider_id, r)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def steane_obfuscated(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph of a Steane code with one more spider than its fully reduced version.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    spiders = {0: [9, 10, 11, 12, 13, 14, 15], 1: [1, 5, 6, 7], 2: [2, 3, 4, 8]}
+    edges = {
+        1: [
+            (1, 2),
+            (1, 3),
+            (1, 4),
+            (1, 9),
+            (2, 5),
+            (2, 10),
+            (3, 6),
+            (3, 11),
+            (4, 7),
+            (4, 12),
+            (5, 8),
+            (5, 13),
+            (6, 8),
+            (6, 14),
+            (7, 8),
+            (7, 15),
+        ]
+    }
+
+    # Foundational graph
+    pyzx_graph = zx.Graph()
+
+    # Add spiders
+    for k, spider_ids in spiders.items():
+        if k == 0:
+            row = 0
+        else:
+            row = 2 if k == 1 else 1
+        for i, spider_id in enumerate(spider_ids):
+            if k == 0:
+                row = 3 if spider_id in [13, 14, 15] else 0
+            pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=i, row=row)
+
+    for k, edge_pairs in edges.items():
+        for u, v in edge_pairs:
+            pyzx_graph.add_edge((u, v), edgetype=k)
+
+    pyzx_graph.set_outputs(spiders[0])
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def hadamard_line(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a line of Hadamards.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
+
+    # GHZ encoding
+    pyzx_circuit.add_gates("H H H H H H", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+    pyzx_graph.set_edge_type((6, 7), EdgeType.HADAMARD)
+    for i in [2, 4, 6]:
+        pyzx_graph.set_type(i, 2)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def hadamard_bend(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a 2-qubit Hadamard sequence.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(2)
+
+    # Encoding
+    pyzx_circuit.add_gates("H H", 0)
+    pyzx_circuit.add_gate("CNOT", 0, 1)
+    pyzx_circuit.add_gates("H H", 0)
+    pyzx_circuit.add_gates("H H", 1)
+    pyzx_graph = pyzx_circuit.to_graph()
+    pyzx_graph.remove_vertex(1)
+    for i in [3, 6, 9]:
+        pyzx_graph.set_type(i, 2)
+    for u, v in [(3, 5), (5, 4), (7, 10), (9, 11)]:
+        pyzx_graph.set_edge_type((u, v), EdgeType.HADAMARD)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def hadamard_mess(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph of a Steane code with Hadamards added for complexity.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(10)
+
+    ancilla_qubits = [0, 1, 2]
+    qubits = [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
+    for i, ancilla_qubit in enumerate(ancilla_qubits):
+        pyzx_circuit.add_gate("HAD", ancilla_qubit)
+        for qubit in qubits[i]:
+            pyzx_circuit.add_gate("CNOT", ancilla_qubit, qubit)
+        pyzx_circuit.add_gate("HAD", ancilla_qubit)
+    pyzx_graph = pyzx_circuit.to_graph()
+
+    # States & effects
+    num_apply_state = pyzx_graph.num_inputs()
+    pyzx_graph.apply_state("0" * num_apply_state)
+    pyzx_graph.apply_effect("000///////")
+
+    # Reduction
+    zx.full_reduce(pyzx_graph)
+    zx.to_rg(pyzx_graph)
+    zx.phase_free_simp(pyzx_graph)
+
+    # Exchange some edges for Hadamards
+    for u, v in [(11, 20), (20, 25), (15, 30)]:
+        pyzx_graph.set_edge_type((u, v), EdgeType.HADAMARD)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def ghz(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a GHZ.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    # Foundational circuit
+    n_qubits = 16
+    pyzx_circuit = zx.Circuit(n_qubits)
+
+    # GHZ encoding
+    pyzx_circuit.add_gate("HAD", 0)
+    for i in range(n_qubits - 1):
+        pyzx_circuit.add_gate("CNOT", i, i + 1)
+    pyzx_graph = pyzx_circuit.to_graph()
+
+    # States & effects
+    num_apply_state = pyzx_graph.num_inputs()
+    pyzx_graph.apply_state("0" * num_apply_state)
 
     # Reduction
     zx.full_reduce(pyzx_graph)
@@ -228,8 +450,157 @@ def random_graph(
     return None, None
 
 
+def y_init(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a single Y-cube followed by a colour spider.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
+
+    # GHZ encoding
+    pyzx_circuit.add_gates("S NOT", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+    pyzx_graph.remove_vertices([0])
+    pyzx_graph.set_inputs(tuple([1]))
+    pyzx_graph.set_outputs(tuple([3]))
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def line_with_s(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a line of gates with an S in the middle.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
+
+    # GHZ encoding
+    pyzx_circuit.add_gates("NOT S NOT", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+    _rm_unnecessary_phases(pyzx_graph)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def t_init(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a single T-spider followed by a colour spider.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
+
+    # GHZ encoding
+    pyzx_circuit.add_gates("T NOT", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+    _rm_unnecessary_phases(pyzx_graph)
+    pyzx_graph.remove_vertices([0])
+    pyzx_graph.set_inputs(tuple([1]))
+    pyzx_graph.set_outputs(tuple([3]))
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+def line_with_t(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return an PyZX graph of a single Y-cube followed by a colour spider.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
+
+    # GHZ encoding
+    pyzx_circuit.add_gates("NOT T NOT", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+
+    # Gadgetise
+    zx.simplify.gadgetize(pyzx_graph, graphlike=False)
+    zx.id_simp(pyzx_graph)
+    _rm_unnecessary_phases(pyzx_graph)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+#######
+# AUX #
+#######
+def _rm_unnecessary_phases(pyzx_graph: zx.Graph):
+    """Remove 1/1 phases for prettier visualisation."""
+    [
+        pyzx_graph.set_phase(i, 0)
+        for i in pyzx_graph.vertices()
+        if pyzx_graph.phase(i) == Fraction(1, 1)
+    ]
+
+
+##############
+# PUBLIC DEF #
+##############
+__all__ = [  # noqa: RUF022  (do not sort: circuits organised in increasing order of difficulty)
+    "cnot",
+    "cnots",
+    "simple_mess",
+    "hadamard_line",
+    "hadamard_bend",
+    "steane",
+    "steane_obfuscated",
+    "hadamard_mess",
+    "ghz",
+    "y_init",
+    "line_with_s",
+    "t_init",
+    "line_with_t",
+]
+
+
 if __name__ == "__main__":
-    cnot, _ = cnot()
-    cnots, _ = cnots()
-    simple_mess, _ = simple_mess()
-    steane, _ = steane_pyzx()
+    pyzx_graph, _ = t_init(draw_graph=True)

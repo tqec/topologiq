@@ -8,78 +8,85 @@ Notes:
 
 """
 
+import random
 from pathlib import Path
 
-import matplotlib.figure
-import pyzx as zx
+from pyinstrument import Profiler
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 
 from topologiq.assets.pyzx_graphs import random_graph
 from topologiq.input.pyzx_manager import ZXGraphManager
-from topologiq.utils.read_write import write_bgraph
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 
 
 ####################
-# MAIN RUN MANAGER #
+# CIRCUIT RETRIEVE #
 ####################
-def run_random(pyzx_graph: BaseGraph | GraphS, fig_data: matplotlib.figure.Figure, **kwargs):
-    """Run a single random PyZX graph m_times.
+def get_random_pyzx_circuit(
+    qubit_n: int, depth: int, draw_graph: bool = False, **kwargs
+) -> BaseGraph | GraphS:
+    """Retrieve and return a random PyZX graph.
 
     Args:
-        pyzx_graph: The random PyZX graph.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
+        qubit_n: The number of qubits in the desired random circuit.
+        depth: The depth of the the desired random circuit.
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
+    Returns:
+        pyzx_graph: The requested random PyZX graph.
+        circuit_name: The name for the circuit/graph.
+
     """
+    if "seed" in kwargs:
+        random.seed(kwargs["seed"])
+    circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
+    pyzx_graph, _ = random_graph(qubit_n, depth, draw_graph=draw_graph, graph_type="cnot", **kwargs)
+    return pyzx_graph, circuit_name
+
+
+##########
+# KWARGS #
+##########
+# If a specific kwarg is not explicitly declared here, it will be auto-generated
+kwargs = {
+    "first_id_strategy": "first_spider",
+    "seed": 42,
+    "debug": 1,
+    "size_of_chip": (10, 10),
+    "k": 3,
+}
+
+
+############
+# MAIN RUN #
+############
+if __name__ == "__main__":
+
+    # Start PyInstrument
+    profiler = Profiler()
+
+    # Retrieve circuit
+    qubit_n, depth = (5, 50)
+    pyzx_graph, circuit_name = get_random_pyzx_circuit(qubit_n, depth, draw_graph=True, **kwargs)
 
     # Convert ZX graph into AugmentedZXGraph
+    profiler.start()
     zx_graph_manager = ZXGraphManager()
     aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, use_primary=True)
-    zx.draw(aug_zx.zx_graph)
 
     # Run Topologiq
-    lattice_nodes, lattice_edges = aug_zx.get_blockgraph(
-        circuit_name=circuit_name, use_reduced=False, final_vis=True, **kwargs
-    )
+    bgraph_manager = aug_zx.get_blockgraph(**kwargs)
+    profiler.stop()
 
-    # Write results to .bgraph file
-    in_spiders = list(aug_zx.zx_graph.inputs())
-    out_spiders = list(aug_zx.zx_graph.outputs())
-    if lattice_nodes and lattice_edges:
-        write_bgraph(
-            OUTPUT_DIR,
-            circuit_name,
-            lattice_nodes,
-            lattice_edges,
-            in_spiders=in_spiders,
-            out_spiders=out_spiders,
-        )
+    # Visualise results
+    bgraph_manager.draw_blockgraph()
 
-
-# ...
-if __name__ == "__main__":
-    # KWARGs (if not here, kwarg is auto-generated)
-    kwargs = {
-        "first_id_strategy": "first_spider",
-        "seed": 42,
-        "vis_options": ("final", None),
-        "max_attempts": 1,
-        "stop_on_first_success": True,
-        "debug": 1,
-        "log_stats": False,
-    }
-
-    # Circuit
-    qubit_n = 5
-    depth = 5
-    circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
-    pyzx_graph, fig_data = random_graph(qubit_n, depth, graph_type="cnot", **kwargs)
-
-    # Run Topologiq
-    run_random(pyzx_graph, fig_data, **kwargs)
+    # Write profiling results
+    with open("profiled_run.html", "w") as f:
+        f.write(profiler.output_html())

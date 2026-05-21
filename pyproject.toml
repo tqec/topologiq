@@ -64,6 +64,7 @@ Issues = "https://github.com/jbolns/topologiq/issues"
 dev = [
     "deptry>=0.24.0",
     "notebook>=7.5.0",
+    "pyinstrument>=5.1.2",
     "ruff==0.14.7", # Ensures all contributors adhere to exact same rules.
 ]
 

@@ -5,505 +5,224 @@ Usage:
 
 """
 
-from collections import deque
-from typing import cast
-
-import matplotlib
 import networkx as nx
 
-from topologiq.core.graph_manager.beams import check_path_to_beam_clashes, check_tgt_beam_clashes
-from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
-from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
-from topologiq.core.pathfinder.spatial import get_taken_coords
-from topologiq.core.pathfinder.symbolic import check_exits
-from topologiq.utils.classes import (
-    Colors,
-    CubeBeams,
-    PathBetweenNodes,
-    StandardBlock,
-    StandardCoord,
-)
-from topologiq.utils.core import datetime_manager
+from topologiq.core.blocks import ZXBlock
+from topologiq.core.graph_manager.spatial import pipe_kind_inference
+from topologiq.utils.classes import StandardCoord
 
 
-##############################
-# STANDARD EDGES / DISCOVERY #
-##############################
-def handle_std_edge(
-    src_id: int,
-    tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
-    circuit_name: str = "circuit",
-    init_step: int = 3,
-    fig_data: matplotlib.figure.Figure | None = None,
-    twin_mode: bool = False,
-    ids_to_twin: list[int] | None = None,
-    **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
-    """Position target cube in the 3D space as part of the primary BFS flow.
-
-    This function calls the inner pathfinder algorithm on any arbitrary combination of an already-placed
-    `src_id` and a yet-to-be-placed `tgt_id`. The inner pathfinder algorithm returns a list of viable
-    paths to a number of valid placements for `tgt_id`, and chooses a best path from this list
-    using hyperparameters passed as `kwargs` and a value function.
+################
+# QUEUE PRECAL #
+################
+def queue_precalc(
+    bgraph: nx.Graph, first_id: int, graph_traverse_strategy: str
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
 
     Args:
-        src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
-        tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        circuit_name: The name of the ZX circuit.
-        init_step: The ideal/intended (Manhattan) distance between source and target blocks.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        twin_mode (optional): True when this function is used to create a twin of a given cube.
-        ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        graph_traverse_strategy: The graph traversing strategy.
 
     Returns:
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        (bool): A boolean flag to signal success (True if placement was succesful).
+        edge_queue: A list of (u, v) tuples to use as queue.
 
     """
 
-    # Start timer
-    t_1, _ = datetime_manager()
+    # Standard edge BFS queues
+    standard_edges = list(nx.bfs_edges(bgraph, first_id))
+    edge_bfs = list(nx.edge_bfs(bgraph, first_id))
+    cross_edges = [e for e in edge_bfs if e not in standard_edges]
 
-    # Always prune beams to ensure recent placements are accounted for
-    nx_g = prune_beams(nx_g, taken)
+    # Fill edge_queue
+    edge_queue: list[tuple[int, int]] = []
 
-    # Get source cube data
-    src_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
-    src_kind: str | None = nx_g.nodes[src_id].get("kind")
-    if src_coords is None or src_kind is None:
-        return nx_g, taken, edge_paths, False
-    src_block_info: StandardBlock = (src_coords, src_kind)
+    # Standard edge BFS
+    if graph_traverse_strategy == "bfs":
+        edge_queue = edge_bfs
 
-    # Check position of target cube (should be None)
-    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
+    # Standard edge BFS + cross edge priority
+    if graph_traverse_strategy == "bfs-cross":
+        visited = []
+        for u, v in standard_edges:
+            if (u, v) not in edge_queue:
+                [
+                    edge_queue.append((uu, vv))
+                    for uu, vv in cross_edges
+                    if (uu, vv) not in edge_queue and uu in visited and vv in visited
+                ]
+                edge_queue.append((u, v))
+                visited.extend([u, v])
 
-    # Process targets that have yet to be placed in the 3D space
-    edge_success = False
+    return edge_queue
 
-    if nxt_neigh_coords is None:
-        # Geat target information
-        nxt_neigh_node_data = nx_g.nodes[tgt_id]
-        nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
 
-        # Get edge information
-        zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-        hdm: bool = True if zx_edge_type == "HADAMARD" else False
+##############
+# TRANSFORMS #
+##############
+def add_path_to_bgraph(
+    bgraph: nx.Graph,
+    taken: set[StandardCoord],
+    full_path: list[tuple[StandardCoord, ZXBlock]],
+    curr_src_id: int,
+    curr_tgt_id: int,
+    is_hadamard: bool,
+    cross_edge: bool,
+) -> tuple[nx.Graph, set[StandardCoord]]:
+    """Add a winner path to the main blockgraph.
 
-        # Remove source coordinates from occupied coords
-        taken_coords_c = taken[:]
-        if src_coords in taken_coords_c:
-            taken_coords_c.remove(src_coords)
+    Args:
+        bgraph: The BlockGraph currently being built.
+        taken: The set of taken coordinates.
+        full_path: The full path being added.
+        curr_src_id: The ID of the current source cube.
+        curr_tgt_id: The ID of the current target cube.
+        is_hadamard: True if the current edge is a Hadamard in the input ZX graph.
+        cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
 
-        # Get clean candidate paths
-        # Note. Topologically correct but not necessarily smart paths
-        clean_paths, pathfinder_vis_data = call_pathfinder(
-            src_block_info,
-            nxt_neigh_zx_type,
-            init_step,
-            taken_coords_c if taken else [],
-            hdm=hdm,
-            src_tgt_ids=(src_id, tgt_id),
-            **kwargs,
+    Returns:
+        bgraph: An updated BlockGraph containing the new path.
+        taken: An updated set of taken coordinates.
+
+
+    """
+
+    # Health checks for source and target
+    src_coords, src_zx_block = full_path.pop(0)
+    tgt_coords, tgt_zx_block = full_path.pop(-1)
+    if (
+        bgraph.nodes[curr_src_id]["coords"] != src_coords
+        or bgraph.nodes[curr_src_id]["zx_block"] != src_zx_block
+    ):
+        raise ValueError(
+            "ERROR. Cannot add standard edge. Source must always match a pre-existing cube."
         )
-
-        # Assemble a preliminary dictionary of viable paths
-        # Note. A smart subset of clean paths
-        viable_paths = []
-        tgt_degree = int(get_node_degree(nx_g, tgt_id))
-        for clean_path in clean_paths:
-            # Extract key path information
-            tgt_coords, tgt_kind = clean_path[-1]
-            coords_in_path = get_taken_coords(clean_path)
-
-            # Check if exits are unobstructed
-            tgt_unobstr_exit_n, tgt_beams, tgt_beams_short = check_exits(
-                tgt_coords, tgt_kind, taken_coords_c, coords_in_path
+    if cross_edge:
+        if (
+            bgraph.nodes[curr_tgt_id]["coords"] != tgt_coords
+            or bgraph.nodes[curr_tgt_id]["zx_block"] != tgt_zx_block
+        ):
+            raise ValueError(
+                "ERROR. Cannot add cross-edge. Target of a cross edge must match a pre-existing cube."
             )
 
-            # Check path doesn't obstruct an absolutely necessary exit for a pre-existing cube
-            # Reset # of unobstructed exits and node beams if target is a boundary
-            if nxt_neigh_zx_type == "O":
-                tgt_unobstr_exit_n, tgt_beams = (6, [])
+    # Update source
+    bgraph.nodes[curr_src_id]["completions"]["pending"] -= 1
 
-            if tgt_unobstr_exit_n >= tgt_degree - 1:
-                # Check if path breaks more beams than tolerable
-                path_to_beam_clashes, beams_broken_by_path, _ = check_path_to_beam_clashes(
-                    nx_g,
-                    src_id,
-                    tgt_id,
-                    coords_in_path,
-                    twin_mode=twin_mode,
-                    ids_to_twin=ids_to_twin,
-                )
+    # Handle any intermediate cubes before target
+    # Since both source and target have been popped,
+    # if winner path has cubes left, there are intermediate cubes
+    intermediate_cubes_present = False
+    if full_path:
+        # Update intermediate cube flag
+        intermediate_cubes_present = True
 
-                # Check if there are more beam-to-beam clashes than tolerable
-                tgt_beam_clashes, beams_broken_by_path = check_tgt_beam_clashes(
-                    nx_g,
-                    src_id,
-                    tgt_id,
-                    tgt_beams,
-                    tgt_beams_short,
-                    tgt_degree,
-                    beams_broken_by_path,
-                    **kwargs,
-                )
+        # In-loop trackers
+        first_in_sequence = True
+        prev_id = None
 
-                # Append path to viable paths if path clears all checks
-                if not path_to_beam_clashes and not tgt_beam_clashes:
-                    all_nodes_in_path = [p for p in clean_path]
+        # Add intermediate cubes one by one
+        for coords, zx_block in full_path:
+            # Calculate intermediate node ID
+            n_id = max(list(bgraph.nodes())) + 1
 
-                    # Re-write type of boundary nodes for consistency
-                    if nxt_neigh_zx_type == "O":
-                        tgt_kind = "ooo"
-                        all_nodes_in_path[-1] = (all_nodes_in_path[-1][0], tgt_kind)
-
-                    # Consolidate path data
-                    path_data = {
-                        "tgt_coords": tgt_coords,
-                        "tgt_kind": tgt_kind,
-                        "tgt_beams": tgt_beams,
-                        "tgt_beams_short": tgt_beams_short,
-                        "coords_in_path": coords_in_path,
-                        "all_nodes_in_path": all_nodes_in_path,
-                        "beams_broken_by_path": beams_broken_by_path,
-                        "len_of_path": len(clean_path),
-                        "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
-                    }
-
-                    # Append to viable paths
-                    viable_paths.append(PathBetweenNodes(**path_data))
-
-        # Choose a winner path from all viable paths
-        winner_path: PathBetweenNodes | None = None
-        if viable_paths:
-            winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
-
-        # Finish timer before popping up visualisation
-        _, t_total_iter = datetime_manager(t_1=t_1)
-
-        # Call visualisation if applicable
-        if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
-            call_debug_vis(
-                circuit_name,
-                nx_g,
-                edge_paths,
-                winner_path,
-                None,
-                (src_id, tgt_id),
-                src_block_info,
-                pathfinder_vis_data,
-                fig_data=fig_data,
-                **kwargs,
+            # Add intermediate node
+            bgraph.add_node(
+                n_id,
+                zx_block=zx_block,
+                coords=coords,
+                completions={
+                    "degree": 2,
+                    "pending": 0,
+                },
             )
 
-        # Write to edge_paths if winner is found
-        if winner_path:
-            nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
-            )
+            # Add intermediate cube coords to taken
+            taken.add(coords)
 
-        # Update user
-        if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-            volume = (
-                len([i for i in winner_path.all_nodes_in_path if "o" not in i[1]])
-                if winner_path
-                else 0
-            )
-            print(
-                f"ADD CUBE: {src_id} -> {tgt_id}.",
-                (Colors.GREEN + "Success." + Colors.RESET)
-                if edge_success
-                else f"{(Colors.YELLOW + 'Increasing search distance.' + Colors.RESET) if init_step < 15 else (Colors.RED + 'FAIL.' + Colors.RESET)}",
-                f"Vol: {volume - 1}." if edge_success else "",
-                f"Runtime: ~{int(t_total_iter * 1000)}ms.",
-            )
-
-    nx_g = prune_beams(nx_g, taken)
-    return nx_g, taken, edge_paths, edge_success
-
-
-####################################################
-# CROSS EDGES / JOIN PREVIOUSLY DISCOVERED SPIDERS #
-####################################################
-def handle_cross_edge(
-    src_id: int,
-    tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
-    circuit_name: str = "circuit",
-    fig_data: matplotlib.figure.Figure | None = None,
-    **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
-    """Search for a path between two cubes that have already been placed in 3D space.
-
-    This function calls the inner pathfinder algorithm to search for paths between cubes that have
-    been already-placed in the 3D space. The inner pathfinder algorithm returns a single paths, indeed
-    the shortest path respecting all restrictoins.
-
-    Args:
-        src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
-        tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        circuit_name: The name of the ZX circuit.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
-
-    Returns:
-        taken: Updated list of all coordinates occupied by any blocks/pipes, including any placed by this function iteration.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        edge_success: A boolean flag declaring whether the edge was built successfully or not.
-
-    """
-    # Start timer
-    t_1, _ = datetime_manager()
-
-    # Prune taken and beams
-    edge_success = False
-    taken = list(set(taken))
-    nx_g = prune_beams(nx_g, taken)
-
-    # Get source and target data for current (src_id, tgt_id) pair
-    u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
-
-    # Process edge only if both src_id and tgt_id have already been placed in the 3D space
-    # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
-    if u_coords is not None and v_coords is not None:
-        # Format adjustments to match existing operations
-        u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
-        v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
-        edge = tuple(sorted((src_id, tgt_id)))
-
-        # Call pathfinder on any graph edge that does not have an entry in edge_paths
-        if edge not in edge_paths:
-            critical_beams = _assemble_critical_beams(nx_g)
-
-            # Check if edge is hadamard
-            zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-            hdm: bool = True if zx_edge_type == "HADAMARD" else False
-
-            # Call pathfinder using optional parameters that flag second pass nature of operation
-            v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
-
-            if v_coords and v_kind:
-                clean_paths, pathfinder_vis_data = call_pathfinder(
-                    (u_coords, u_kind),
-                    v_zx_type,
-                    3,
-                    taken[:],
-                    tgt_block_info=(v_coords, v_kind),
-                    hdm=hdm,
-                    critical_beams=critical_beams,
-                    src_tgt_ids=(src_id, tgt_id),
-                    **kwargs,
+            # Add edge as appropriate
+            if first_in_sequence:
+                # Make the foundational connection
+                bgraph.add_edge(
+                    curr_src_id,
+                    n_id,
+                    edge_type=bgraph.edges[(curr_src_id, curr_tgt_id)]["edge_type"],
+                    start_coords=None,
+                    end_coords=None,
+                    kind=None,
                 )
 
-                # Finish timer before popping up visualisation
-                _, t_total_iter = datetime_manager(t_1=t_1)
+                # Remove flag for first pipe in sequence
+                first_in_sequence = False
 
-                # For visualisation, create a new graph on each step irrespective of outcome
-                if (
-                    kwargs["debug"] > 1
-                    or kwargs["vis_options"][0] == "detail"
-                    or kwargs["vis_options"][1]
-                    # or (src_id == 75 and (tgt_id in [14, 15]))
-                ):
-                    # kwargs["debug"] = 3
-                    # Call visualisation
-                    call_debug_vis(
-                        circuit_name,
-                        nx_g,
-                        edge_paths,
-                        None,
-                        clean_paths[0] if clean_paths else None,
-                        (src_id, tgt_id),
-                        (u_coords, u_kind),
-                        pathfinder_vis_data,
-                        fig_data=fig_data,
-                        **kwargs,
-                    )
-
-                # Write to edge_paths if an edge is found
-                nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                    nx_g,
-                    edge_paths,
-                    None,
-                    clean_paths[0] if clean_paths else None,
-                    taken,
-                    zx_edge_type,
-                    src_id,
-                    tgt_id,
-                    second_pass=True,
+                # Infer pipe kind
+                start_coords, end_coords, pipe_kind = pipe_kind_inference(
+                    bgraph, curr_src_id, n_id, is_hadamard=is_hadamard
                 )
 
-                # Update user
-                if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-                    volume = (
-                        len([i for i in clean_paths[0] if "o" not in i[1]]) if edge_success else 0
-                    )
-                    print(
-                        f"CONNECT PRE-EXISTING CUBES: {src_id} -> {tgt_id}.",
-                        (Colors.GREEN + "Success." + Colors.RESET)
-                        if edge_success
-                        else Colors.RED + "FAIL." + Colors.RESET,
-                        f"Vol: {volume - 2}." if edge_success else "",
-                        f"Runtime: ~{int(t_total_iter * 1000)}ms.",
-                    )
+                # Complete edge attributes
+                bgraph.edges[(curr_src_id, n_id)]["start_coords"] = start_coords
+                bgraph.edges[(curr_src_id, n_id)]["end_coords"] = end_coords
+                bgraph.edges[(curr_src_id, n_id)]["kind"] = pipe_kind
 
-    nx_g = prune_beams(nx_g, taken)
-    return nx_g, taken, edge_paths, edge_success
-
-
-def _assemble_critical_beams(
-    nx_g: nx.Graph,
-) -> dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]]:
-    """Assemble a dictionary of beams and related information.
-
-    Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-
-    Returns:
-        critical_beams: A dictionary containing beams to and key related information, to be used by the pathfinder.
-            Keys:
-                cube_id: The ID of an arbitrary cube.
-            Values:
-                cube_coords: The coordinates of the cube.
-                cube_pending_edges: The number of edges still needed by the particular cube.
-                cube_beams: The infinite beams for the specific node.
-                cube_beams_short: The short beams for the specific node.
-
-    """
-
-    critical_beams = {}
-    for cube_id in nx_g.nodes():
-        cube_coords = nx_g.nodes[cube_id]["coords"]
-        cube_beams = nx_g.nodes[cube_id]["beams"]
-        cube_beams_short = nx_g.nodes[cube_id]["beams_short"]
-        if cube_beams or cube_beams_short:
-            cube_degree = get_node_degree(nx_g, cube_id)
-            cube_pending_edges = cube_degree - nx_g.nodes[cube_id]["completed"]
-            if cube_pending_edges != 0:
-                critical_beams[cube_id] = (
-                    cube_coords,
-                    cube_pending_edges,
-                    cube_beams,
-                    cube_beams_short,
+            else:
+                # Make the foundational connection
+                bgraph.add_edge(
+                    prev_id,
+                    n_id,
+                    edge_type="SIMPLE",
+                    start_coords=None,
+                    end_coords=None,
+                    kind=None,
                 )
 
-    return critical_beams
+                # Infer pipe kind
+                start_coords, end_coords, pipe_kind = pipe_kind_inference(bgraph, prev_id, n_id)
 
+                # Complete edge attributes
+                bgraph.edges[(prev_id, n_id)]["start_coords"] = start_coords
+                bgraph.edges[(prev_id, n_id)]["end_coords"] = end_coords
+                bgraph.edges[(prev_id, n_id)]["kind"] = pipe_kind
 
-#####################################################
-# RECOVERY EDGES / CREATE SPIDERS TO AVOID SHUTDOWN #
-#####################################################
-def add_twin(
-    circuit_name,
-    nx_g,
-    queue,
-    visited,
-    edge_paths,
-    taken,
-    fig_data,
-    twins,
-    priority_ids,
-    src_id,
-    **kwargs,
-):
-    """Create a twin spider for any given number of priority spiders."""
+            # Update previous node ID
+            prev_id = n_id
 
-    hold_for_edge_removal = []
-
-    for priority_id in priority_ids:
-        # Define new ID
-        twin_id = max(nx_g.nodes) + 1
-        twins[priority_id] = twin_id
-
-        # Add the twin
-        nx_g.add_node(
-            twin_id,
-            type=nx_g.nodes[priority_id]["type"],
-            type_fam=nx_g.nodes[priority_id]["type_fam"],
+    # Handle target (in either case, there is already a node for target)
+    # Replace source-target edge if intermediate nodes were added
+    if intermediate_cubes_present:
+        # Add edge from last intermediate cube to target
+        bgraph.add_edge(
+            prev_id,
+            curr_tgt_id,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
             kind=None,
-            coords=None,
-            beams=None,
-            beams_short=None,
-            completed=0,
         )
+        # Remove original source-target edge
+        bgraph.remove_edge(curr_src_id, curr_tgt_id)
 
-        # Get neighbours pending for original and transfer to twin
-        twin_pending_neighs = [
-            n
-            for n in nx_g.neighbors(priority_id)
-            if tuple(sorted((n, priority_id))) not in list(edge_paths.keys())
-        ]
-        twin_pending_neighs = [n if n not in twins else twins[n] for n in twin_pending_neighs]
+    # Update target attributes
+    bgraph.nodes[curr_tgt_id]["zx_block"] = tgt_zx_block
+    bgraph.nodes[curr_tgt_id]["coords"] = tgt_coords
+    bgraph.nodes[curr_tgt_id]["completions"]["pending"] -= 1
 
-        nx_g.add_edge(priority_id, twin_id, type="SIMPLE")
-        for twin_neigh_id in twin_pending_neighs:
-            edge_type = nx_g.get_edge_data(priority_id, twin_neigh_id)
-            hold_for_edge_removal.append((priority_id, twin_neigh_id))
-            nx_g.add_edge(twin_id, twin_neigh_id, type=edge_type)
+    # Add target to taken
+    taken.add(tgt_coords)
 
-        # Try to place twin slightly away from current blockgraph
-        taken = list(set(taken))
+    # Infer pipe kind and other attributes
+    if intermediate_cubes_present:
+        start_coords, end_coords, pipe_kind = pipe_kind_inference(bgraph, prev_id, curr_tgt_id)
+        bgraph.edges[(prev_id, curr_tgt_id)]["start_coords"] = start_coords
+        bgraph.edges[(prev_id, curr_tgt_id)]["end_coords"] = end_coords
+        bgraph.edges[(prev_id, curr_tgt_id)]["kind"] = pipe_kind
+    else:
+        start_coords, end_coords, pipe_kind = pipe_kind_inference(
+            bgraph, curr_src_id, curr_tgt_id, is_hadamard=is_hadamard
+        )
+        bgraph.edges[(curr_src_id, curr_tgt_id)]["start_coords"] = start_coords
+        bgraph.edges[(curr_src_id, curr_tgt_id)]["end_coords"] = end_coords
+        bgraph.edges[(curr_src_id, curr_tgt_id)]["kind"] = pipe_kind
 
-        step, max_step = (6, 15)
-        while step <= max_step:
-            nx_g, taken, edge_paths, edge_success = handle_std_edge(
-                priority_id,
-                twin_id,
-                nx_g,
-                taken,
-                edge_paths,
-                circuit_name=circuit_name,
-                init_step=step,
-                fig_data=fig_data,
-                twin_mode=True,
-                ids_to_twin=priority_ids,
-                **kwargs,
-            )
-
-            # Move to next if there is a succesful placement
-            if edge_success:
-                visited.add(twin_id)
-                nx_g = prune_beams(nx_g, taken)
-                break
-
-            if step >= max_step:
-                print(
-                    Colors.RED,
-                    "==> Failed to add twin nodes:" + Colors.RESET,
-                    priority_ids,
-                )
-
-            # Increase distance between nodes if placement not possible
-            step += 3
-
-    # Re-write queue to exchange priority IDs with new twin IDs
-    new_queue: deque[int] = deque([src_id])
-    while queue:
-        next_in_queue = queue.popleft()
-        if next_in_queue in priority_ids:
-            new_queue.append(twins[next_in_queue])
-            visited.add(twins[next_in_queue])
-        else:
-            new_queue.append(next_in_queue)
-    queue.extend(new_queue)
-
-    priority_ids = []
-
-    return nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal
+    return bgraph, taken

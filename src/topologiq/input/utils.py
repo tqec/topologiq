@@ -42,6 +42,8 @@ class ZXColors(str, Enum):
     Y = "#7fff00"
     Z = "#b9cdff"
     P = "#777777"
+    XZ = "#f2f3fb"
+    T = "#f531ff"
     HADAMARD = "#ffff00"
     BOUNDARY = "#777777"
     SIMPLE = "#000000"
@@ -59,6 +61,7 @@ class ZXColors(str, Enum):
         """
 
         try:
+            char = "XZ" if char == "*" else char
             return cls[char.upper()]
         except (KeyError, AttributeError):
-            return cls.SIMPLE
+            return cls.BOUNDARY if char.upper() == "O" else cls.SIMPLE
