@@ -109,7 +109,9 @@ def check_skip_move(
     bounding_box: dict[str, dict[str, int]],
     curr_path_coords: list[StandardCoord],
     pruned_taken: set[StandardCoord],
+    parametrised_taken: dict[tuple[int, int], set],
     cross_edge: bool,
+    special_target_kind: bool = False,
 ) -> bool:
     """Check if current move should be skipped to speed up pathfinding process.
 
@@ -123,15 +125,17 @@ def check_skip_move(
         tent_coords: The final "target" coordinates at which path should arrive.
         bounding_box: The coordinates determining the bounding box outside of which moves are not allowed.
         curr_path_coords: The coordinates for the current path.
-        cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
         pruned_taken: A pruned version of taken not containing source and target coordinates.
+        parametrised_taken: A version of taken parametrised for more efficient clash detection.
+        cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
+        special_target_kind (optional): True if final target is a Y, conditional, or cultivation block.
 
     """
 
     if nxt_coords in pruned_taken or nxt_coords in curr_path_coords:
         return True
 
-    if cross_edge:
+    if cross_edge or special_target_kind:
         if bounding_box:
             nxt_x, nxt_y, nxt_z = nxt_coords
             if (

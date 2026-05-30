@@ -48,7 +48,9 @@ def pathfinder(
     cross_edge: bool,
     taken: set[StandardCoord],
     pruned_taken: set[StandardCoord],
+    parametrised_taken: dict[tuple[int, int], set],
     is_hadamard: bool,
+    time_deps: tuple[int, int] | None = None,
     **kwargs,
 ) -> tuple[
     dict[PositionedZXBlock, list[PositionedZXBlock]] | None,
@@ -78,7 +80,9 @@ def pathfinder(
         cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
         taken: The set of taken coordinates.
         pruned_taken: A pruned version of taken not containing source and target coordinates.
+        parametrised_taken: A version of taken parametrised for more efficient clash detection.
         is_hadamard: True if the current edge is a Hadamard in the input ZX graph.
+        time_deps (optional): A time-ordering dependency for the target spider (relative to another spider in the graph).
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -93,6 +97,8 @@ def pathfinder(
     src_zx_block: ZXBlock = bgraph.nodes[curr_src_id]["zx_block"]
     tgt_zx_block: ZXBlock = bgraph.nodes[curr_tgt_id]["zx_block"]
     src_coords: StandardCoord = bgraph.nodes[curr_src_id]["coords"]
+    time_deps_id, time_deps_diff = time_deps if time_deps else (None, None)
+    time_deps_coords = bgraph.nodes[time_deps_id]["coords"] if time_deps_id else None
 
     # Generate kinds that could in theory be assigned to the target cube
     tent_tgt_kinds = tgt_zx_block.kind if cross_edge else tgt_zx_block.get_kind_family
@@ -109,10 +115,11 @@ def pathfinder(
     tgts_to_fill, max_manhattan, src_tgt_manhattan = gen_exit_conditions(
         src_coords,
         tent_coords,
-        pruned_taken,
+        taken,
         max_span,
         cross_edge,
-        **kwargs,
+        kwargs["min_succ_rate"],
+        special_target_kind=tgt_zx_block.zx_type in ["Y", "T", "XZ"],
     )
 
     # Manage queue
@@ -133,12 +140,25 @@ def pathfinder(
         # Check for success
         if curr_coords in tent_coords:
             if _check_for_success(
-                curr_block_positioned, tent_tgt_kinds, path, valid_paths, tgts_to_fill
+                curr_block_positioned,
+                tent_tgt_kinds,
+                path,
+                valid_paths,
+                tgts_to_fill,
+                pruned_taken,
+                realised_time_deps=(time_deps_coords, time_deps_diff),
             ):
                 break
             else:
-                if cross_edge:
+                if cross_edge or curr_zx_block.zx_type in ["Y", "T", "XZ"]:
                     continue
+
+        # Avoid multiple special gates on same path
+        if tgt_zx_block.zx_type in ["Y", "T", "XZ"]:
+            if any(
+                [zx_b.zx_type == tgt_zx_block.zx_type for _, zx_b in path[curr_block_positioned]]
+            ):
+                continue
 
         # Try moving in all directions
         for move in curr_zx_block.get_move_vectors:
@@ -159,7 +179,9 @@ def pathfinder(
                 bounding_box,
                 curr_path_coords,
                 pruned_taken,
+                parametrised_taken,
                 cross_edge,
+                special_target_kind=tgt_zx_block.zx_type in ["Y", "T", "XZ"],
             ):
                 continue
 
@@ -207,19 +229,19 @@ def _to_visit_or_not_to_visit(
     curr_block_positioned: PositionedZXBlock,
     nxt_block: PositionedZXBlock,
     queue: deque,
-    visited: dict[tuple[StandardBlock, StandardCoord], int],
+    visited: dict[tuple[PositionedZXBlock, StandardCoord], int],
     move: tuple[int, int, int],
-    path: dict[StandardBlock, list[StandardBlock]],
-    path_len: dict[StandardBlock, int],
+    path: dict[PositionedZXBlock, list[PositionedZXBlock]],
+    path_len: dict[PositionedZXBlock, int],
     visit_attempts: int,
-    all_search_paths: dict[StandardBlock, list[StandardBlock]],
+    all_search_paths: dict[PositionedZXBlock, list[PositionedZXBlock]],
 ) -> tuple[
     deque,
-    dict[tuple[StandardBlock, StandardCoord], int],
-    dict[StandardBlock, list[StandardBlock]],
-    dict[StandardBlock, int],
+    dict[tuple[PositionedZXBlock, StandardCoord], int],
+    dict[PositionedZXBlock, list[PositionedZXBlock]],
+    dict[PositionedZXBlock, int],
     int,
-    dict[StandardBlock, list[StandardBlock]],
+    dict[PositionedZXBlock, list[PositionedZXBlock]],
 ]:
     """Visit site if conditions are met.
 
@@ -267,12 +289,12 @@ def _to_visit_or_not_to_visit(
 def _check_for_success(
     curr_block_positioned: PositionedZXBlock,
     tent_tgt_kinds: list[str],
-    path: dict[StandardBlock, list[StandardBlock]],
-    valid_paths: dict[StandardBlock, list[StandardBlock]],
+    path: dict[PositionedZXBlock, list[PositionedZXBlock]],
+    valid_paths: dict[PositionedZXBlock, list[PositionedZXBlock]],
     tgts_to_fill: int,
-) -> tuple[
-    dict[StandardBlock, list[StandardBlock]], dict[StandardBlock, list[StandardBlock]], int, bool
-]:
+    pruned_taken: set[StandardCoord],
+    realised_time_deps: tuple[StandardCoord | None, int | None],
+) -> tuple[dict[PositionedZXBlock, list[PositionedZXBlock]], bool]:
     """Check if iteration achieved success.
 
     Args:
@@ -281,14 +303,51 @@ def _check_for_success(
         path: The full path object for the entire BFS.
         valid_paths: All paths found in round covering some or all tent_coords.
         tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
+        pruned_taken: A pruned version of taken not containing source and target coordinates.
+        realised_time_deps (optional): The z-coords and plus/minus diff between target and reference spider.
 
     Return:
         [bool]: True if success was achieved in this iteration, else False.
 
     """
+
+    curr_coords, _ = curr_block_positioned
+    time_deps_coords, time_deps_diff = realised_time_deps
+
+    time_deps_check = True
+    if time_deps_coords and time_deps_diff:
+        if time_deps_diff == -1:
+            time_deps_check = time_deps_coords[2] > curr_coords[2]
+        elif time_deps_diff == 1:
+            time_deps_check = time_deps_coords[2] < curr_coords[2]
+
+        if not time_deps_check:
+            return False
+
+    if tent_tgt_kinds[0] in ["YYO", "TTO", "XZ*", "ZX*"]:
+        if curr_coords in list([c for c, b in valid_paths.keys()]):
+            return False
+
+        if tent_tgt_kinds == ["TTO"]:
+            curr_path_coords = [coords for coords, _ in path[curr_block_positioned]]
+            for i in range(1, 4):
+                check_coords = (curr_coords[0], curr_coords[1], curr_coords[2] - i)
+                if check_coords in pruned_taken or check_coords in curr_path_coords:
+                    return False
+
+        if tent_tgt_kinds[0] in ["TTO", "ZX*", "XZ*"]:
+            prev_coords = path[curr_block_positioned][-2][0]
+            last_z_diff = abs(curr_coords[2]) - abs(prev_coords[2])
+            last_z_diff = 1 if last_z_diff > 0 else -1 if last_z_diff < 0 else 0
+            valid_last_diffs = [-1] if tent_tgt_kinds[0] == "TTO" else [1]
+            if last_z_diff not in valid_last_diffs:
+                return False
+
     if tent_tgt_kinds == ["OOO"] or curr_block_positioned[1].kind in tent_tgt_kinds:
         valid_paths[curr_block_positioned] = path[curr_block_positioned]
+
         tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+
         if tgts_filled >= tgts_to_fill:
             return True
 

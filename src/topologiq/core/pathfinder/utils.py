@@ -44,25 +44,40 @@ def init_bfs(
 
 
 def gen_exit_conditions(
-    src_coords, tent_coords, taken, max_span, second_pass, **kwargs
+    src_coords,
+    tent_coords,
+    taken,
+    max_span: int,
+    cross_edge: bool,
+    min_success_rate: int,
+    special_target_kind: bool = False,
 ) -> tuple[int, int, int]:
-    """Calculate conditions that need to be met to exit the pathfinder BFS."""
+    """Calculate conditions that need to be met to exit the pathfinder BFS.
 
-    # Min numbers of targets that need to be filled for a run to be deemed successful
-    tgts_to_fill = (
-        int(len(tent_coords) * kwargs["min_succ_rate"] / 100) if len(tent_coords) > 1 else 1
-    )
+    Args:
+        src_coords: The source coords for the current edge.
+        tent_coords: A list of tentative coords for final edge target cube.
+        taken: The set of  taken coordinates.
+        max_span: the longest edge of the bounding box, equivalent to largest axes needed for box.
+        cross_edge: A boolean flag to determine if search is a primary or `cross_edge` search.
+        min_success_rate: The minimum percentage of edges (relative to total possible) after which to exit.
+        special_target_kind (optional): True if final target is a Y, conditional, or cultivation block.
+
+    """
 
     # Manhattan distances to skip iterations and exit BFS in the event of failure
-    if not second_pass:
-        max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
-        src_tgt_manhattan = max_manhattan
-    else:
+    if cross_edge or special_target_kind:
+        tgts_to_fill = 1
         src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
         max_manhattan = max(
             get_max_manhattan(src_coords, taken) * 2,
             max_span,
         )
+    else:
+        tgts_to_fill = int(len(tent_coords) * min_success_rate / 100)
+        max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2
+        src_tgt_manhattan = max_manhattan
+
     src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
 
     return tgts_to_fill, max_manhattan, src_tgt_manhattan

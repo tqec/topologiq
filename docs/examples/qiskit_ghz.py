@@ -1,9 +1,8 @@
-"""Example of how to use Topologiq to perform algorithmic lattice surgery (LS) on a Qiskit circuit.
+"""Example of how to use with a Qiskit circuit.
 
-This script contains an example of how to use Topologiq to perform algorithmic LS on a
-16-qubit GHZ circuit originally designed in Qiskit. Please note, for documentation purposes,
-the LS is performed on both the full (unreduced) and the reduced version of the circuit.
-In real terms, one would only produce one LS.
+For documentation purposes, the script performs algorithmic lattice surgery on both the
+full (unreduced) and the reduced version of the circuit. In real terms,
+one would only undertake LS on one of them, probably the reduced version.
 
 Usage:
     Run script as given.
@@ -13,8 +12,8 @@ Usage:
 import pyzx as zx
 from qiskit.circuit import QuantumCircuit
 
-from topologiq.input.pyzx_manager import ZXGraphManager
-from topologiq.input.qbraid_manager import CircuitManager
+from topologiq.input.circuit_manager import CircuitManager
+from topologiq.input.zx_manager import ZXGraphManager
 
 
 ############
@@ -45,9 +44,9 @@ def ghz_encoding(n_qubits: int, circuit_name: str, draw_circuit: bool = False) -
     return qc
 
 
-############
-# MAIN RUN #
-############
+#######
+# RUN #
+#######
 if __name__ == "__main__":
     # Create circuit or import it from somewhere
     n_qubits = 16
@@ -75,12 +74,10 @@ if __name__ == "__main__":
     bgraph_manager_reduced = augmented_zx_graph_in.get_blockgraph(use_reduced=True)
     bgraph_manager_reduced.draw_blockgraph()
 
-    # Note that you can also confirm equality using the Augmented ZX Graph
+    # You can also confirm equality using the Augmented ZX Graph
     out_zx_graph_manager = ZXGraphManager()
     augmented_zx_graph_out = out_zx_graph_manager.add_graph_from_blockgraph(
         bgraph_manager_reduced, graph_key="ghz_out"
     )
-    zx.draw(augmented_zx_graph_out.zx_graph)
-
     equality = augmented_zx_graph_in.check_equality(augmented_zx_graph_out)
     print(equality)

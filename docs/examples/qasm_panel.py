@@ -1,19 +1,10 @@
-"""Example of how to use Topologiq to perform LS on a small collection of QASM circuits.
-
-This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery (LS) on a number of circuits generated randomly in PyZX and saved as QASM.
-Outputs are saved to a `.bgraph` file in `./outputs/bgraph/`.
-
-Usage:
-    Run script as given.
-
-"""
+"""Example of how to use Topologiq with QASM circuits."""
 
 from pathlib import Path
 
 import pyzx as zx
 
-from topologiq.input.pyzx_manager import ZXGraphManager
+from topologiq.input.zx_manager import ZXGraphManager
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 ASSETS_DIR = ROOT_DIR / "src/topologiq/assets"
@@ -23,19 +14,18 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 ##########
 # KWARGS #
 ##########
-kwargs = {
-    "first_id_strategy": "centrality_random",
-    "seed": None,
-    "debug": 0,
-}
+# Note. Topologiq auto-completes any KWARGs not given explicitly.
+# By extension, you only need to give KWARGs that deviate from default parameters.
+# All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
+kwargs = {"debug": 1}
 
 
-############
-# MAIN RUN #
-############
+#######
+# RUN #
+#######
 if __name__ == "__main__":
     # Circuits
-    circuit_names = ["qasm_random_05_05", "qasm_random_10_10"]
+    circuit_names = ["qasm_random_05_05.qasm", "qasm_random_10_10.qasm"]
 
     # Run selected circuits on a loop, without reduction
     for circuit_name in circuit_names:
@@ -43,7 +33,7 @@ if __name__ == "__main__":
         print(f"\n===> START. QASM circuit: {circuit_name}")
 
         # Path to file
-        path_to_qasm_file = ASSETS_DIR / f"{circuit_name}.qasm"
+        path_to_qasm_file = ASSETS_DIR / f"{circuit_name}"
 
         # QASM -> PyZX
         zx_graph_manager = ZXGraphManager()
@@ -57,4 +47,3 @@ if __name__ == "__main__":
 
         # Visualise results
         bgraph_manager.draw_blockgraph()
-

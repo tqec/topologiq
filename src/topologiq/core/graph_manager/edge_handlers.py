@@ -210,6 +210,8 @@ def add_path_to_bgraph(
 
     # Add target to taken
     taken.add(tgt_coords)
+    if tgt_zx_block.zx_type == "T":
+        taken.update([(tgt_coords[0], tgt_coords[1], tgt_coords[2] - i) for i in range(1, 4)])
 
     # Infer pipe kind and other attributes
     if intermediate_cubes_present:

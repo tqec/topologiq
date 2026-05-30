@@ -8,13 +8,16 @@ Usage:
 
 """
 
-from typing import Annotated, Literal
+from fractions import Fraction
+from typing import Annotated, Any, Literal
 
 import matplotlib
+import matplotlib.pyplot as plt
 import matplotlib.text as mtext
 import networkx as nx
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import ticker
+from matplotlib.widgets import Button
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
@@ -31,7 +34,7 @@ from topologiq.utils.vis import node_hex_map
 def draw_as_zx(
     bgraph: nx.Graph, in_qubits: dict[int, int], in_rows: dict[int, int], draw_style: str = "zx"
 ):
-    """Draw the NX blockgraph using ZX or NX styling.
+    """Draw the NX BlockGraph using ZX or NX styling.
 
     Args:
         bgraph: The BlockGraph being built.
@@ -40,7 +43,6 @@ def draw_as_zx(
         draw_style: The style of drawing:
             zx: Positions nodes in a PyZX-like manner
             nx: Positions nodes using NX algorithms.
-
 
     """
 
@@ -81,17 +83,23 @@ def draw_as_blockgraph(
     bgraph: nx.Graph,
     taken: set[StandardCoord],
     is_cross_edge: bool,
+    in_zx: dict[str, Any],
+    base_graph: dict[str, Any],
     is_final_vis: bool = True,
     iter_fail: bool = False,
+    block_style: str = "pipe",
 ):
-    """Draw the NX blockgraph using ZX or NX styling.
+    """Draw the primary BlockGraph algon collapsable overlays with additional information.
 
     Args:
         bgraph: The BlockGraph being built.
         taken: The set of taken coordinates.
         is_cross_edge: True if the current edge is a cross edge.
-        is_final_vis: Boolean to flag if current visualisation is the final blockgraph.
-        iter_fail: Boolean to flag if current visualisation comes right after an iteration failure.
+        in_zx: The information of the input ZX packed as a dictionary.
+        base_graph: The information of the base graph (input ZX after mandatory LS transformations) packed as a dictionary.
+        is_final_vis: True if visualising the final BlockGraph.
+        iter_fail: True if the visualisation is being called due to a build failure.
+        block_style: str = "pipe"
 
     """
 
@@ -99,7 +107,7 @@ def draw_as_blockgraph(
     fig, ax = init_vis(is_cross_edge, is_final_vis)
 
     # Shared settings
-    cube_size = [0.33, 0.33, 0.33]
+    cube_size = [0.33 if block_style == "pipe" else 1] * 3
     edge_col = "black"
 
     # Add cubes
@@ -134,9 +142,151 @@ def draw_as_blockgraph(
     # Define visualisation boundaries
     _ = adjust_plot_styles(fig, ax, bgraph, is_final_vis, iter_fail=iter_fail)
 
+    # Setup overlays for input ZX and base_graph
+    setup_overlays(fig, in_zx, base_graph)
+
     # Show
     fig.canvas.mpl_connect("pick_event", lambda e: onpick_handler(e, ax))
     plt.show()
+
+
+############
+# OVERLAYS #
+############
+def setup_overlays(fig: plt.Figure, in_zx: dict[str, Any], base_graph: dict[str, Any]):
+    """Create 50% width buttons and click handlers for the graph overlays."""
+
+    # Bottom button regions [left, bottom, width, height]
+    ax_btn_zx = fig.add_axes([0.0, 0.0, 0.5, 0.08])
+    ax_btn_base = fig.add_axes([0.5, 0.0, 0.5, 0.08])
+
+    btn_zx = Button(ax_btn_zx, "RAW ZX INPUT", color="#f2f3fb", hovercolor="#b2b2b2")
+    btn_base = Button(ax_btn_base, "BASE ZX GRAPH", color="#f2f3fb", hovercolor="#b2b2b2")
+
+    # Toggle click logic
+    def toggle_overlay(overlay_key: str, graph_data: dict[str, Any]):
+        other_key = "base_graph" if overlay_key == "in_zx" else "in_zx"
+
+        # Close the other overlay if it's currently open
+        if fig._overlay_axes[other_key] is not None:
+            fig._overlay_axes[other_key].remove()
+            fig._overlay_axes[other_key] = None
+
+        # If selected overlay is open, close it (toggle off)
+        if fig._overlay_axes[overlay_key] is not None:
+            fig._overlay_axes[overlay_key].remove()
+            fig._overlay_axes[overlay_key] = None
+        else:
+            # Create a full-width overlay axis restricted to 30% height just above the button strip
+            overlay_ax = fig.add_axes([0.0, 0.08, 1.0, 0.30])
+            fig._overlay_axes[overlay_key] = overlay_ax
+
+            # Render the ZX structure onto this new axis
+            render_overlay_graph(overlay_ax, graph_data)
+
+        fig.canvas.draw_idle()
+
+    # Bind
+    btn_zx.on_clicked(lambda event: toggle_overlay("in_zx", in_zx))
+    btn_base.on_clicked(lambda event: toggle_overlay("base_graph", base_graph))
+
+    # Reference to buttons (so they remain clickable)
+    fig._buttons.extend([btn_zx, btn_base])
+
+
+def render_overlay_graph(ax: plt.Axes, graph_data: dict[str, Any]):
+    """Rebuilds and draws the NX layout onto the targeted overlay axis using existing rules."""
+
+    node_colors = []
+    positions = {}
+
+    for spider_id, zx_type in graph_data["types"].items():
+        row = graph_data["rows"].get(spider_id, -1)
+        qubit = graph_data["qubits"].get(spider_id, -1)
+        positions[spider_id] = [row, -qubit]
+
+        try:
+            node_colors.append(ZXColors.lookup(zx_type))
+        except KeyError:
+            node_colors.append("#FD1818")
+
+    ax.patch.set_facecolor("#f2f3fb")
+    ax.patch.set_alpha(0.7)  # Ensure full opacity
+
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    # 2. Draw Edges (LineCollections / standard plots)
+    # Group coordinates by line segments: [[x1, x2], [y1, y2]]
+    for (u, v), edge_type in graph_data["edge_types"].items():
+        if u in positions and v in positions:
+            x_coords = [positions[u][0], positions[v][0]]
+            y_coords = [positions[u][1], positions[v][1]]
+
+            try:
+                col = ZXColors.lookup(edge_type)
+            except KeyError:
+                col = "black"
+
+            ax.plot(x_coords, y_coords, color=col, zorder=1)
+
+    # 3. Draw Nodes (Scatter plot)
+    # Extract structural arrays
+    node_ids = list(positions.keys())
+    x_nodes = [positions[n][0] for n in node_ids]
+    y_nodes = [positions[n][1] for n in node_ids]
+
+    ax.scatter(
+        x_nodes,
+        y_nodes,
+        c=node_colors,
+        edgecolors="#111111",
+        s=300,  # Marker size matching NetworkX defaults
+        zorder=2,  # Force node dots above the edge connections
+    )
+
+    # 4. Draw Labels (Text objects)
+    for n_id, (x, y) in positions.items():
+        # Main Node ID Label
+        ax.text(
+            x,
+            y,
+            str(n_id),
+            fontsize=9,
+            ha="center",
+            va="center",
+            zorder=3,  # Force text on top
+            color="black",
+        )
+
+        # Add phase label underneath if it is non-zero
+        phase = graph_data.get("phases", {}).get(n_id, 0)
+        if phase != 0 and phase != Fraction(1 / 1):
+            if hasattr(phase, "numerator"):
+                num, den = phase.numerator, phase.denominator
+                if num == 1:
+                    phase_str = f"π/{den}" if den != 1 else "π"
+            else:
+                phase_str = f"{phase}"
+            ax.text(
+                x,
+                y - 0.25,  # Slight vertical offset downwards
+                phase_str,
+                fontsize=8,
+                ha="center",
+                va="top",  # Top-aligned so it expands cleanly downwards
+                zorder=3,
+                color="black",
+                weight="bold",  # Bold styling to distinguish it from the ID
+            )
+
+    # Auto-scale the limits of the white box to match the positions drawn
+    if positions:
+        ax.set_xlim(min(x_nodes) - 1, max(x_nodes) + 1)
+        ax.set_ylim(min(y_nodes) - 1, max(y_nodes) + 1)
 
 
 ##################
@@ -152,7 +302,7 @@ def init_vis(is_cross_edge: bool, is_final_vis: bool):
     Args:
         bgraph: The BlockGraph being built.
         is_cross_edge: True if the current edge is a cross edge.
-        is_final_vis: A boolean flag to tell if visualisation is the final built blockgraph.
+        is_final_vis: A boolean flag to tell if visualisation is the final built BlockGraph.
 
     Return:
         fig: The Matplotlib Figure object to which state trackers (e.g., fig.show_overlay) will be attached.
@@ -164,46 +314,21 @@ def init_vis(is_cross_edge: bool, is_final_vis: bool):
 
     """
 
-    # Determine type of visualisation
+    # Create figure and ax
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(projection="3d")
+
+    # Push the 3D plot up slightly to leave comfortable room for a 30% height overlay at the bottom
+    fig.subplots_adjust(bottom=0.15)
     fig.ax = ax
-
-    # Tentative targets
-    fig.target_artists = []
-    fig.show_tent_tgt_blocks = not is_final_vis and not is_cross_edge
-
-    # Valid paths
-    fig.valid_path_artists = []
-    fig.show_valid_paths = False
-    fig.animation_handle = None
-
-    # Searched paths
-    fig.show_static_search_paths = False
-    fig.static_search_artists = []
 
     # Beams
     fig.beam_artists = []
     fig.show_beams = False
 
-    # Winner paths
-    fig.winner_path_artists = []
-    fig.show_winner_path = True
-
-    # Input ZX graph overlay
-    fig.ax_overlay = None
-    fig.show_overlay = False
-    fig.overlay_image_artist = None
-    fig.overlay_button_handle = None
-
-    # Proximate paths
-    fig.show_prox_paths = False
-    fig.all_search_paths_raw = []
-    fig.prox_path_artists = []
-    fig.prox_distance_threshold = 1
-    fig.prox_filtered_paths = []
-    fig.prox_view_mode = "ALL"
-    fig.prox_current_index = 0
+    # Track references to prevent garbage collection and maintain toggle states
+    fig._overlay_axes = {"in_zx": None, "base_graph": None}
+    fig._buttons = []
 
     return fig, ax
 
@@ -235,8 +360,7 @@ def adjust_plot_styles(
     """
 
     # Calculate positions of all contents
-    all_static_coords: Annotated[np.ndarray, Literal["N", 3]]
-    all_static_coords = np.array(
+    all_static_coords: Annotated[np.ndarray, Literal["N", 3]] = np.array(
         [c for c in nx.get_node_attributes(bgraph, "coords").values() if c]
     )
 
@@ -261,8 +385,16 @@ def adjust_plot_styles(
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
 
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
+    ax.zaxis.set_major_locator(ticker.MultipleLocator(1))
+
+    # Clean string formatter to drop trailing decimals
+    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+    ax.zaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
     # BG colours (yellow: progress, green: success, red: failure)
-    bg_colour = "#c3ffb0" if is_final_vis else "#b8b8b8"
+    bg_colour = "#353535" if is_final_vis else "#b8b8b8"
     if iter_fail:
         bg_colour = "#fcbbb8"
     fig.patch.set_facecolor(bg_colour)
@@ -272,9 +404,9 @@ def adjust_plot_styles(
     return max_range
 
 
-#############
-# RENDERERS #
-#############
+###################
+# BLOCK RENDERERS #
+###################
 def render_block(
     ax: matplotlib.axes.Axes,
     node_id: int,

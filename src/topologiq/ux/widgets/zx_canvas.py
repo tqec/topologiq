@@ -30,8 +30,8 @@ from PySide6.QtWidgets import (
 from vispy import scene
 from vispy.color import Color
 
-from topologiq.input.pyzx_manager import AugmentedZXGraph
 from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
+from topologiq.input.zx_manager import AugmentedZXGraph
 from topologiq.ux.utils import styles
 from topologiq.ux.utils.aux import create_split_controls
 
@@ -223,7 +223,7 @@ class ZXCanvas(QWidget):
         self.manager.status_changed.emit(f"Applying {opt_name}...")
 
         if opt_name == "Full Reduce":
-                zx.full_reduce(temp_zx)
+            zx.full_reduce(temp_zx)
         elif opt_name == "Spider Fusion":
             zx.spider_simp(temp_zx)
         elif opt_name == "To RG":

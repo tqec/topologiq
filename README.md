@@ -1,28 +1,44 @@
-> NB! Major breaking changes just merged. Most things seem to be working but since we do not yet have a comprehensive testing strategy (we'll get there, one squirrel at a time), maybe there's still some bug hidden somewhere. Do not feel shy to open an Issue if you run into any bug. Please do.
-
 # Topologiq: Algorithmic Lattice Surgery
 **Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
 
-Interoperable with [PyZX](https://github.com/zxcalc/pyzx), [Qiskit](https://github.com/Qiskit), and, of course, [TQEC/tqec](https://github.com/tqec/tqec).
-
-<br />
-
 [![Unitary Foundation](https://img.shields.io/badge/Supported%20By-UNITARY%20FOUNDATION-FFFF00.svg?style=for-the-badge)](https://unitary.foundation)
 
-## Summary
-> Work in progress. Latest stable checkpoint on main. Check branches for latest updates. 
+## ✨ Overview
+Topologiq is a greedy BFS algorithm that attempts to minimise the volume of the final build, which we call BlockGraph but is also often referred to as space-time or pipe diagram.
 
-As visualised in the animated GIF below, **Topologiq** uses the connectivity information in a ZX-graph to produce a topologically-correct lattice surgery / space-time diagram. It picks a starting point randomly based on a centrality measure. It builds incrementally from that starting point, one edge at a time.
+The general algorithmic rationale is as follows:
+- Topologiq traverses the input circuit graph using a BFS rationale, one edge at a time.
+- On each iteration, it greedily converts the edge into the shortest topologically-correct 3D path it can find.
+  - Realised paths often correspond to the actual shortest path possible.
+  - Where not the case, it is typically because a shortest path is deemed an unavoidable obstacle for future placements.
 
-**Topologiq**'s outputs can be used as inputs for TQEC/tqec and, *theoretically*, other similar tools.
+An animated visualisation is given below, and the algorithm is described [here](docs/concepts/topologiq_algorithm.md).
 
-<br>
+![Algorithmic lattice surgery of three CNOTs using Topologiq](./docs/media/cnots.gif)
 
-![Algorithmic lattice surgery of a CNOT](./docs/media/cnots.gif)
+*Figure 1. Algorithmic lattice surgery of three CNOTs using Topologiq.*
 
-*Figure 1. Algorithmic lattice surgery of a CNOT.*
+## 🔗 Gate support
+Topologiq supports the following gate set and combinations thereof:
 
-## Install
+> NB! The block patterns in the images below are **NOT hard patterns**. Topologiq yields the patterns in the images if there are no other gates in the circuit. However, the patterns are flexible and will be bent and stretched in all sort of manners during the lattice surgery. That is, *literally*, what Topologiq does. It bends new patterns around old patterns in ways that do not break the topology of the computation.
+
+| CLIFFORD | | NON-CLIFFORD | |
+| -------- | ------------ | ------------ | ------------ |
+| **X, Z, I:** | ![Block pattern (X/Z/I)](./docs/media/xzi.png) | **Cultivation:** | ![Block pattern (MSC)](./docs/media/msc.png) |
+| **CNOT, CZ:** | ![Block pattern (CNOT/CZ)](./docs/media/cnot_cz.png) | **Conditional:** | ![Block pattern (MSC)](./docs/media/conditional.png)  |
+| **Hadamard:** | ![Block pattern (Hadamard)](./docs/media/hadamard.png) | **T:** | ![Block pattern (T)](./docs/media/t.png) |
+| **Y:** | ![Block pattern (Y)](./docs/media/yi.png) |  |  |
+| **S:** | ![Block pattern (S)](./docs/media/s.png) |  |  |
+
+## 🏛️ Architecture
+Topologiq is designed to be (or at the very least, become) highly modular. The final goal is to allow others to easily use tailored component and/or develop end-to-end "flavours" re-interpreting several components. 
+
+An overview of Topologiq's general architecture is available [here](docs/concepts/architecture.md).
+
+> Currently, an area where contributors could make a massive difference in the short term is CI/CD workflows for testing and benchmarking. Leaving these "for later" helped in that it enabled rapid experimentation and iteration. However, the codebase is becoming a bit too large to keep it like that.  [Open an issue to contribute a CI/CD](https://github.com/tqec/topologiq/issues/new/choose).
+
+## 🛠 Install
 Currently, the best way to test **Topologiq** is to clone the repository, recreate the environment, and install dependencies.
 
 ### Using UV
@@ -62,81 +78,39 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Examples
-You can quickly test **Topologiq** from the terminal using pre-defined circuit examples.
+## 🚀 Documentation
+There is a growing number of examples showing how to use Topologiq in a variety of circumstances.
 
-Check `./outputs/txt/` for results. All information in TXT outputs is also available for programmatic use.
+### Beginner
+Examples of how to use Topologiq with circuits designed in a number of frameworks compatible with Topologiq:
+- [Using ***PyZX*** circuits in Topologiq (CNOTs, small)](docs/examples/pyzx_cnots.ipynb).[^1]
+- [How to use Topologiq with ***QASM*** files (CNOTs, multiple)](docs/examples/qasm_panel.py).
+- [How to use with a ***Qiskit*** circuit (GHZ)](docs/examples/qiskit_ghz.py).
+- [Using ***Qrisp*** circuits with Topologiq (H-Z-S-T)](docs/examples/qrisp_combo.ipynb).[^1]
+- $\textcolor{red}{\textsf{[Pending]}}$ Other qBraid supported formats: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
+- $\textcolor{red}{\textsf{[Pending]}}$ Other circuit design framework able to output QASM: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
 
-``` bash
-# PyZX examples (Available examples: cnot, cnots, simple_mess)
-uv run src/topologiq/run.py --pyzx:<circuit_name>
-python3 src/topologiq/run.py --pyzx:<circuit_name>  # Requires active .venv
+### Intermediate
+Examples using Topologiq programmatically and with human-readable output files in [BGRAPH](src/topologiq/assets/cnots.bgraph) format.
+- [Verifiable lattice surgery with *PyZX* and Topologiq (Steane)](docs/examples/steane_verified.ipynb).[^1]
+- [Using Topologiq with random PyZX graphs and producing a ***BGRAPH file as primary output*** (Clifford & non-Clifford)](docs/examples/pyzx_random.py).
 
-# Dict-based graph examples (Available examples: hadamard_line, hadamard_bend, steane, steane_obfs, or hadamard_mess)
-uv run src/topologiq/run.py --graph:<circuit_name>
-python3 src/topologiq/run.py --graph:<circuit_name>  # Requires active .venv
-```
+### Advanced
+Examples of how to use Topologiq with [TQEC/tqec](https://github.com/tqec/tqec).
+- $\textcolor{red}{\textsf{[Pending]}}$ Using Topologiq and TQEC as part of a shared environment: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
+- $\textcolor{red}{\textsf{[Pending]}}$ Using Topologiq from within a TQEC environment: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
 
-There are also optional parameters to enable 3D visuals, animations, and debug options.
-
-``` bash
-# Enable "final" result or "detail" edge-by-edge progress visualisations
-uv run src/topologiq/run.py --pyzx:<circuit_name> --vis:<final|detail>
-python3 src/topologiq/run.py --pyzx:<circuit_name> --vis:<final|detail>  # Requires active .venv
-
-# Produce a "GIF" or "MP4" animation of the process (MP4 requires FFmpeg).
-uv run src/topologiq/run.py --pyzx:<circuit_name> --animate:<GIF|MP4>
-python3 src/topologiq/run.py --pyzx:<circuit_name> --animate:<GIF|MP4>  # Requires active .venv
-
-# Run a circuit a specific number of times irrespective of outcome for each inidividual run
-uv run src/topologiq/run.py --pyzx:<circuit_name> --repeat:50
-python3 src/topologiq/run.py --pyzx:<circuit_name> --repeat:50  # Requires active .venv
-
-# Log run-time and performance statistics
-uv run src/topologiq/run.py --pyzx:<circuit_name> --log_stats
-python3 src/topologiq/run.py --pyzx:<circuit_name> --log_stats  # Requires active .venv
-
-# Enable debug mode (incrementally detailed logs and visuals) (available modes: 1, 2, 3, 4) .
-uv run src/topologiq/run.py --pyzx:<circuit_name> --vis:detail --debug:1
-python3 src/topologiq/run.py --pyzx:<circuit_name> --vis:detail --debug:1  # Requires active .venv
-```
-
-There is also an accessible debug facility to quickly run any edge case encountered while running Topologiq with `log_stats` enabled.
-``` bash
-# Pick up and replicate any available edge case (i.e. circuits Topologiq failed to build).
-uv run src/topologiq/utils/debug.py
-python3 src/topologiq/utils/debug.py  # Requires active .venv
-
-# NB! Case must have been logged to stats, which only happens when Topologiq runs with `log_stats` enabled.
-# NB! Currently available only for example graphs (the foundational graph must exist in file to replicate it).
-```
-
-## Yeah, but how does it work, really?
-Detailed insight into **Topologiq** and, hopefully, a paper, is in progress. Meanwhile, below, a quick overview of what goes on under the hood. 
-
-**Input.** **Topologiq** will look for an incoming ZX graph and, if needed and possible, convert it into a native format.
-- ***Native format:*** A simple dictionary of nodes and edges (see `./src/topologiq/assets/graphs/simple_graphs.py` for examples).
-- ***PyZX interoperability:*** PyZX graphs supported (check `docs/examples/pyzx_cnots.ipynb` for an example).
-  - NB. If using a random PyZX circuit, ensure all qubit lines are interconnected. Else, the graph has independent subgraphs, which Topologiq does not support.
-
-**Process.** **Topologiq** will traverse the ZX graph transforming each spider into an equivalent lattice surgery "primitive" positioned in a 3D space.
-- ***Positioning:*** define a number of tentative 3D positions for each spider.
-- ***Pathfinding:*** determine which tentative positions allow topologically-correct paths.
-- ***Value function:*** choose best of any number of topologically-correct paths from previous step
-
-The final choice considers the length of each topologically-correct path found in during pathfinding, as well as their relative impact to the feasibility of future placements. Having said that, all steps in the process share objects and undertake checks that avoid overloading the final step with many unreasonably suboptimal paths.
-
-## Contributing
+## 👷🏽‍♂️ Contributing
 Pull requests and issues are more than welcomed!
 
 See [CONTRIBUTING](./CONTRIBUTING.md) for specific instructions to start contributing.
 
-## License
+## 📜 License
 Topologiq is licensed under an [Apache 2.0 license](./LICENSE).
 
 The [`ETHICAL_NOTICE.md`](ETHICAL_NOTICE.md) contains additional **ethical use** pointers.
 
-## Community
+## 🏟️ Community
 Every Wednesday at 8:30am PST, we hold [meetings](https://meet.jit.si/TQEC-design-automation) to discuss project progress and conduct educational talks related to TQEC.
 
 Here are some helpful links to learn more about the TQEC community and Topologiq:
@@ -149,3 +123,11 @@ Here are some helpful links to learn more about the TQEC community and Topologiq
 All the resources and group meeting recordings are available at [this link](https://docs.google.com/spreadsheets/d/11DSA2wzKLOrfTGNHunFvzsMYeO7jZ8Ny8kpzoC_wKQg/edit?usp=sharing&resourcekey=0-PdGFkp5s-4XWihMSxk0UIg).
 
 Please join the [Google group](https://groups.google.com/g/tqec-design-automation) to receive more updates and information!
+
+
+
+<br />
+<br />
+<br />
+
+[^1]: Documents currently demonstrate basic usage but could be improved and expanded. [Open an issue to improve or expand](https://github.com/tqec/topologiq/issues/new/choose).

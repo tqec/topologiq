@@ -19,8 +19,8 @@ import pyzx as zx
 import qbraid
 from PySide6.QtCore import QObject, Signal
 
-from topologiq.input.pyzx_manager import AugmentedZXGraph, ZXGraphManager
-from topologiq.input.qbraid_manager import CircuitManager
+from topologiq.input.circuit_manager import CircuitManager
+from topologiq.input.zx_manager import AugmentedZXGraph, ZXGraphManager
 
 
 class UXManager(QObject):
@@ -137,19 +137,21 @@ class UXManager(QObject):
                 def _execute():
                     exec(source_design, context)  # noqa: S102 (user responsible for its own scripts)
                     return context.get(var_name)
+
                 target = await asyncio.to_thread(_execute)
                 if target is None:
                     raise LookupError(f"Variable '{var_name}' not found in the script.")
 
                 # PATH A: NATIVE PyZX
                 if isinstance(target, zx.graph.base.BaseGraph):
-
                     # Log and communicate path
                     is_native_pyzx = True
                     self.status_changed.emit("Integrating live PyZX graph...")
 
                     # Pass the LIVE object as given
-                    aug_zx_to_emit = self.zx_manager_in.add_graph_from_pyzx(target, graph_key=var_name)
+                    aug_zx_to_emit = self.zx_manager_in.add_graph_from_pyzx(
+                        target, graph_key=var_name
+                    )
 
                     # Sync Design pane text area
                     try:
@@ -169,7 +171,6 @@ class UXManager(QObject):
 
             # qBraid -> PyZX conversion
             if not is_native_pyzx:
-
                 # Store
                 aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
                 self._data_store["augmented_qb_circuit"] = aug_qb

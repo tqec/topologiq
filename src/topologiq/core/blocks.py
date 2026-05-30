@@ -144,11 +144,13 @@ class ZXBlock:
         directions.
 
         """
-        if self.get_basis in ((Basis.Y, Basis.Y, Basis.P), (Basis.T, Basis.T, Basis.P)) or "*" in self.kind:
+        if (
+            self.get_basis in ((Basis.Y, Basis.Y, Basis.P), (Basis.T, Basis.T, Basis.P))
+            or "*" in self.kind
+        ):
             return (False, False, True)
         if self.get_basis == (Basis.P, Basis.P, Basis.P):
             return (True, True, True)
-
 
         basis_x, basis_y, basis_z = self.get_basis
         zx_basis = Basis(self.zx_type)
@@ -290,8 +292,10 @@ class ZXBlock:
             src_kind_new = alt_self.kind[:move_idx] + alt_self.kind[move_idx + 1 :]
         tgt_kind_new = tgt_zx_block.kind[:move_idx] + tgt_zx_block.kind[move_idx + 1 :]
 
-        if move_idx == 2 and tgt_zx_block.zx_type == "Y":
-            src_kind_new = src_kind_new.replace("X", "Y").replace("Z", "Y")
+        if move_idx == 2 and tgt_zx_block.zx_type in ["Y", "T"]:
+            src_kind_new = src_kind_new.replace("X", tgt_zx_block.zx_type).replace(
+                "Z", tgt_zx_block.zx_type
+            )
 
         # Return match
         return src_kind_new[:3] == tgt_kind_new

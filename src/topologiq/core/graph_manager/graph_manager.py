@@ -9,6 +9,7 @@ Usage:
 
 """
 
+import os
 import random
 from dataclasses import dataclass
 from fractions import Fraction
@@ -43,8 +44,7 @@ from topologiq.utils.core import datetime_manager
 # PATHS #
 #########
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent.parent.parent
-OUTPUT_DIR_PATH = REPO_ROOT / "output/txt"
-TEMP_DIR_PATH = REPO_ROOT / "output/temp"
+OUTPUT_DIR = REPO_ROOT / "output/bgraph"
 
 
 #########
@@ -111,20 +111,26 @@ class BlockGraphManager:
 
         # Space management objects
         self.taken: set[StandardCoord] = set()
+        self.parametrised_taken: dict[tuple[int, int], set] = {}
         self.beams: dict[int, CubeBeams] = {}
         self.beams_short: dict[int, CubeBeams] = {}
         self.ids_to_twin: list[int] = set()
 
         # Replicate ZX trackers to have editable copies
-        self.ids: set[int] = self.in_ids
-        self.types: dict[int, str] = self.in_types
-        self.edge_types: dict[tuple[int, int], str] = self.in_edge_types
-        self.degrees: dict[int, int] = self.in_degrees
-        self.qubits: dict[int, int] = self.in_qubits
-        self.rows: dict[int, int] = self.in_rows
+        self.ids: set[int] = self.in_ids.copy()
+        self.types: dict[int, str] = self.in_types.copy()
+        self.edge_types: dict[tuple[int, int], str] = self.in_edge_types.copy()
+        self.degrees: dict[int, int] = self.in_degrees.copy()
+        self.qubits: dict[int, int] = self.in_qubits.copy()
+        self.rows: dict[int, int] = self.in_rows.copy()
         self.inputs: list[int] = self.in_inputs
         self.outputs: list[int] = self.in_outputs
-        self.phases: dict[int, int | Fraction] = self.in_phases
+        self.phases: dict[int, int | Fraction] = self.in_phases.copy()
+
+        # Introduce empty tracker for time-order dependencies
+        # Any spider that should come before or after another spider should be added here
+        # using a {spider_id: (reference_spider_id, 1 if reference comes before else -1)}
+        self.time_deps: dict[int, tuple[int, int]] = {}
 
         # Other trackers
         self.run_success: bool = False
@@ -232,6 +238,7 @@ class BlockGraphManager:
                     # Add corresponding entry to qubit and row trackers
                     self.qubits[y_id] = self.qubits[spider_id] - 1
                     self.rows[y_id] = self.rows[spider_id] - 1
+                    self.time_deps[y_id] = (spider_id, -1)
 
                     # Add corresponding edge
                     self.bgraph.add_edge(
@@ -260,110 +267,66 @@ class BlockGraphManager:
                         zx_type="T"
                     )
 
-                # Mid-circuit T-gate
                 else:
-                    x1_id, x2_id, t_id = (max_id + 1, max_id + 2, max_id + 3)
-                    z_bridge_id, y_id = (max_id + 4, max_id + 5)
+                    t_id = max_id + 1
+                    x_bridge_id, xz_id, y_id = (max_id + 3, max_id + 4, max_id + 5)
+                    self.time_deps[xz_id] = (t_id, +1)
+                    self.time_deps[y_id] = (xz_id, -1)
 
                     # Reset phase on original spider since it is getting a pattern instead
                     self.phases[spider_id] = 0
 
-                    # Attach X spiders
+                    # Attach T
+                    self.bgraph.add_node(
+                        t_id,
+                        zx_block=ZXBlockRegistry.get_create(zx_type="T"),
+                        coords=None,
+                        completions={
+                            "degree": None,
+                            "pending": None,
+                        },
+                    )
+                    self.qubits[t_id] = self.qubits[spider_id]
+                    self.rows[t_id] = self.rows[spider_id] - 1
+
+                    self.bgraph.add_edge(
+                        spider_id,
+                        t_id,
+                        edge_type="SIMPLE",
+                        start_coords=None,
+                        end_coords=None,
+                        kind=None,
+                    )
+
+                    # Attach ZX-Y combo pattern (full)
                     prev_id = spider_id
-                    for x_id in [x1_id, x2_id]:
+                    types_in_seq = {0: "X", 1: "XZ", 2: "Y"}
+                    for i, s_id in enumerate([x_bridge_id, xz_id, y_id]):
+                        zx_type = types_in_seq[i]
                         self.bgraph.add_node(
-                            x_id,
-                            zx_block=ZXBlockRegistry.get_create(zx_type="X"),
+                            s_id,
+                            zx_block=ZXBlockRegistry.get_create(zx_type=zx_type),
                             coords=None,
                             completions={
                                 "degree": None,
                                 "pending": None,
                             },
                         )
-                        self.qubits[x_id] = self.qubits[prev_id] - 1
-                        self.rows[x_id] = self.rows[prev_id] - 1
-
+                        self.qubits[s_id] = self.qubits[spider_id] - (0 if zx_type != "Y" else -1)
+                        self.rows[s_id] = self.rows[prev_id] + (1 if zx_type != "Y" else -1)
                         self.bgraph.add_edge(
-                            prev_id,
-                            x_id,
+                            prev_id if zx_type != "Y" else x_bridge_id,
+                            s_id,
                             edge_type="SIMPLE",
                             start_coords=None,
                             end_coords=None,
                             kind=None,
                         )
-
-                        prev_id = x_id
-
-                    # Attach future XZ
-                    self.bgraph.add_node(
-                        t_id,
-                        zx_block=ZXBlockRegistry.get_create(zx_type="XZ"),
-                        coords=None,
-                        completions={
-                            "degree": None,
-                            "pending": None,
-                        },
-                    )
-                    self.qubits[t_id] = self.qubits[x1_id]
-                    self.rows[t_id] = self.rows[x1_id] - 1
-
-                    self.bgraph.add_edge(
-                        x1_id,
-                        t_id,
-                        edge_type="SIMPLE",
-                        start_coords=None,
-                        end_coords=None,
-                        kind=None,
-                    )
-
-                    # Attach Z bridge
-                    self.bgraph.add_node(
-                        z_bridge_id,
-                        zx_block=ZXBlockRegistry.get_create(zx_type="Z"),
-                        coords=None,
-                        completions={
-                            "degree": None,
-                            "pending": None,
-                        },
-                    )
-                    self.qubits[z_bridge_id] = self.qubits[spider_id] - 1
-                    self.rows[z_bridge_id] = self.rows[spider_id] + 1
-
-                    self.bgraph.add_edge(
-                        spider_id,
-                        z_bridge_id,
-                        edge_type="SIMPLE",
-                        start_coords=None,
-                        end_coords=None,
-                        kind=None,
-                    )
-
-                    # Attach future Y
-                    self.bgraph.add_node(
-                        y_id,
-                        zx_block=ZXBlockRegistry.get_create(zx_type="Y"),
-                        coords=None,
-                        completions={
-                            "degree": None,
-                            "pending": None,
-                        },
-                    )
-                    self.qubits[y_id] = self.qubits[z_bridge_id] - 1
-                    self.rows[y_id] = self.rows[z_bridge_id]
-
-                    self.bgraph.add_edge(
-                        z_bridge_id,
-                        y_id,
-                        edge_type="SIMPLE",
-                        start_coords=None,
-                        end_coords=None,
-                        kind=None,
-                    )
+                        prev_id = s_id
 
         # Draw ZX as NX if applicable
         if self._kwargs["debug"] > 1:
             self.draw_zx()
-
 
     def get_bounds(self):
         """Define the max/min bounds for the chip surface."""
@@ -471,6 +434,7 @@ class BlockGraphManager:
         for raw_u, raw_v in self.edge_queue:
             # Start iteration timer
             self.t1_iter, _ = datetime_manager()
+            self.parametrise_taken()
 
             # Get (u, v) from the ID trace
             # If a given node has not twins, the last twin is itself
@@ -590,7 +554,11 @@ class BlockGraphManager:
                     self.cross_edge,
                     self.taken,
                     self.pruned_taken,
+                    self.parametrised_taken,
                     self.is_hadamard,
+                    time_deps=self.time_deps[self.curr_tgt_id]
+                    if self.curr_tgt_id in self.time_deps
+                    else None,
                     **self._kwargs,
                 )
 
@@ -912,16 +880,6 @@ class BlockGraphManager:
         # Extract KWARGs into independent values for ease of manipulation
         path_len_hp, beams_broken_hp = self._kwargs["weights"]
 
-        # Determine if edge is moving up, down, or sideways along circuit
-        z_axis_diff = candidate_path.full_path[-1][0][2] - self.curr_src_coords[2]
-        z_axis_diff = 0 if z_axis_diff == 0 else 1 if z_axis_diff > 0 else -1
-        if self.curr_tgt_id in self.rows and self.curr_src_id in self.rows:
-            row_diff = self.rows[self.curr_tgt_id] - self.rows[self.curr_src_id]
-            row_diff = 0 if row_diff == 0 else 1 if row_diff > 0 else -1
-            z_diff_contrib = (row_diff == z_axis_diff) * 1
-        else:
-            z_diff_contrib = z_axis_diff if self.curr_tgt_id not in self.inputs else -z_axis_diff
-
         # Apply bounds
         out_of_bounds_contrib = 0
         if self.bounds.x and self.bounds.y:
@@ -937,9 +895,21 @@ class BlockGraphManager:
         broken_beams_contrib = candidate_path.beams_broken_by_path * beams_broken_hp
 
         # Cumulative value
-        path_value = len_contrib + broken_beams_contrib + z_diff_contrib + out_of_bounds_contrib
+        path_value = len_contrib + broken_beams_contrib + out_of_bounds_contrib
 
         return path_value
+
+    def parametrise_taken(self):
+        """Break taken into a series of segments."""
+
+        parametrised_taken: dict[tuple[int, int], set] = {}
+        for x, y, z in sorted(self.taken):
+            if (x, y) in parametrised_taken:
+                parametrised_taken[x, y].add(z)
+            else:
+                parametrised_taken[x, y] = set([z])
+
+        self.parametrised_taken = parametrised_taken
 
     def draw_zx(self, draw_style: str = "zx"):
         """Draw the NX blockgraph using ZX or NX styling.
@@ -959,9 +929,91 @@ class BlockGraphManager:
             iter_fail: Boolean to flag if current visualisation comes right after an iteration failure.
 
         """
+
+        # Pack the input ZX as NX into a single object
+        in_zx = {
+            "ids": self.in_ids,
+            "qubits": self.in_qubits,
+            "rows": self.in_rows,
+            "inputs": self.in_inputs,
+            "outputs": self.in_outputs,
+            "phases": self.in_phases,
+            "edge_types": self.in_edge_types,
+            "degrees": self.in_degrees,
+            "types": self.in_types,
+        }
+
+        # Pack the base NX after transformations into a single object
+        base_graph = {
+            "ids": self.ids,
+            "qubits": self.qubits,
+            "rows": self.rows,
+            "inputs": self.inputs,
+            "outputs": self.outputs,
+            "phases": self.phases,
+            "edge_types": self.edge_types,
+            "degrees": self.degrees,
+            "types": self.types,
+        }
+
         draw_as_blockgraph(
-            self.bgraph, self.taken, self.cross_edge, is_final_vis=is_final_vis, iter_fail=iter_fail
+            self.bgraph,
+            self.taken,
+            self.cross_edge,
+            in_zx,
+            base_graph,
+            is_final_vis=is_final_vis,
+            iter_fail=iter_fail,
         )
+
+    def write_bgraph(
+        self,
+        output_dir: Path | str = OUTPUT_DIR,
+        circuit_name: str = "qc",
+    ):
+        """Write BlockGraph to a BGRAPH file.
+
+        Args:
+            output_dir (optional): The path to the directory where results should be saved.
+            circuit_name (optional): The name of the circuit.
+
+        """
+        # Create output directory if it doesn't exist.
+        if not isinstance(output_dir, Path):
+            try:
+                output_dir = Path(str(output_dir))
+            except Exception as e:
+                raise NotADirectoryError(
+                    f"Unable to create output directory: '{output_dir}'"
+                ) from e
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Write to BGRAPH file
+        path_to_output_file = output_dir / f"{circuit_name}.bgraph"
+
+        with open(path_to_output_file, "w") as f:
+            f.write("BLOCKGRAPH 0.1.0;\n")
+
+            f.write("\nMETADATA: attr_name; value;\n")
+            f.write("source; topologiq;\n")
+            f.write(f"circuit_name; {circuit_name};\n")
+
+            f.write("\nCUBES: index;x;y;z;kind;label;\n")
+
+            for n_id, attrs in self.bgraph.nodes(data=True):
+                x, y, z = attrs["coords"]
+                kind = attrs["zx_block"].kind
+                label = ""
+                if n_id in self.inputs:
+                    label = f"in_{self.qubits[n_id]}" if n_id in self.qubits else "in"
+                if n_id in self.outputs:
+                    label = f"out_{self.qubits[n_id]}" if n_id in self.qubits else "out"
+                f.write(f"{n_id};{x!s};{y!s};{z!s};{kind};{label};\n")
+
+            f.write("\nPIPES: src;tgt;kind;\n")
+            f.writelines(
+                [f"{u!s};{v!s};{kind};\n" for u, v, kind in self.bgraph.edges(data="kind")]
+            )
 
 
 #######
