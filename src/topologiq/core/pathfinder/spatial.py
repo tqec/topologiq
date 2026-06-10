@@ -5,11 +5,8 @@ Usage:
 
 """
 
-import networkx as nx
-
 from topologiq.core.blocks import PositionedZXBlock
-from topologiq.core.pathfinder.beams import check_beams
-from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
+from topologiq.utils.classes import StandardBlock, StandardCoord
 
 
 #######################
@@ -99,40 +96,29 @@ def gen_bounding_box(
 # CHECKS #
 ##########
 def check_skip_move(
-    bgraph: nx.Graph,
-    beams: CubeBeams,
-    beams_short: CubeBeams,
-    curr_src_id: int,
-    curr_tgt_id: int,
     nxt_coords: StandardCoord,
-    tent_coords: list[StandardCoord],
     bounding_box: dict[str, dict[str, int]],
     curr_path_coords: list[StandardCoord],
-    pruned_taken: set[StandardCoord],
-    parametrised_taken: dict[tuple[int, int], set],
+    parametrised_taken: dict[int, dict[int, set[int]]],
     cross_edge: bool,
     special_target_kind: bool = False,
 ) -> bool:
     """Check if current move should be skipped to speed up pathfinding process.
 
     Args:
-        bgraph: The BlockGraph currently being built.
-        beams: The beams for all the cubes in blockgraph that need beams..
-        beams_short: The short beams for all the cubes in blockgraph that need beams..
-        curr_src_id: The ID of the current source cube.
-        curr_tgt_id: The ID of the current target cube.
         nxt_coords: The coordinates being checked as potential next position to place a block.
-        tent_coords: The final "target" coordinates at which path should arrive.
         bounding_box: The coordinates determining the bounding box outside of which moves are not allowed.
         curr_path_coords: The coordinates for the current path.
-        pruned_taken: A pruned version of taken not containing source and target coordinates.
         parametrised_taken: A version of taken parametrised for more efficient clash detection.
         cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
         special_target_kind (optional): True if final target is a Y, conditional, or cultivation block.
 
     """
 
-    if nxt_coords in pruned_taken or nxt_coords in curr_path_coords:
+    if (
+        check_clashes_parametrised_taken(nxt_coords, parametrised_taken)
+        or nxt_coords in curr_path_coords
+    ):
         return True
 
     if cross_edge or special_target_kind:
@@ -148,16 +134,24 @@ def check_skip_move(
             ):
                 return True
 
-        if not check_beams(
-            bgraph,
-            beams,
-            beams_short,
-            curr_src_id,
-            curr_tgt_id,
-            nxt_coords,
-            tent_coords,
-            curr_path_coords,
-        ):
-            return True
+    return False
 
+def check_clashes_parametrised_taken(
+    nxt_coords: StandardCoord,
+    parametrised_taken: dict[int, set[StandardCoord]],
+) -> bool:
+    """Check for clashes between an arbitrary set of coordinates and the pruned version of taken.
+
+    Args:
+        nxt_coords: The coordinates being checked as potential next position to place a block.
+        parametrised_taken: A version of taken that has been organised into layers for more efficient clash detection.
+
+    Returns:
+        clash: False if no clashes are found, True otherwise.
+
+    """
+
+    x, y, z = nxt_coords
+    if z in parametrised_taken:
+        return (x, y) in parametrised_taken[z]
     return False

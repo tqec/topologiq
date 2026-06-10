@@ -84,13 +84,12 @@ def check_beam_clashes(
             src_tgt_adjust = 1 if cube_id in [curr_src_id, curr_tgt_id] else 0
             in_threshold = (
                 min(1, bgraph.nodes[cube_id]["completions"]["pending"])
-                if twin_mode
+                if twin_mode or not strict
                 else bgraph.nodes[cube_id]["completions"]["pending"]
             )
             if len(all_beams_to_check[cube_id]) - cube_clash_count + src_tgt_adjust < in_threshold:
                 beams_broken_by_path += 1
                 clash = True
-                break
 
     out_threshold = bgraph.nodes[curr_tgt_id]["completions"]["pending"] - 1
     if len(tgt_beams_to_check) - sum(tgt_clash_tracker) < out_threshold:

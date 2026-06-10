@@ -47,11 +47,11 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent.parent.parent
 OUTPUT_DIR = REPO_ROOT / "output/bgraph"
 
 
-#########
-# GRAPH #
-#########
+#######################
+# OUTER GRAPH MANAGER #
+#######################
 class BlockGraphManager:
-    """Topologiq's primary graph object."""
+    """Topologiq's primary graph management subroutine."""
 
     def __init__(
         self,
@@ -111,7 +111,6 @@ class BlockGraphManager:
 
         # Space management objects
         self.taken: set[StandardCoord] = set()
-        self.parametrised_taken: dict[tuple[int, int], set] = {}
         self.beams: dict[int, CubeBeams] = {}
         self.beams_short: dict[int, CubeBeams] = {}
         self.ids_to_twin: list[int] = set()
@@ -127,10 +126,9 @@ class BlockGraphManager:
         self.outputs: list[int] = self.in_outputs
         self.phases: dict[int, int | Fraction] = self.in_phases.copy()
 
-        # Introduce empty tracker for time-order dependencies
-        # Any spider that should come before or after another spider should be added here
-        # using a {spider_id: (reference_spider_id, 1 if reference comes before else -1)}
-        self.time_deps: dict[int, tuple[int, int]] = {}
+        # Introduce empty trackers for time-order dependencies
+        # using a {spider_id: [predecessor_1, predecessor_2, ..., predecessor_n]}
+        self.time_order_pre: dict[int, set[int]] = {}
 
         # Other trackers
         self.run_success: bool = False
@@ -238,7 +236,6 @@ class BlockGraphManager:
                     # Add corresponding entry to qubit and row trackers
                     self.qubits[y_id] = self.qubits[spider_id] - 1
                     self.rows[y_id] = self.rows[spider_id] - 1
-                    self.time_deps[y_id] = (spider_id, -1)
 
                     # Add corresponding edge
                     self.bgraph.add_edge(
@@ -268,10 +265,12 @@ class BlockGraphManager:
                     )
 
                 else:
+                    # IDs for all spiders in sequence
                     t_id = max_id + 1
-                    x_bridge_id, xz_id, y_id = (max_id + 3, max_id + 4, max_id + 5)
-                    self.time_deps[xz_id] = (t_id, +1)
-                    self.time_deps[y_id] = (xz_id, -1)
+                    x_bridge_id, y_id, xz_id = (max_id + 3, max_id + 4, max_id + 5)
+
+                    # Time orders for all spiders in sequence
+                    self.time_order_pre[xz_id] = set([spider_id, t_id, x_bridge_id, y_id])
 
                     # Reset phase on original spider since it is getting a pattern instead
                     self.phases[spider_id] = 0
@@ -298,10 +297,10 @@ class BlockGraphManager:
                         kind=None,
                     )
 
-                    # Attach ZX-Y combo pattern (full)
+                    # Attach Y-XZ combo pattern (full)
                     prev_id = spider_id
-                    types_in_seq = {0: "X", 1: "XZ", 2: "Y"}
-                    for i, s_id in enumerate([x_bridge_id, xz_id, y_id]):
+                    types_in_seq = {0: "X", 1: "Y", 2: "XZ"}
+                    for i, s_id in enumerate([x_bridge_id, y_id, xz_id]):
                         zx_type = types_in_seq[i]
                         self.bgraph.add_node(
                             s_id,
@@ -313,9 +312,9 @@ class BlockGraphManager:
                             },
                         )
                         self.qubits[s_id] = self.qubits[spider_id] - (0 if zx_type != "Y" else -1)
-                        self.rows[s_id] = self.rows[prev_id] + (1 if zx_type != "Y" else -1)
+                        self.rows[s_id] = self.rows[prev_id] + (1 if zx_type != "Y" else 0)
                         self.bgraph.add_edge(
-                            prev_id if zx_type != "Y" else x_bridge_id,
+                            prev_id if zx_type != "XZ" else x_bridge_id,
                             s_id,
                             edge_type="SIMPLE",
                             start_coords=None,
@@ -353,8 +352,12 @@ class BlockGraphManager:
     def enforce_max_four_legs_per_spider(self):
         """Ensure all spiders in an incoming blockgraph have at most four legs/edges."""
 
-        # Only do anything if there are any nodes with more neighbours than allowed
-        if [v for _, v in self.bgraph.degree if v > 4]:
+        # Proceed if there are
+        # spiders with more than 4 neighbours
+        # S-gates with more than 3 neighbours
+        more_than_four_ids = [v for _, v in self.bgraph.degree if v > 4]
+        s_gates_more_than_three = [k for k, v in self.phases.items() if (v == Fraction(1, 2) and self.bgraph.degree(k) > 3)]
+        if more_than_four_ids or s_gates_more_than_three:
             # Determine if graph has only one colour spider
             non_boundary_spiders = [
                 n
@@ -367,7 +370,7 @@ class BlockGraphManager:
                 self.bgraph, new_ids = max_four_edges_single_spider_graph(self.bgraph)
             # Use generic method for all other graphs
             else:
-                self.bgraph, new_ids = max_four_edges_random(self.bgraph)
+                self.bgraph, new_ids = max_four_edges_random(self.bgraph, s_gates_more_than_three=s_gates_more_than_three)
 
             # Update ID trackers to match changes in input graph
             self.ids.update(new_ids.keys())
@@ -434,7 +437,6 @@ class BlockGraphManager:
         for raw_u, raw_v in self.edge_queue:
             # Start iteration timer
             self.t1_iter, _ = datetime_manager()
-            self.parametrise_taken()
 
             # Get (u, v) from the ID trace
             # If a given node has not twins, the last twin is itself
@@ -458,7 +460,7 @@ class BlockGraphManager:
             self.curr_tgt_zx_type = self.bgraph.nodes[self.curr_tgt_id]["zx_block"].zx_type
 
             # Announce edge
-            if self._kwargs["debug"] > 1:
+            if self._kwargs["debug"] > 0:
                 print(
                     f"\n=> Edge: {u} ({self.bgraph.nodes[u]['zx_block'].zx_type}) --> {v} ({self.curr_tgt_zx_type}). {'CROSS' if self.cross_edge else 'STANDARD'}"
                 )
@@ -487,7 +489,7 @@ class BlockGraphManager:
                 step += 1
 
                 if step > max_step:
-                    if self._kwargs["debug"] >= 0:
+                    if self._kwargs["debug"] >= 1:
                         self.draw_blockgraph(is_final_vis=False, iter_fail=True)
                     raise ValueError(
                         f"ERROR. No path found for {'CROSS' if self.cross_edge else 'STANDARD'} edge: {u} --> {v}"
@@ -500,12 +502,13 @@ class BlockGraphManager:
             # Update user if applicable
             if self._kwargs["debug"] > 0:
                 print(
-                    f"Edge completed. {'CROSS' if self.cross_edge else 'STANDARD'}: {self.curr_src_id} --> {self.curr_tgt_id}.",
+                    "Edge completed.",
                     f"Vol +: {len(self.winner_path.full_path) - (2 if (self.cross_edge or self.curr_tgt_zx_type == 'O') else 1)}.",
                     f"Duration: {duration_iter:.2f}s",
                 )
 
             # Check if placement created a need for twins
+            self.just_checked_twins = False
             self.check_need_twins()
 
         # Stop timer
@@ -538,7 +541,7 @@ class BlockGraphManager:
             self.tent_coords = (
                 [self.curr_tgt_coords]
                 if self.cross_edge
-                else gen_tent_tgt_coords(self.curr_src_coords, step, self.taken)
+                else gen_tent_tgt_coords(self.curr_src_coords, step, self.taken, overload=self.curr_tgt_zx_type in ["Y"])
             )  # Send full taken (path cannot overlap source)
 
             # Try finding paths to each tentative coordinate
@@ -554,11 +557,8 @@ class BlockGraphManager:
                     self.cross_edge,
                     self.taken,
                     self.pruned_taken,
-                    self.parametrised_taken,
                     self.is_hadamard,
-                    time_deps=self.time_deps[self.curr_tgt_id]
-                    if self.curr_tgt_id in self.time_deps
-                    else None,
+                    self.time_order_pre,
                     **self._kwargs,
                 )
 
@@ -608,15 +608,8 @@ class BlockGraphManager:
                             coords_in_path, twin_mode=twin_mode
                         )
 
-                        special_ok = True
-                        if (
-                            self.curr_tgt_zx_type == "Y"
-                            and valid_path[-1][0][2] >= self.curr_src_coords[2]
-                        ):
-                            special_ok = False
-
                         # Append path to viable paths if path clears all checks
-                        if not beam_clashes and special_ok:
+                        if not beam_clashes:
                             # Consolidate path data
                             candidate_path = CandidatePath(
                                 **{
@@ -724,8 +717,18 @@ class BlockGraphManager:
             strict=True,
         )
 
-        if self.ids_to_twin:
+        while self.ids_to_twin:
             self.add_twins()
+            self.ids_to_twin = check_beam_clashes_for_twins(
+                self.bgraph,
+                self.beams,
+                self.beams_short,
+                self.curr_src_id,
+                self.curr_tgt_id,
+                self.taken,
+                ids_to_twin=self.ids_to_twin,
+                strict=True,
+            )
 
     def add_twins(self):
         """Create a twin spider for any given number of priority spiders."""
@@ -877,8 +880,25 @@ class BlockGraphManager:
 
         """
 
-        # Extract KWARGs into independent values for ease of manipulation
+        # EXTRACT KEY PARAMETERS
+        # KWARGs
         path_len_hp, beams_broken_hp = self._kwargs["weights"]
+
+        # Last candidate path
+        last_coords, last_zx_block = candidate_path.full_path[-1]
+
+        # Determine if edge is moving up, down, or sideways along circuit
+        z_axis_diff = last_coords[2] - self.curr_src_coords[2]
+        z_axis_diff = 0 if z_axis_diff == 0 else 1 if z_axis_diff > 0 else -1
+        if self.curr_tgt_id in self.rows and self.curr_src_id in self.rows:
+            row_diff = self.rows[self.curr_tgt_id] - self.rows[self.curr_src_id]
+            row_diff = 0 if row_diff == 0 else 1 if row_diff > 0 else -1
+            z_diff_contrib = (row_diff == z_axis_diff) * 1
+        else:
+            z_diff_contrib = z_axis_diff if self.curr_tgt_id not in self.inputs else -z_axis_diff
+
+        # Z punishment for special cubes
+        z_punish = -1 * last_coords[2] if last_zx_block.zx_type in ["Y", "T"] else 0
 
         # Apply bounds
         out_of_bounds_contrib = 0
@@ -895,21 +915,9 @@ class BlockGraphManager:
         broken_beams_contrib = candidate_path.beams_broken_by_path * beams_broken_hp
 
         # Cumulative value
-        path_value = len_contrib + broken_beams_contrib + out_of_bounds_contrib
+        path_value = len_contrib + broken_beams_contrib + out_of_bounds_contrib + z_diff_contrib + z_punish
 
         return path_value
-
-    def parametrise_taken(self):
-        """Break taken into a series of segments."""
-
-        parametrised_taken: dict[tuple[int, int], set] = {}
-        for x, y, z in sorted(self.taken):
-            if (x, y) in parametrised_taken:
-                parametrised_taken[x, y].add(z)
-            else:
-                parametrised_taken[x, y] = set([z])
-
-        self.parametrised_taken = parametrised_taken
 
     def draw_zx(self, draw_style: str = "zx"):
         """Draw the NX blockgraph using ZX or NX styling.

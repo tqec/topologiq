@@ -33,9 +33,9 @@ def check_beams(
     """Check that move does not break any beams of cubes that need all their exits.
 
     Args:
-        bgraph: The BlockGraph currently being built..
-        beams: The beams for all the cubes in blockgraph that need beams..
-        beams_short: The short beams for all the cubes in blockgraph that need beams..
+        bgraph: The BlockGraph currently being built.
+        beams: The beams for all the cubes in blockgraph that need beams.
+        beams_short: The short beams for all the cubes in blockgraph that need beams.
         curr_src_id: The ID of the current source cube.
         curr_tgt_id: The ID of the current target cube.
         nxt_coords: The coordinates being checked as potential next position to place a block.
@@ -50,42 +50,17 @@ def check_beams(
 
     # Select short of full beams as appropriate
     all_beams = beams if strict else beams_short
+    check_coords = [*curr_path_coords, nxt_coords]
 
     # Check each cube against all other cubes
     for out_id, out_beams in all_beams.items():
         # Track outer beams in a way that remembers which beam is which
         out_clash_tracker = np.array([False for _ in out_beams])
 
-        # Look for clashes against path
         broken_beams = [
-            any([out_beam.contains(coord) for coord in curr_path_coords]) for out_beam in out_beams
+            any([out_beam.contains(coord) for coord in check_coords]) for out_beam in out_beams
         ]
-
         out_clash_tracker = out_clash_tracker + np.array(broken_beams)
-
-        # Look for clashes against the beams of other cubes
-        # if (
-        # any(broken_beams)
-        # and nxt_coords in tent_coords
-        # and out_id not in (curr_src_id, curr_tgt_id)
-        # ):
-        # for in_id, in_beams in all_beams.items():
-        # Track inner beams in a way that remembers which beam is which
-        # in_clash_tracker = 0
-
-        # Look for inner clashes
-        # for in_beam in in_beams:
-        # intersections = [out_beam.intersects(in_beam, 9) for out_beam in out_beams]
-        # out_clash_tracker = out_clash_tracker + np.array(intersections)
-        # in_clash_tracker += any(intersections)
-
-        # Determine if in clashes are within tolerance
-        # src_tgt_adjust = 1 if in_id in (curr_src_id, curr_tgt_id) else 0
-        # in_pending = (
-        # 1 if src_tgt_adjust == 0 else bgraph.nodes[in_id]["completions"]["pending"]
-        # )
-        # if len(in_beams) + src_tgt_adjust - in_clash_tracker < min(in_pending, 1):
-        # return False
 
         # Determine if out clashes are within tolerance
         src_tgt_adjust = 1 if out_id in (curr_src_id, curr_tgt_id) else 0

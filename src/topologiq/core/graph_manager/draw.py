@@ -394,7 +394,7 @@ def adjust_plot_styles(
     ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
     ax.zaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
     # BG colours (yellow: progress, green: success, red: failure)
-    bg_colour = "#353535" if is_final_vis else "#b8b8b8"
+    bg_colour = "#6DFFAC" if is_final_vis else "#b8b8b8"
     if iter_fail:
         bg_colour = "#fcbbb8"
     fig.patch.set_facecolor(bg_colour)

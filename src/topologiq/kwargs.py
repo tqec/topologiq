@@ -51,10 +51,10 @@ Notes:
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
 
 # Strategy for selecting the ID of the first spider processed by the algorithm
-# centrality_majority: Use a majority vote from several centrality measures
-# centrality_random: Pick randomly from a list of central spiders
-# first_spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
-FIRST_ID_STRATEGY = "first_spider"
+# centrality-majority: Use a majority vote from several centrality measures
+# centrality-random: Pick randomly from a list of central spiders
+# first-spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
+FIRST_ID_STRATEGY = "first-spider"
 
 # Deterministic or randomised running mode
 BEAMS_SHORT_LEN = 2

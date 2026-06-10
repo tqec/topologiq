@@ -12,7 +12,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 # KWARGS #
 ##########
 # If a specific kwarg is not explicitly declared here, it will be auto-generated
-kwargs = {"first_id_strategy": "first_spider", "seed": 42}
+kwargs = {"first_id_strategy": "first_spider", "seed": 42, "debug": 0}
 
 ############
 # MAIN RUN #
@@ -23,7 +23,7 @@ if __name__ == "__main__":
         random.seed(kwargs["seed"])
 
     # Profile with and without Hadamards and phases
-    for had_phase in [False, True]:
+    for had_phase in [True]:
         # Start PyInstrument
         profiler = Profiler()
         profiler.start()
@@ -47,6 +47,7 @@ if __name__ == "__main__":
 
         # Run Topologiq
         bgraph_manager = aug_zx.get_blockgraph(**kwargs)
+        bgraph_manager.draw_blockgraph()
 
         # Run Topologiq
         profiler.stop()
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         # Write profiling results
         path_to_profiled_run = (
             Path(__file__).resolve().parent
-            / f"pyinst_random_{'had_phase' if had_phase else ''}.html"
+            / f"pyinst_random{'_had_phase' if had_phase else ''}.html"
         )
         with open(path_to_profiled_run, "w") as f:
             f.write(profiler.output_html())

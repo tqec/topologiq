@@ -29,8 +29,8 @@ def get_first_cube_data(
     Args:
         bgraph: The BlockGraph being built.
         first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
-            centrality_majority: Use a majority vote from several centrality measures (deterministic).
-            centrality_random: Pick randomly from a list of central spiders (probabilistic).
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
             first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
         inputs: A list of spiders formally declared as graph inputs.
         override_first_cube: Override ID and kind (used to replicate specific cases).
@@ -73,8 +73,8 @@ def pick_first_id(bgraph: nx.Graph, first_id_strategy: str, inputs: list[int]) -
     Args:
         bgraph: The BlockGraph being built.
         first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
-            centrality_majority: Use a majority vote from several centrality measures (deterministic).
-            centrality_random: Pick randomly from a list of central spiders (probabilistic).
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
             first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
         inputs: A list of spiders formally declared as graph inputs.
 
@@ -88,7 +88,7 @@ def pick_first_id(bgraph: nx.Graph, first_id_strategy: str, inputs: list[int]) -
         raise ValueError("ERROR: bgraph.nodes() empty. Graph appears empty.")
 
     # ID of first non-boundary node
-    if first_id_strategy == "first_spider":
+    if first_id_strategy == "first-spider":
         # Try getting the lowest formally declared input ID.
         if inputs:
             all_node_ids = sorted(inputs)
@@ -111,7 +111,7 @@ def pick_first_id(bgraph: nx.Graph, first_id_strategy: str, inputs: list[int]) -
         first_id = all_node_ids[0]
 
     # Majority vote from applicable centrality measures
-    elif first_id_strategy == "centrality_majority":
+    elif first_id_strategy == "centrality-majority":
         # Append ID determined as central by several centrality measures to a single array
         central_nodes = []
 
@@ -150,7 +150,7 @@ def pick_first_id(bgraph: nx.Graph, first_id_strategy: str, inputs: list[int]) -
         first_id = max(set(central_nodes), key=central_nodes.count)
 
     # Random choice from central spiders
-    elif first_id_strategy == "centrality_random":
+    elif first_id_strategy == "centrality-random":
         # Loose build a list of central spiders
         max_degree = -1
         central_nodes: list[int] = []
@@ -187,8 +187,8 @@ def pick_id_and_kind(
     Args:
         bgraph: The BlockGraph being built.
         first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
-            centrality_majority: Use a majority vote from several centrality measures (deterministic).
-            centrality_random: Pick randomly from a list of central spiders (probabilistic).
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
             first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
         inputs: A list of spiders formally declared as graph inputs.
         override_first_cube: Override ID and kind (used to replicate specific cases).
@@ -209,7 +209,7 @@ def pick_id_and_kind(
         first_id = pick_first_id(bgraph, first_id_strategy, inputs)
 
     if not first_kind:
-        deterministic = False if first_id_strategy == "centrality_random" else True
+        deterministic = False if first_id_strategy == "centrality-random" else True
         tentative_kinds = bgraph.nodes[first_id].get("zx_block").get_kind_family
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
 

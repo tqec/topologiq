@@ -128,7 +128,13 @@ class SingleBeam:
     def contains(self, coords_to_check: StandardCoord) -> bool:
         """Check if beam contains a given coordinate."""
         x, y, z = coords_to_check
-        return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
+        if not self.z.contains(z):
+            return False
+        if not self.y.contains(y):
+            return False
+        if not self.x.contains(x):
+            return False
+        return True
 
     def intersects(self, other: SingleBeam, short_beams: bool = True) -> bool:
         """Check if two beams intersect one another."""

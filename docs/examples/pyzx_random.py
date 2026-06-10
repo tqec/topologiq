@@ -19,11 +19,11 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
 kwargs = {
-    "first_id_strategy": "first_spider",
+    "first_id_strategy": "first-spider",
     "seed": 42,
     "debug": 1,
-    # "size_of_chip": (10, 10),  # Ignore this for the time being. I use this file for testing new ideas.
-    # "k": 3,    # Ignore this for the time being. I use this file for testing new ideas.
+    #"size_of_chip": (17, 17),  # Ignore this for the time being. I use this file for testing new ideas.
+    #"k": 7,    # Ignore this for the time being. I use this file for testing new ideas.
 }
 
 
@@ -36,7 +36,7 @@ if __name__ == "__main__":
         random.seed(kwargs["seed"])
 
     # Retrieve circuit
-    had_phase = True
+    had_phase = False
     qubit_n, depth = (5, 10)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph, _ = random_graph(

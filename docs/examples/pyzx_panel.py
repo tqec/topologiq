@@ -9,7 +9,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 # Note. Topologiq auto-completes any KWARGs not given explicitly.
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
-kwargs = {"debug": 1, "first_id_strategy": "centrality_random"}
+kwargs = {"debug": 1, "first_id_strategy": "first-spider"}
 
 #######
 # RUN #
@@ -22,22 +22,22 @@ if __name__ == "__main__":
 
     # (OPTIONAL) Exclude graphs by name
     include = [
-        # "xyi",
-        # "cnot_cz",
-        # "one_hadamard",
-        # "cnot",
-        # "cnots",
-        # "simple_mess",
-        # "hadamard_line",
-        # "hadamard_bend",
-        # "hadamard_mess",
-        "steane",
-        # "steane_obfuscated",
-        # "ghz",
-        # "yi",
-        # "s",
-        # "msc",
-        # "t",
+        #"xyi",
+        #"cnot_cz",
+        #"one_hadamard",
+        #"cnot",
+        #"cnots",
+        #"simple_mess",
+        #"hadamard_line",
+        #"hadamard_bend",
+        #"steane",
+        #"steane_obfuscated",
+        #"hadamard_mess",
+        #"ghz",
+        #"yi",
+        "s",
+        #"msc",
+        "t",
     ]
 
     # Loop over available encoding functions
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
         # Get PyZX graph
         encoding_fx = getattr(pyzx_graphs, graph_name)
-        pyzx_graph, _ = encoding_fx(draw_graph=False)
+        pyzx_graph, _ = encoding_fx(draw_graph=True)
 
         # QASM -> ZX manager
         zx_graph_manager_in = ZXGraphManager()

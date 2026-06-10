@@ -19,11 +19,15 @@ from topologiq.utils.classes import StandardCoord
 ##################
 # GRAPH REWRITES #
 ##################
-def max_four_edges_random(bgraph: nx.Graph) -> tuple[nx.Graph, dict[int, int]]:
+def max_four_edges_random(
+    bgraph: nx.Graph,
+    s_gates_more_than_three: list[int] | None = None,
+) -> tuple[nx.Graph, dict[int, int]]:
     """Ensure nodes in graph have max 4 neighbours (randomised breakup strategy).
 
     Args:
         bgraph: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        s_gates_more_than_three: A list with the IDs of S-gates with more than 3 neighbours.
 
     Return:
         bgraph: The updated version of the incoming graph.
@@ -38,14 +42,17 @@ def max_four_edges_random(bgraph: nx.Graph) -> tuple[nx.Graph, dict[int, int]]:
     i = 0
     while i < 100:
         # List of high degree nodes
-        all_nodes_loop = bgraph.nodes()
-        nodes_with_more_than_four_edges = [n for n in all_nodes_loop if bgraph.degree(n) > 4]
+        spiders_over_threshold = [
+            n
+            for n in bgraph.nodes()
+            if bgraph.degree(n) > (3 if n in s_gates_more_than_three else 4)
+        ]
 
         # Exit loop when no nodes with more than 4 edges
-        if not nodes_with_more_than_four_edges:
+        if not spiders_over_threshold:
             break
 
-        node_to_sanitise = random.choice(nodes_with_more_than_four_edges)
+        node_to_sanitise = random.choice(spiders_over_threshold)
         original_node_type = bgraph.nodes[node_to_sanitise]["zx_block"].zx_type
 
         # Add a twin
@@ -80,7 +87,9 @@ def max_four_edges_random(bgraph: nx.Graph) -> tuple[nx.Graph, dict[int, int]]:
 
         shuffle_c = 0
         for neigh in neighs:
-            if shuffle_c >= degree_to_shuffle or bgraph.degree(node_to_sanitise) <= 4:
+            if shuffle_c >= degree_to_shuffle or bgraph.degree(node_to_sanitise) <= (
+                3 if node_to_sanitise in s_gates_more_than_three else 4
+            ):
                 break
             if bgraph.has_edge(node_to_sanitise, neigh) and not bgraph.has_edge(twin_n_id, neigh):
                 edge_data = bgraph.get_edge_data(node_to_sanitise, neigh)
@@ -209,18 +218,24 @@ def gen_tent_tgt_coords(
     src_c: StandardCoord,
     max_manhattan: int = 1,
     taken: set[StandardCoord] = [],
+    overload: bool = False,
 ) -> list[StandardCoord]:
     """Generate a number of potential placement positions for target node.
 
     Args:
         src_c: The (x, y, z) coordinates for the originating block.
         max_manhattan: Max. (Manhattan) distance between origin and target blocks.
-        taken: A list of coordinates already taken by previous operations.
+        taken (optional): A list of coordinates already taken by previous operations.
+        overload (optional): True if there is a need to double the max manhattan distance.
+            Needed for special cubes requiring patterns that cannot always be complete with one single-axis move.
 
     Returns:
         all_coords_at_distance: A list of tentative target coordinates that make good candidates for placing the target block.
 
     """
+
+    # APPLY OVERLOAD IF NEEDED
+    max_manhattan = max_manhattan + 1 if overload else max_manhattan
 
     # EXTRACT SOURCE COORDS
     sx, sy, sz = src_c
@@ -289,7 +304,14 @@ def gen_tent_tgt_coords(
                 )
                 base_for_next_layer.extend([t for t in tgts])
 
-    all_coords_at_distance = tent_coords[min(max_manhattan, 3)]
+    if overload:
+        all_coords_at_distance = [
+            *tent_coords[min(max_manhattan, 5)],
+            *tent_coords[min(max_manhattan - 1, 4)],
+        ]
+    else:
+        all_coords_at_distance = tent_coords[min(max_manhattan, 5)]
+
     return all_coords_at_distance
 
 

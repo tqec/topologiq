@@ -52,6 +52,23 @@ def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord])
 
     return 0
 
+def get_min_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
+    """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
+
+    Args:
+        src_coord: The (x, y, z) coordinates for the source block.
+        all_coords: A list of (x, y, z) coordinates of any arbitrary length, which may include src_coord.
+
+    Returns:
+        int: The max Manhattan distance between the source coordinate and all coordinates in the list of coordinates.
+
+    """
+
+    if all_coords:
+        return min([get_manhattan(src_coord, c) for c in all_coords])
+
+    return 0
+
 
 def kind_to_zx_type(kind: str) -> str:
     """Get the ZX type corresponding to a given block or pipe kind.

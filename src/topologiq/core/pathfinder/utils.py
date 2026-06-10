@@ -35,12 +35,11 @@ def init_bfs(
     queue = deque([src_block_positioned])
     visited = {(src_block_positioned, (0, 0, 0)): 0}
     visit_attempts = 0
-    path_len = {src_block_positioned: 0}
     path = {src_block_positioned: [src_block_positioned]}
     valid_paths = {}
     all_search_paths = {}
 
-    return queue, visited, visit_attempts, path_len, path, valid_paths, all_search_paths
+    return queue, visited, visit_attempts, path, valid_paths, all_search_paths
 
 
 def gen_exit_conditions(
