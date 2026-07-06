@@ -133,9 +133,9 @@ def pathfinder(
         max_span,
         cross_edge,
         kwargs["min_succ_rate"],
-        special_target_kind=tgt_zx_block.zx_type in ["Y", "T", "XZ"],
+        special_target_kind=tgt_zx_block.zx_type in ["T"],
     )
-    tgts_to_fill = min(10, tgts_to_fill)
+    tgts_to_fill = min(100, tgts_to_fill)
 
     # Manage queue
     hdm = is_hadamard
@@ -199,11 +199,9 @@ def pathfinder(
             # Check if move can be skipped (for speed)
             if check_skip_move(
                 nxt_coords,
-                bounding_box,
                 curr_path_coords,
                 parametrised_taken,
-                cross_edge,
-                special_target_kind=tgt_zx_block.zx_type in ["Y", "T"],
+                bounding_box=bounding_box,
             ):
                 continue
 
@@ -213,7 +211,6 @@ def pathfinder(
                 is_hadamard=hdm,
                 tgt_zx_type=tgt_zx_block.zx_type,
             )
-
 
             # Loop over all possible next types
             for possible_nxt_zx_block in possible_nxt_zx_blocks:
@@ -479,10 +476,11 @@ def _check_for_success(
             ]
             valid_paths[(nxt_coords, xz_block)] = path[(nxt_coords, xz_block)]
         else:
-            valid_paths[nxt_block_positioned] = path[nxt_block_positioned]
+            if nxt_block_positioned not in valid_paths or len(path[nxt_block_positioned]) < len(valid_paths[nxt_block_positioned]):
+                valid_paths[nxt_block_positioned] = path[nxt_block_positioned]
 
-        if tgt_block_zx_type not in ["Y", "T", "O"]:
-            tgts_filled = min(len([p[0] for p in valid_paths.keys()]), 10)
+        if tgt_block_zx_type not in ["Y", "T", "O", "XZ"]:
+            tgts_filled = len([p[0] for p in valid_paths.keys()])
             if tgts_filled >= tgts_to_fill:
                 return True
 

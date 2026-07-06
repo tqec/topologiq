@@ -122,6 +122,7 @@ class BlockGraphManager:
         self.beams_short: dict[int, CubeBeams] = {}
         self.ids_to_twin: list[int] = set()
         self.completed_in_zx_edges: dict[tuple[int, int], list[int]] = {}
+        self.intermediate_ids: list[int] = []
 
         # Replicate ZX trackers to have editable copies
         self.ids: set[int] = self.in_ids.copy()
@@ -422,8 +423,8 @@ class BlockGraphManager:
 
         self.bounds = GraphBounds()
         if "size_of_chip" in self._kwargs and "k" in self._kwargs:
-            self.bounds.x = int(self._kwargs["size_of_chip"][0] / (self._kwargs["k"] + 2))
-            self.bounds.y = int(self._kwargs["size_of_chip"][1] / (self._kwargs["k"] + 2))
+            self.bounds.x = int(self._kwargs["size_of_chip"][0] / (self._kwargs["k"])) - 1
+            self.bounds.y = int(self._kwargs["size_of_chip"][1] / (self._kwargs["k"])) - 1
 
     def get_nodes_verbose(self):
         """Retrieve all nodes in blockgraph (verbose)."""
@@ -487,6 +488,8 @@ class BlockGraphManager:
         self.is_hadamard = False
 
         # Pick and ID and kind for first cube
+        # Update corresponding node
+        self.first_coords = (0, 0, 0)
         self.first_id, self.other_first_ids, self.first_zx_block, src_beams, src_beams_short = (
             get_first_cube_data(
                 self.bgraph,
@@ -494,32 +497,24 @@ class BlockGraphManager:
                 self.qubits,
                 self.inputs,
                 self._kwargs["beams_len_short"],
+                first_coords=self.first_coords,
                 override_first_cube=self._kwargs["first_cube"],
                 random_seed=self._kwargs["seed"],
             )
         )
 
-        if self._kwargs["debug"] >= 4:
-            self.draw_zx(draw_style="nx-atlas")
-
-        # Update corresponding node
-        first_coord = (
-            (0, 0, 0)
-            if not self.bounds.x or not self.bounds.y
-            else (int(self.bounds.x / 2), int(self.bounds.y / 2), 0)
-        )
+        self.bgraph.nodes[self.first_id]["coords"] = self.first_coords
         self.bgraph.nodes[self.first_id]["zx_block"] = self.first_zx_block
-        self.bgraph.nodes[self.first_id]["coords"] = first_coord
         self.beams[self.first_id] = src_beams
         self.beams_short[self.first_id] = src_beams_short
 
         # Update taken
-        self.taken.add(first_coord)
+        self.taken.add(self.first_coords)
 
         # Update user if applicable
         if self._kwargs["debug"] > 0:
             print(
-                f"First cube placed. ID: {self.first_id}. Kind: {self.first_zx_block.kind}. Coords: {first_coord}."
+                f"First cube placed. ID: {self.first_id}. Kind: {self.first_zx_block.kind}. Coords: {self.first_coords}."
             )
 
     def get_queue(self):
@@ -645,20 +640,25 @@ class BlockGraphManager:
         self.z_bounds: dict[str, int | None] = {"min": None, "max": None}
 
         # Overload tentative coords generation if applicable
-        overload = True if self.curr_tgt_zx_type in ["Y"] or self._kwargs["z_stretch"] else False
-        overload = False if self._kwargs["graph_traverse_mode"] == "bfs-rows" else overload
-        if (
-            self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]
-            and self.curr_src_id in self.qubits
-            and self.curr_tgt_id in self.qubits
-            and (
-                self.qubits[self.first_id]
-                == self.qubits[self.curr_src_id]
-                == self.qubits[self.curr_tgt_id]
-            )
-        ):
-            overload = False
-            step = self._kwargs["z_stretch"]
+        overload = 0
+        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]:
+            if (
+                self.curr_src_id in self.qubits
+                and self.curr_tgt_id in self.qubits
+                and (
+                    self.qubits[self.first_id]
+                    == self.qubits[self.curr_src_id]
+                    == self.qubits[self.curr_tgt_id]
+                )
+            ):
+                overload = 0
+                step = self._kwargs["z_stretch"]
+            else:
+                overload = 2 if self.curr_tgt_zx_type in ["Y", "XZ"] else 0
+        elif self.curr_tgt_zx_type in ["Y", "XZ"]:
+            overload = 2
+        elif self._kwargs["z_stretch"]:
+            overload = 1
 
         # Set time constraints if applicable
         if self.curr_tgt_id in self.ante:
@@ -696,7 +696,7 @@ class BlockGraphManager:
                     self.curr_src_coords,
                     step,
                     self.taken,
-                    overload=overload if step < 3 else False,
+                    overload=overload if step < 3 else 0,
                     z_bounds=self.z_bounds,
                 )
             )
@@ -705,11 +705,6 @@ class BlockGraphManager:
             if self.tent_coords:
                 # Get a number of valid paths (topologically correct, not necessarily optimal)
                 for iter_graph_bounds in [self.bounds, None]:
-                    if (
-                        not (self.cross_edge or self.curr_tgt_zx_type in ["Y", "T", "O", "XZ"])
-                        and not iter_graph_bounds
-                    ):
-                        continue
                     self.valid_paths, self.pathfinder_vis_data = pathfinder(
                         self.bgraph,
                         self.beams,
@@ -1123,8 +1118,9 @@ class BlockGraphManager:
         ## Weights
         path_len_w, beams_broken_w = self._kwargs["weights"]
 
-        ## Last candidate path
+        ## Extract dandidate path key characteristics
         last_coords, last_zx_block = candidate_path.full_path[-1]
+        coords_in_path = np.array([c for c, _ in candidate_path.full_path])
 
         # Penalise length
         len_contrib = len(candidate_path.full_path) * path_len_w
@@ -1139,7 +1135,7 @@ class BlockGraphManager:
             stretch_multiplier = self._kwargs["z_stretch"] if self._kwargs["z_stretch"] else 1
 
             # Push down for Y-cubes and cultivation/distillation
-            if last_zx_block.zx_type in ["Y", "T"]:
+            if last_zx_block.zx_type in ["Y", "T", "XZ"]:
                 z_push = -1 * last_coords[2]
             # Favour row difference for all other cubes
             else:
@@ -1152,7 +1148,6 @@ class BlockGraphManager:
 
             # Apply bounds if given
             if not self.faux_edge and self.bounds.x and self.bounds.y:
-                coords_in_path = np.array([c for c, _ in candidate_path.full_path])
                 x_coords = coords_in_path[:, 0]
                 y_coords = coords_in_path[:, 1]
                 x_out = [x < 0 or x > self.bounds.x for x in x_coords]
@@ -1191,16 +1186,22 @@ class BlockGraphManager:
                 nxt_is_cross
                 or self.faux_edge
                 or (
-                    self._kwargs["graph_traverse_mode"] == "bfs-cycles"
+                    self._kwargs["graph_traverse_mode"] in ["bfs-cycles"]
                     and self.curr_tgt_zx_type != "O"
                 )
             ):
                 d_to_centre = np.linalg.norm(np.array(last_coords) - np.array(centre_coords))
                 pull_to_centre = d_to_centre * -10 * self._kwargs["gravity"]
-            elif self.curr_tgt_zx_type not in ["O", "Y", "XZ", "T"]:
+            elif self.curr_tgt_zx_type not in ["O", "Y", "T", "XZ"]:
                 centre_x, centre_y, _ = centre_coords
                 x, y, _ = last_coords
                 pull_to_centre = -self._kwargs["gravity"] * (abs(x - centre_x) + abs(y - centre_y))
+            elif self.curr_tgt_zx_type in ["T", "XZ"]:
+                centre_x, centre_y, _ = centre_coords
+                mean_d_to_centre = np.sum(
+                    [(abs(x - centre_x) + abs(y - centre_y)) for x, y, _ in coords_in_path]
+                ) / len(coords_in_path)
+                pull_to_centre = -self._kwargs["gravity"] * mean_d_to_centre
 
         # Return cumulative value
         path_value = len_contrib + broken_beams_contrib + out_of_bounds + z_push + pull_to_centre

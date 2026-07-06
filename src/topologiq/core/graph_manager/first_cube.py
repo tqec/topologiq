@@ -11,7 +11,7 @@ import networkx as nx
 
 from topologiq.core.blocks import ZXBlock, ZXBlockRegistry
 from topologiq.core.pathfinder.symbolic import check_exits_add_beams
-from topologiq.utils.classes import CubeBeams
+from topologiq.utils.classes import CubeBeams, StandardCoord
 
 
 ###########
@@ -23,6 +23,7 @@ def get_first_cube_data(
     qubits: dict[int, int],
     inputs: list[int],
     beams_len_short: int,
+    first_coords: StandardCoord = (0, 0, 0),
     override_first_cube: tuple[int | None, str | None] = (None, None),
     random_seed: int | None = None,
 ) -> tuple[int, ZXBlock, CubeBeams, CubeBeams]:
@@ -37,8 +38,9 @@ def get_first_cube_data(
         qubits: Spiders organised by qubit.
         inputs: A list of spiders formally declared as graph inputs.
         beams_len_short: The length of any short beams.
+        first_coords (optional): First coords are (0,0,0) unless a specific value is given.
         override_first_cube: Override ID and kind (used to replicate specific cases).
-        random_seed: random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
+        random_seed: random_seed (optional): Typically `None`, but used to pass a seed across the entire algorithm.
 
     Returns:
         first_id: The ID of the first cube.
@@ -64,7 +66,9 @@ def get_first_cube_data(
     zx_block = ZXBlockRegistry.get_create(kind=first_kind)
 
     # Get and write beams for corresponding node
-    _, src_beams, src_beams_short = check_exits_add_beams(zx_block, (0, 0, 0), [], [(0, 0, 0)], beams_len_short)
+    _, src_beams, src_beams_short = check_exits_add_beams(
+        zx_block, first_coords, [], [first_coords], beams_len_short
+    )
 
     return first_id, other_ids, zx_block, src_beams, src_beams_short
 
@@ -241,7 +245,13 @@ def pick_first_id(
 
         # Randomly pick a spider from list of central spiders
         if first_id_strategy == "random":
-            first_id: int = random.choice([n_id for n_id, b in bgraph.nodes(data="zx_block") if b.zx_type not in ["O", "Y", "XZ", "T"]])
+            first_id: int = random.choice(
+                [
+                    n_id
+                    for n_id, b in bgraph.nodes(data="zx_block")
+                    if b.zx_type not in ["O", "Y", "XZ", "T"]
+                ]
+            )
         else:
             first_id: int = random.choice(central_nodes)
 
@@ -268,4 +278,3 @@ def pick_first_id(
         raise ValueError("ERROR @ pick_first_id. Invalid selection strategy.")
 
     return first_id, other_ids
-

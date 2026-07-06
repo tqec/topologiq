@@ -219,7 +219,7 @@ def gen_tent_tgt_coords(
     src_c: StandardCoord,
     max_manhattan: int = 1,
     taken: set[StandardCoord] = [],
-    overload: bool = False,
+    overload: int = 0,
     z_bounds: dict[str, int | None] = {},
 ) -> list[StandardCoord]:
     """Generate a number of potential placement positions for target node.
@@ -228,7 +228,7 @@ def gen_tent_tgt_coords(
         src_c: The (x, y, z) coordinates for the originating block.
         max_manhattan: Max. (Manhattan) distance between origin and target blocks.
         taken (optional): A list of coordinates already taken by previous operations.
-        overload (optional): True if there is a need to double the max manhattan distance.
+        overload (optional): True if there is a need to increase the max manhattan distance.
             Needed for special cubes requiring patterns that cannot always be complete with one single-axis move.
         z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
 
@@ -255,9 +255,8 @@ def gen_tent_tgt_coords(
         min_z_ok = t[2] >= z_bounds["min"] if z_bounds.get("min") else True
         return t not in taken and t != src_c and min_z_ok
 
-
     # Apply overload
-    max_manhattan = max_manhattan + 1 if overload and max_manhattan == 1 else max_manhattan
+    max_manhattan = max_manhattan + overload if max_manhattan == 1 else max_manhattan
 
     # Extract src coords
     sx, sy, sz = src_c
@@ -321,10 +320,9 @@ def gen_tent_tgt_coords(
 
     # Concatenate coords for overloaded returns
     if overload and max_manhattan <= 3:
-        all_coords_at_distance = [
-            *tent_coords[min(max_manhattan, 3)],
-            *tent_coords[min(max_manhattan - 1, 2)],
-        ]
+        all_coords_at_distance = []
+        for i in range(1, max_manhattan + 1):
+            all_coords_at_distance.extend(tent_coords[i])
     # Standard returns
     else:
         all_coords_at_distance = tent_coords[max_manhattan]

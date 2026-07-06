@@ -117,11 +117,9 @@ def gen_bounding_box(
 ##########
 def check_skip_move(
     nxt_coords: StandardCoord,
-    bounding_box: dict[str, dict[str, int]],
     curr_path_coords: list[StandardCoord],
     parametrised_taken: dict[int, dict[int, set[int]]],
-    cross_edge: bool,
-    special_target_kind: bool = False,
+    bounding_box: dict[str, dict[str, int]] | None = None,
 ) -> bool:
     """Check if current move should be skipped to speed up pathfinding process.
 
@@ -141,18 +139,17 @@ def check_skip_move(
     ):
         return True
 
-    if cross_edge or special_target_kind:
-        if bounding_box:
-            nxt_x, nxt_y, nxt_z = nxt_coords
-            if (
-                nxt_x < bounding_box["x"]["min"]
-                or nxt_x > bounding_box["x"]["max"]
-                or nxt_y < bounding_box["y"]["min"]
-                or nxt_y > bounding_box["y"]["max"]
-                or nxt_z < bounding_box["z"]["min"]
-                or nxt_z > bounding_box["z"]["max"]
-            ):
-                return True
+    if bounding_box:
+        nxt_x, nxt_y, nxt_z = nxt_coords
+        if (
+            nxt_x < bounding_box["x"]["min"]
+            or nxt_x > bounding_box["x"]["max"]
+            or nxt_y < bounding_box["y"]["min"]
+            or nxt_y > bounding_box["y"]["max"]
+            or nxt_z < bounding_box["z"]["min"]
+            or nxt_z > bounding_box["z"]["max"]
+        ):
+            return True
 
     return False
 
