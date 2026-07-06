@@ -45,6 +45,7 @@ if __name__ == "__main__":
     pyzx_graph, _ = random_graph(
         qubit_n,
         depth,
+        p_t=0.2,
         draw_graph=True,
         graph_type="cnot_had_phase" if had_phase else "cnot",
         **kwargs,

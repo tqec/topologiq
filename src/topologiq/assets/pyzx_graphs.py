@@ -567,17 +567,18 @@ def ghz(
 
 
 def random_graph(
-    qubit_n: int, depth: int, graph_type: str = "cnot", draw_graph: bool = False, **kwargs
+    qubit_n: int, depth: int, p_t: int = 0.2, graph_type: str = "cnot", draw_graph: bool = False, **kwargs
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Produce a random PyZX graph.
 
     Args:
         qubit_n: The number of qubit lines in the desired graph.
         depth: The depth of the desired graph.
-        graph_type: The type of graph to generate.
+        p_t (optional): Probability of getting a T-gate.
+        graph_type (optional): The type of graph to generate.
             "cnot": A graph composed of only CNOTs.
             "cnot_had_phase": A graph with CNOTs, Hadamards, and phases.
-        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+        draw_graph (optional): Whether to pop-up PyZX graph visualisation or not.
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -606,7 +607,7 @@ def random_graph(
         # Generate a graph
         if graph_type == "cnot_had_phase":
             pyzx_circuit = zx.generate.CNOT_HAD_PHASE_circuit(
-                qubits=qubit_n, depth=depth, clifford=False, p_t=0.1
+                qubits=qubit_n, depth=depth, clifford=False, p_t=p_t
             )
             pyzx_graph = pyzx_circuit.to_graph()
         elif graph_type == "cnot":

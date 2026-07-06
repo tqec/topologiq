@@ -238,12 +238,32 @@ class BlockGraphVisualiser:
             self.update_global_highlights(set())
             return
 
+        # Check for our new string-based identifiers or custom node list attributes
+        is_string_gid = isinstance(gid, str)
+        is_node_layer = (
+            isinstance(gid, list)
+            or hasattr(artist, "node_ids")
+            or (is_string_gid and gid.startswith("nodes_"))
+            or (is_string_gid and gid == "overlay_nodes_layer")
+        )
+
+        is_edge_layer = isinstance(gid, tuple) or (is_string_gid and gid.startswith("edge_"))
+
         # Structural pattern match based on (label, is_node, is_edge)
-        match (label, isinstance(gid, list), isinstance(gid, tuple)):
+        match (label, is_node_layer, is_edge_layer):
             case (_, True, False):
-                self._handle_node_pick(event, gid)
-            case (_, False, True) if gid[0] == "edge":
-                self._handle_edge_pick(event, gid)
+                # Ensure a list-like object fallback gets routed safely down to the picker
+                node_list = getattr(artist, "node_ids", gid if isinstance(gid, list) else [])
+                self._handle_node_pick(event, node_list)
+            case (_, False, True):
+                # Normalize edge key strings back to tuples format if needed by downstream unpackers
+                edge_tuple = gid
+                if is_string_gid and gid.startswith("edge_"):
+                    # Converts "edge_u_v" -> ("edge", "u", "v")
+                    parts = gid.split("_")
+                    if len(parts) >= 3:
+                        edge_tuple = ("edge", parts[1], parts[2])
+                self._handle_edge_pick(event, edge_tuple)
             case (l, False, False) if (
                 isinstance(l, str)
                 and l
@@ -272,8 +292,20 @@ class BlockGraphVisualiser:
 
     def _handle_node_pick(self, event: Any, gid: list):
         """Process click events falling inside scatter collection node clusters."""
-        if hasattr(event, "ind") and len(event.ind) > 0 and event.ind[0] < len(gid):
-            clicked_node = str(gid[event.ind[0]])
+        # Get the artist object responsible for catching the mouse click
+        artist = getattr(event, "artist", None)
+
+        # Use custom node_ids attached to artist or fall back to the original gid parameter.
+        active_node_sequence = getattr(artist, "node_ids", gid)
+
+        if (
+            hasattr(event, "ind")
+            and len(event.ind) > 0
+            and event.ind[0] < len(active_node_sequence)
+        ):
+            # Extract using the data index from the chosen array sequence
+            clicked_node = str(active_node_sequence[event.ind[0]])
+
             if event.mouseevent is not None:
                 self._last_node_click_coord = (event.mouseevent.x, event.mouseevent.y)
 
@@ -1251,8 +1283,12 @@ class View2D:
             picker=True,
             zorder=3,
         )
-        # Convert the entire container to a safe string descriptor for Jupyter SVG canvas
-        nodes_scatter.set_gid(f"nodes_{'_'.join(map(str, node_ids))}")
+
+        # Keep a safe, static generic label string for the SVG vector backend
+        nodes_scatter.set_gid("overlay_nodes_layer")
+
+        # Bind the actual node ID sequence directly to the object data dictionary
+        nodes_scatter.node_ids = list(node_ids)
 
         # Safely clean out pre-existing local panel selection markers
         current_panel_key = "in_zx" if ax == self._overlay_axes.get("in_zx") else "base_graph"
