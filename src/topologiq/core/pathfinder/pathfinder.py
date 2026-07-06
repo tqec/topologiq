@@ -25,15 +25,16 @@ from collections import deque
 import networkx as nx
 import numpy as np
 
-from topologiq.core.blocks import PositionedZXBlock, ZXBlock
+from topologiq.core.blocks import PositionedZXBlock, ZXBlock, ZXBlockRegistry
+from topologiq.core.pathfinder.aux import gen_exit_conditions, init_bfs
 from topologiq.core.pathfinder.spatial import (
+    check_clashes_parametrised_taken,
     check_skip_move,
     gen_bounding_box,
     get_coords_for_current_move,
 )
-from topologiq.core.pathfinder.utils import gen_exit_conditions, init_bfs
-from topologiq.utils.classes import CubeBeams, StandardBlock, StandardCoord
-from topologiq.utils.misc import get_manhattan
+from topologiq.utils.classes import CubeBeams, GraphBounds, StandardBlock, StandardCoord
+from topologiq.utils.manhattan import get_manhattan
 
 
 ############################
@@ -50,7 +51,8 @@ def pathfinder(
     taken: set[StandardCoord],
     pruned_taken: set[StandardCoord],
     is_hadamard: bool,
-    time_order_pre: dict[int, set[int]],
+    z_bounds: dict[str, int | None] = {},
+    graph_bounds: GraphBounds | None = None,
     **kwargs,
 ) -> tuple[
     dict[PositionedZXBlock, list[PositionedZXBlock]] | None,
@@ -81,7 +83,8 @@ def pathfinder(
         taken: The set of taken coordinates.
         pruned_taken: A pruned version of taken not containing source and target coordinates.
         is_hadamard: True if the current edge is a Hadamard in the input ZX graph.
-        time_order_pre (optional): A dictionary with cube ID that must be placed after their respective dependencies.
+        z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
+        graph_bounds (optional): A tuple of max_x and max_y coordinates to maintain build within bounds.
         **kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
@@ -96,10 +99,6 @@ def pathfinder(
     src_zx_block: ZXBlock = bgraph.nodes[curr_src_id]["zx_block"]
     tgt_zx_block: ZXBlock = bgraph.nodes[curr_tgt_id]["zx_block"]
     src_coords: StandardCoord = bgraph.nodes[curr_src_id]["coords"]
-    if curr_tgt_id in time_order_pre:
-        time_order_pre_coords = [bgraph.nodes[cube_id]["coords"] for cube_id in time_order_pre[curr_tgt_id]]
-    else:
-        time_order_pre_coords = None
 
     # Parametrise taken
     parametrised_taken: dict[int, list[tuple[int, int]]] = {}
@@ -113,7 +112,9 @@ def pathfinder(
     tent_tgt_kinds = tgt_zx_block.kind if cross_edge else tgt_zx_block.get_kind_family
 
     # Create bounding box to limit space search
-    bounding_box, max_span = gen_bounding_box(taken, cross_edge=cross_edge)
+    bounding_box, max_span = gen_bounding_box(
+        taken, cross_edge=cross_edge, graph_bounds=graph_bounds
+    )
 
     # Initialise BFS
     queue, visited, visit_attempts, path, valid_paths, all_search_paths = init_bfs(
@@ -134,10 +135,16 @@ def pathfinder(
         kwargs["min_succ_rate"],
         special_target_kind=tgt_zx_block.zx_type in ["Y", "T", "XZ"],
     )
+    tgts_to_fill = min(10, tgts_to_fill)
 
     # Manage queue
     hdm = is_hadamard
+    break_for_success = False
     while queue:
+        # Flag to exit prematurely due to success
+        if break_for_success:
+            break
+
         # Unpack current block (source for iteration)
         curr_block_positioned: PositionedZXBlock = queue.popleft()
         curr_coords: StandardCoord = curr_block_positioned[0]
@@ -148,34 +155,24 @@ def pathfinder(
         if curr_manhattan > src_tgt_manhattan * 3:
             continue
         if curr_manhattan > max_manhattan:
-            pass  # Need to eventually delete, leaving it here for debugging purposes
+            continue
 
         # Check for success
         if curr_coords in tent_coords:
-            if _check_for_success(
-                curr_block_positioned,
-                tent_tgt_kinds,
-                path,
-                valid_paths,
-                tgts_to_fill,
-                pruned_taken,
-                time_order_pre_coords=time_order_pre_coords,
-            ):
-                break
-            else:
-                if cross_edge or curr_zx_block.zx_type in ["Y", "T", "XZ"]:
-                    continue
+            if cross_edge or curr_zx_block.zx_type in ["Y", "T", "O"]:
+                continue
 
         # Avoid multiple special gates on same path
-        if tgt_zx_block.zx_type in ["Y", "T", "XZ"]:
+        if tgt_zx_block.zx_type in ["Y", "T"]:
             if any(
-                [zx_b.zx_type == tgt_zx_block.zx_type for _, zx_b in path[curr_block_positioned]]
+                [
+                    zx_b.zx_type == tgt_zx_block.zx_type
+                    for _, zx_b in path[curr_block_positioned][1:]
+                ]
             ):
                 continue
 
         # Check path for beam clashes before attempting move
-
-        # Select short of full beams as appropriate
         if _check_beams_clashes(
             bgraph,
             curr_block_positioned,
@@ -206,7 +203,7 @@ def pathfinder(
                 curr_path_coords,
                 parametrised_taken,
                 cross_edge,
-                special_target_kind=tgt_zx_block.zx_type in ["Y", "T", "XZ"],
+                special_target_kind=tgt_zx_block.zx_type in ["Y", "T"],
             ):
                 continue
 
@@ -217,6 +214,7 @@ def pathfinder(
                 tgt_zx_type=tgt_zx_block.zx_type,
             )
 
+
             # Loop over all possible next types
             for possible_nxt_zx_block in possible_nxt_zx_blocks:
                 # Check if next kind needs to be rotated due to Hadamard
@@ -224,6 +222,23 @@ def pathfinder(
                     nxt_coords,
                     possible_nxt_zx_block,
                 )
+
+                if possible_nxt_zx_block.zx_type == "T":
+                    nxt_x, nxt_y, nxt_z = nxt_coords
+                    skip_possible_nxt_zx_block = False
+                    for i in [1, 2]:
+                        if check_clashes_parametrised_taken(
+                            (nxt_x, nxt_y, nxt_z - i), parametrised_taken
+                        ):
+                            skip_possible_nxt_zx_block = True
+                        if (nxt_x, nxt_y, nxt_z - i) in taken or (
+                            nxt_x,
+                            nxt_y,
+                            nxt_z - i,
+                        ) in curr_path_coords:
+                            skip_possible_nxt_zx_block = True
+                    if skip_possible_nxt_zx_block:
+                        continue
 
                 # Log to visited and update path lengths if all conditions met
                 queue, visited, path, visit_attempts, all_search_paths = _to_visit_or_not_to_visit(
@@ -237,10 +252,29 @@ def pathfinder(
                     all_search_paths,
                 )
 
+                # Check for success
+                if nxt_coords in tent_coords:
+                    if _check_for_success(
+                        (nxt_coords, possible_nxt_zx_block),
+                        tgt_zx_block.zx_type,
+                        tent_tgt_kinds,
+                        path,
+                        valid_paths,
+                        tgts_to_fill,
+                        pruned_taken,
+                        z_bounds=z_bounds,
+                    ):
+                        break_for_success = True
+                        break
+
+            if break_for_success:
+                break
+
         # Hadamards are introduce on very first move so once loop clears first
         # set of possible moves, there can be no more Hadamards in a specific edge.
         hdm = False
 
+    # Exit by default
     return valid_paths, (tent_tgt_kinds, visit_attempts, len(visited), all_search_paths)
 
 
@@ -364,59 +398,91 @@ def _to_visit_or_not_to_visit(
 
 
 def _check_for_success(
-    curr_block_positioned: PositionedZXBlock,
+    nxt_block_positioned: PositionedZXBlock,
+    tgt_block_zx_type: str,
     tent_tgt_kinds: list[str],
     path: dict[PositionedZXBlock, list[PositionedZXBlock]],
     valid_paths: dict[PositionedZXBlock, list[PositionedZXBlock]],
     tgts_to_fill: int,
     pruned_taken: set[StandardCoord],
-    time_order_pre_coords: list[StandardCoord] | None,
+    z_bounds: dict[str, int | None] = {},
 ) -> tuple[dict[PositionedZXBlock, list[PositionedZXBlock]], bool]:
     """Check if iteration achieved success.
 
     Args:
-        curr_block_positioned: The positioned ZX block (coordinates, zx_block).
+        nxt_block_positioned: The positioned ZX block (coordinates, zx_block).
+        tgt_block_zx_type: The ZX type of the target block.
         tent_tgt_kinds: A list of kinds matching the zx-type of target block.
         path: The full path object for the entire BFS.
         valid_paths: All paths found in round covering some or all tent_coords.
         tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
         pruned_taken: A pruned version of taken not containing source and target coordinates.
-        time_order_pre_coords (optional): Coordinates that must in the past of current target.
+        z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
 
     Return:
         [bool]: True if success was achieved in this iteration, else False.
 
     """
 
-    curr_coords, _ = curr_block_positioned
+    # Extract last block in path
+    nxt_coords, _ = nxt_block_positioned
 
-    if time_order_pre_coords:
-        if any([coords[2] >= curr_coords[2] for coords in time_order_pre_coords]):
-            return False
+    # Separate checks into categories for readability
+    fail_time_constraints = False
+    fail_time_constraints_2 = False
+    fail_special_cube_constraints = False
 
-    if tent_tgt_kinds[0] in ["YYO", "TTO", "XZ*", "ZX*"]:
-        if curr_coords in list([c for c, _ in valid_paths.keys()]):
-            return False
+    # Check time constraints
+    if z_bounds.get("min"):
+        fail_time_constraints = z_bounds["min"] >= nxt_coords[2]
 
+    if not fail_time_constraints and z_bounds.get("max"):
+        fail_time_constraints_2 = z_bounds["max"] <= nxt_coords[2]
+
+    if fail_time_constraints or fail_time_constraints_2:
+        return False
+
+    # Check special cube conditions
+    if tgt_block_zx_type in ["Y", "T", "XZ", "O"]:
+        fail_special_cube_constraints = nxt_coords in list([c for c, _ in valid_paths.keys()])
         if tent_tgt_kinds == ["TTO"]:
-            curr_path_coords = [coords for coords, _ in path[curr_block_positioned]]
+            curr_path_coords = [coords for coords, _ in path[nxt_block_positioned]]
             for i in range(1, 4):
-                check_coords = (curr_coords[0], curr_coords[1], curr_coords[2] - i)
-                if check_coords in pruned_taken or check_coords in curr_path_coords:
-                    return False
+                check_coords = (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i)
+                fail_special_cube_constraints = (
+                    check_coords in pruned_taken or check_coords in curr_path_coords
+                )
+    if fail_special_cube_constraints:
+        return False
 
-        if tent_tgt_kinds[0] in ["TTO", "ZX*", "XZ*"]:
-            prev_coords = path[curr_block_positioned][-2][0]
-            last_z_diff = abs(curr_coords[2]) - abs(prev_coords[2])
-            last_z_diff = 1 if last_z_diff > 0 else -1 if last_z_diff < 0 else 0
-            valid_last_diffs = [-1] if tent_tgt_kinds[0] == "TTO" else [1]
-            if last_z_diff not in valid_last_diffs:
-                return False
+    if tgt_block_zx_type == "T":
+        goes_down = path[nxt_block_positioned][-2][0][2] > nxt_coords[2]
+        if not goes_down:
+            fail_special_cube_constraints = True
 
-    if tent_tgt_kinds == ["OOO"] or curr_block_positioned[1].kind in tent_tgt_kinds:
-        valid_paths[curr_block_positioned] = path[curr_block_positioned]
-        if tent_tgt_kinds[0] not in ["YYO", "TTO", "ZX*", "XZ*"]:
-            tgts_filled = len(set([p[0] for p in valid_paths.keys()]))
+    if tgt_block_zx_type == "XZ":
+        goes_up = path[nxt_block_positioned][-2][0][2] < nxt_coords[2]
+        if not goes_up:
+            fail_special_cube_constraints = True
+
+    if fail_special_cube_constraints:
+        return False
+
+    # For all cases, return true only if standard checks clear
+    if tgt_block_zx_type == "O" or nxt_block_positioned[1].kind in tent_tgt_kinds:
+        if tgt_block_zx_type in ["XZ"]:
+            nxt_kind = nxt_block_positioned[1].kind[:2] + "*"
+            xz_block = ZXBlockRegistry.get_create(kind=nxt_kind)
+            path[(nxt_coords, xz_block)] = [
+                *path[nxt_block_positioned][:-1],
+                (nxt_coords, xz_block),
+            ]
+            valid_paths[(nxt_coords, xz_block)] = path[(nxt_coords, xz_block)]
+        else:
+            valid_paths[nxt_block_positioned] = path[nxt_block_positioned]
+
+        if tgt_block_zx_type not in ["Y", "T", "O"]:
+            tgts_filled = min(len([p[0] for p in valid_paths.keys()]), 10)
             if tgts_filled >= tgts_to_fill:
                 return True
 

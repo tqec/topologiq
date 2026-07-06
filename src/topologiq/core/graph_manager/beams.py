@@ -25,7 +25,7 @@ def check_beam_clashes(
     coords_in_path: list[StandardCoord],
     strict: bool = False,
     twin_mode: bool = False,
-    ids_to_twin: list[int] = [],
+    extra_allowance: bool = False,
 ) -> tuple[bool, int]:
     """Determine if placement triggers critical multi-beam clashes.
 
@@ -45,7 +45,7 @@ def check_beam_clashes(
         coords_in_path: All coords in the current path.
         strict (optional): Whether to perform a strict or loose check.
         twin_mode (optional): True if the current edge is part of a twin creation cycle.
-        ids_to_twin (optional): A pre-existing list of IDs that need twins.
+        extra_allowance (optional): Number of extra beams that can be ignored beyond threshold.
 
     Returns:
         clash: False if no critical beam clashed found, else True.
@@ -87,11 +87,15 @@ def check_beam_clashes(
                 if twin_mode or not strict
                 else bgraph.nodes[cube_id]["completions"]["pending"]
             )
+            if extra_allowance:
+                in_threshold = in_threshold - extra_allowance
             if len(all_beams_to_check[cube_id]) - cube_clash_count + src_tgt_adjust < in_threshold:
                 beams_broken_by_path += 1
                 clash = True
 
     out_threshold = bgraph.nodes[curr_tgt_id]["completions"]["pending"] - 1
+    if extra_allowance:
+        out_threshold = out_threshold - extra_allowance
     if len(tgt_beams_to_check) - sum(tgt_clash_tracker) < out_threshold:
         beams_broken_by_path += 1
         clash = True
@@ -102,8 +106,7 @@ def check_beam_clashes(
 
     # Loop over all cubes in 3D space looking for conflicts with path
     for cube_id in bgraph.nodes():
-        # Loop is cumulative,
-        # skip rest of sequence if clash is detected
+        # Skip rest of sequence if clash is detected
         if clash:
             break
 
@@ -124,6 +127,8 @@ def check_beam_clashes(
                 if twin_mode
                 else bgraph.nodes[cube_id]["completions"]["pending"]
             )
+            if extra_allowance:
+                threshold = threshold - extra_allowance
             src_tgt_adjust = (
                 1 if (cube_id in [curr_src_id, curr_tgt_id] and curr_src_id != curr_tgt_id) else 0
             )
@@ -161,6 +166,13 @@ def check_beam_clashes_for_twins(
 
     # Select short or full beams as appropriate
     all_beams_to_check = all_beams if strict else all_beams_short
+
+    # Start by adding any nodes that still need connections and have no beams
+    [
+        ids_to_twin.add(cube_id)
+        for cube_id, attrs in bgraph.nodes(data=True)
+        if attrs["coords"] and attrs["completions"]["pending"] > 0 and cube_id not in all_beams_to_check
+    ]
 
     # Check beams of all cubes against target beams
     for out_id, out_beams in all_beams_to_check.items():

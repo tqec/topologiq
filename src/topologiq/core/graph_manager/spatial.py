@@ -5,6 +5,7 @@ Usage:
 
 """
 
+import itertools
 import math
 import random
 
@@ -219,6 +220,7 @@ def gen_tent_tgt_coords(
     max_manhattan: int = 1,
     taken: set[StandardCoord] = [],
     overload: bool = False,
+    z_bounds: dict[str, int | None] = {},
 ) -> list[StandardCoord]:
     """Generate a number of potential placement positions for target node.
 
@@ -228,21 +230,41 @@ def gen_tent_tgt_coords(
         taken (optional): A list of coordinates already taken by previous operations.
         overload (optional): True if there is a need to double the max manhattan distance.
             Needed for special cubes requiring patterns that cannot always be complete with one single-axis move.
+        z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
 
     Returns:
         all_coords_at_distance: A list of tentative target coordinates that make good candidates for placing the target block.
 
     """
 
-    # APPLY OVERLOAD IF NEEDED
-    max_manhattan = max_manhattan + 1 if overload else max_manhattan
+    def _sums(n, k):
+        for combo in itertools.combinations(range(n + k - 1), k - 1):
+            s = [combo[0]]
+            s.extend([(combo[i] - combo[i - 1] - 1) for i in range(1, k - 1)])
+            s.append(n + k - 2 - combo[k - 2])
+            yield s
 
-    # EXTRACT SOURCE COORDS
+    def _manhattan_sphere(point, step):
+        k = len(point)
+        for differences in _sums(step, k):
+            signed_differences = [[-d, d] if d != 0 else [d] for d in differences]
+            for p in itertools.product(*signed_differences):
+                yield [x + d for x, d in zip(point, p)]
+
+    def _approve_target(t: StandardCoord):
+        min_z_ok = t[2] >= z_bounds["min"] if z_bounds.get("min") else True
+        return t not in taken and t != src_c and min_z_ok
+
+
+    # Apply overload
+    max_manhattan = max_manhattan + 1 if overload and max_manhattan == 1 else max_manhattan
+
+    # Extract src coords
     sx, sy, sz = src_c
     base_for_next_layer = []
     tent_coords = {}
 
-    # SINGLE MOVES
+    # Single moves for full coverage of any max Manhattan < 3
     tgts = [
         (sx + 1, sy, sz),
         (sx - 1, sy, sz),
@@ -251,12 +273,15 @@ def gen_tent_tgt_coords(
         (sx, sy, sz + 1),
         (sx, sy, sz - 1),
     ]
-    tent_coords[1] = [t for t in tgts if t not in taken]
+
+    # Manhattan 1
+    tent_coords[1] = [t for t in tgts if _approve_target(t)]
     base_for_next_layer = [t for t in tgts]
 
-    # MANHATTAN 6
+    # Manhattan 2
     if max_manhattan > 1:
         tent_coords[2] = []
+        all_tgts_at_distance = []
         for dx, dy, dz in [c for c in base_for_next_layer]:
             tgts = [
                 (dx + 1, dy, dz),
@@ -266,12 +291,14 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz + 1),
                 (dx, dy, dz - 1),
             ]
-            tent_coords[2].extend([t for t in tgts if t not in taken and t != src_c])
-            base_for_next_layer.extend([t for t in tgts])
+            tent_coords[2].extend([t for t in tgts if _approve_target(t)])
+            all_tgts_at_distance.extend([t for t in tgts])
+        base_for_next_layer = all_tgts_at_distance
 
-    # MANHATTAN 9
+    # Manhattan 3
     if max_manhattan > 2:
         tent_coords[3] = []
+        all_tgts_at_distance = []
         for dx, dy, dz in [c for c in base_for_next_layer]:
             tgts = [
                 (dx + 1, dy, dz),
@@ -281,36 +308,26 @@ def gen_tent_tgt_coords(
                 (dx, dy, dz + 1),
                 (dx, dy, dz - 1),
             ]
-            tent_coords[3].extend([t for t in tgts if t not in taken and t != src_c])
-            base_for_next_layer.extend([t for t in tgts])
+            tent_coords[3].extend([t for t in tgts if _approve_target(t)])
+            all_tgts_at_distance.extend([t for t in tgts])
+        base_for_next_layer = all_tgts_at_distance
 
-    # > MANHATTAN 9
+    # Manhattan sphere for max Manhattan > 3
     if max_manhattan > 3:
-        tent_coords[max_manhattan] = []
-        num_loops = int(max_manhattan - 3)
-
-        for _ in [i + 1 for i in range(num_loops)]:
-            for dx, dy, dz in [c for c in base_for_next_layer]:
-                tgts = [
-                    (dx + 1, dy, dz),
-                    (dx - 1, dy, dz),
-                    (dx, dy + 1, dz),
-                    (dx, dy - 1, dz),
-                    (dx, dy, dz + 1),
-                    (dx, dy, dz - 1),
-                ]
-                tent_coords[max_manhattan].extend(
-                    [t for t in tgts if t not in taken and t != src_c]
-                )
-                base_for_next_layer.extend([t for t in tgts])
-
-    if overload:
-        all_coords_at_distance = [
-            *tent_coords[min(max_manhattan, 5)],
-            *tent_coords[min(max_manhattan - 1, 4)],
+        tgts = [
+            (int(c[0]), int(c[1]), int(c[2])) for c in list(_manhattan_sphere(src_c, max_manhattan))
         ]
+        tent_coords[max_manhattan] = [t for t in tgts if _approve_target(t)]
+
+    # Concatenate coords for overloaded returns
+    if overload and max_manhattan <= 3:
+        all_coords_at_distance = [
+            *tent_coords[min(max_manhattan, 3)],
+            *tent_coords[min(max_manhattan - 1, 2)],
+        ]
+    # Standard returns
     else:
-        all_coords_at_distance = tent_coords[min(max_manhattan, 5)]
+        all_coords_at_distance = tent_coords[max_manhattan]
 
     return all_coords_at_distance
 
@@ -323,6 +340,7 @@ def pipe_kind_inference(
     u: int,
     v: int,
     is_hadamard: bool = False,
+    tent_coords: StandardCoord | None = None,
 ) -> tuple[StandardCoord, StandardCoord, str]:
     """Infer the pipe kind between two cubes.
 
@@ -331,6 +349,7 @@ def pipe_kind_inference(
         u: And ID to override the ID of the source cube.
         v: And ID to override the ID of the target cube.
         is_hadamard: Whether the pipe is a Hadamard pipe.
+        tent_coords: Coords to override health checks to check a tentative placement.
 
     """
 
@@ -343,15 +362,20 @@ def pipe_kind_inference(
         raise ValueError(
             "ERROR. Cannot infer pipe kind. Source and target must have a connecting edge."
         )
-    if not bgraph.nodes[u]["coords"] or not bgraph.nodes[v]["coords"]:
+    if not bgraph.nodes[u]["coords"] or (not bgraph.nodes[v]["coords"] or tent_coords):
         raise ValueError(
             "ERROR. Cannot infer pipe kind. Source and target must have a pre-defined position."
         )
 
     # Determine base kind
-    base_id, end_id = (u, v) if bgraph.nodes[u]["coords"] < bgraph.nodes[v]["coords"] else (v, u)
+    base_id, end_id = (
+        (u, v)
+        if bgraph.nodes[u]["coords"]
+        < (bgraph.nodes[v]["coords"] if not tent_coords else tent_coords)
+        else (v, u)
+    )
     start_coords = bgraph.nodes[base_id]["coords"]
-    end_coords = bgraph.nodes[end_id]["coords"]
+    end_coords = bgraph.nodes[end_id]["coords"] if not tent_coords else tent_coords
     base_kind = bgraph.nodes[base_id]["zx_block"].kind
 
     # Determine pipe direction

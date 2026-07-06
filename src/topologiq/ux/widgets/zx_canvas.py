@@ -30,8 +30,8 @@ from PySide6.QtWidgets import (
 from vispy import scene
 from vispy.color import Color
 
-from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
 from topologiq.input.zx_manager import AugmentedZXGraph
+from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 from topologiq.ux.utils import styles
 from topologiq.ux.utils.aux import create_split_controls
 

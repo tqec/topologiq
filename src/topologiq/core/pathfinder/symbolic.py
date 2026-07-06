@@ -74,6 +74,7 @@ def check_exits_add_beams(
     src_coords: StandardCoord,
     taken: set[StandardCoord],
     coords_in_path: list[StandardCoord],
+    beams_len_short: int,
 ) -> tuple[int, CubeBeams, CubeBeams]:
     """Find the number of unobstructed exits for an arbitrary block and attach beams to them.
 
@@ -82,6 +83,7 @@ def check_exits_add_beams(
         src_coords: The (x, y, z) coordinates for the ZX block.
         taken: The coordinates taken by any blocks placed as a result of previous operations.
         coords_in_path: The coordinates taken by the path under current evaluation.
+        beams_len_short: The length of any short beams.
 
     Returns:
         unobstr_exits_n: The number of unobstructed exist for the block.
@@ -104,7 +106,7 @@ def check_exits_add_beams(
         )
 
         is_unobstr, single_beam, single_beam_short = check_unobstructed(
-            src_coords, tgt_coords, taken
+            src_coords, tgt_coords, taken, beams_len_short,
         )
         if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
             unobstr_exits_n += 1
@@ -120,6 +122,7 @@ def check_unobstructed(
     src_c: StandardCoord,
     tgt_c: StandardCoord,
     taken: set[StandardCoord],
+    beams_len_short: int,
 ) -> tuple[bool, SingleBeam]:
     """Check if a face is unobstructed.
 
@@ -129,6 +132,7 @@ def check_unobstructed(
         src_c: The (x, y, z) coordinates for the current block/pipe.
         tgt_c: The coordinates for the target block/pipe.
         taken: The coordinates taken by any blocks/pipes placed as a result of previous operations.
+        beams_len_short: The length of any short beams.
 
     Returns:
         (bool): True if face is unobstructed else False.
@@ -163,17 +167,17 @@ def check_unobstructed(
 
     x_start, x_end, x_direction = (
         src_c[0],
-        src_c[0] if diffs[0] == 0 else src_c[0] + diffs[0] * 9,
+        src_c[0] if diffs[0] == 0 else src_c[0] + diffs[0] * beams_len_short,
         diffs[0],
     )
     y_start, y_end, y_direction = (
         src_c[1],
-        src_c[1] if diffs[1] == 0 else src_c[1] + diffs[1] * 9,
+        src_c[1] if diffs[1] == 0 else src_c[1] + diffs[1] * beams_len_short,
         diffs[1],
     )
     z_start, z_end, z_direction = (
         src_c[2],
-        src_c[2] if diffs[2] == 0 else src_c[2] + diffs[2] * 9,
+        src_c[2] if diffs[2] == 0 else src_c[2] + diffs[2] * beams_len_short,
         diffs[2],
     )
 

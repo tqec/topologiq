@@ -16,7 +16,7 @@ import pyzx as zx
 from pyzx.circuit import Circuit
 
 from topologiq.core.graph_manager.graph_manager import BlockGraphManager
-from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
+from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 
 
 ######################
@@ -181,6 +181,12 @@ class AugmentedZXGraph:
             zx_graph = cls._rm_lonely_resets(zx_graph)
             zx_graph = cls._rm_post_measurement_spiders(zx_graph)
 
+        for ph in zx_graph.phases().values():
+            if ph == Fraction(1, 4):
+                zx.simplify.gadgetize(zx_graph, graphlike=False)
+                zx.id_simp(zx_graph)
+                break
+
         return cls(zx_graph)
 
     @classmethod
@@ -228,7 +234,6 @@ class AugmentedZXGraph:
 
     def get_blockgraph(
         self: AugmentedZXGraph,
-        circuit_name: str = "primary",
         use_reduced: bool = False,
         final_vis=False,
         **kwargs,

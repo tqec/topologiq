@@ -21,9 +21,8 @@ from typing import ClassVar
 
 import numpy as np
 
-from topologiq.input.utils import ZXColors
 from topologiq.utils.classes import CubeBeams, StandardCoord
-from topologiq.utils.misc import kind_to_zx_type
+from topologiq.utils.zx import ZXColors, kind_to_zx_type
 
 
 #########################################
@@ -101,7 +100,7 @@ class ZXBlock:
             "X": ["ZXZ", "ZZX", "XZZ"],
             "Y": ["YYO"],
             "Z": ["XZX", "XXZ", "ZXX"],
-            "XZ": ["ZX*", "XZ*"],
+            "XZ": ["XZX", "XXZ", "ZXX", "ZXZ", "ZZX", "XZZ"],
             "T": ["TTO"],
             "O": ["OOO"],
             "BOUNDARY": ["OOO"],
@@ -198,11 +197,6 @@ class ZXBlock:
             kind = tgt_zx_type * 2 + "O"
             all_zx_blocks.append(ZXBlockRegistry.get_create(kind=kind))
 
-        # Add XZ to sequence if target is ZX-cube
-        if tgt_zx_type == "XZ" and move == (0, 0, 1):
-            all_zx_blocks.append(ZXBlockRegistry.get_create(kind="XZ*"))
-            all_zx_blocks.append(ZXBlockRegistry.get_create(kind="ZX*"))
-
         if is_hadamard:
             rotated_kind = rotate_block_kind(self.kind, move)
             alt_self = ZXBlockRegistry.get_create(kind=rotated_kind)
@@ -292,7 +286,9 @@ class ZXBlock:
             src_kind_new = alt_self.kind[:move_idx] + alt_self.kind[move_idx + 1 :]
         tgt_kind_new = tgt_zx_block.kind[:move_idx] + tgt_zx_block.kind[move_idx + 1 :]
 
-        if move_idx == 2 and tgt_zx_block.zx_type in ["Y", "T"]:
+        if move_idx == 2 and (
+            tgt_zx_block.zx_type == "Y" or (tgt_zx_block.zx_type == "T" and move[2] < 0)
+        ):
             src_kind_new = src_kind_new.replace("X", tgt_zx_block.zx_type).replace(
                 "Z", tgt_zx_block.zx_type
             )

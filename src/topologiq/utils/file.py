@@ -1,4 +1,4 @@
-"""Utilities to assist the management of the graph manager BFS.
+"""Utilities to assist the management of files across Topologiq.
 
 Usage:
     Call any function/class from a separate script.
@@ -9,9 +9,9 @@ import shutil
 from pathlib import Path
 
 
-###################
-# FILE MANAGEMENT #
-###################
+##############
+# TEMP FILES #
+##############
 def rm_temp_files(temp_dir_path: Path):
     """Remove any temporary files created during run."""
     try:

@@ -1,4 +1,4 @@
-"""Util facilities for logging and reading stats.
+"""Utilities to support logging and stats.
 
 Usage:
     Call any function/class from a separate script.
@@ -64,60 +64,6 @@ HEADER_PARAMS_STATS = [
 ############
 # WRITE  #
 ############
-def write_bgraph(
-    output_dir: Path | str,
-    circuit_name: str,
-    lat_nodes: dict[int, StandardBlock],
-    lat_edges: dict[tuple[int, int], list[str]],
-    in_spiders: list[int] = [],
-    out_spiders: list[int] = [],
-):
-    """Write final outputs to a `.bgraph` file.
-
-    Args:
-        output_dir: The path to the directory where results should be saved.
-        circuit_name: The name of the circuit.
-        path_to_output_file: Path to the .bgraph file being written.
-        lat_nodes: The cubes of the final space-time diagram produced by Topologiq.
-        lat_edges: The pipes of the final space-time diagram produced by Topologiq.
-        in_spiders: A list of in/start (depth=0) boundary spiders.
-        out_spiders: A list of out/end (depth=depth) boundary spiders
-
-    """
-
-    # Create output directory if it doesn't exist.
-    if not isinstance(output_dir, Path):
-        output_dir = Path(str(output_dir))
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Write to bgraph file
-    path_to_output_file = output_dir / f"{circuit_name}.bgraph"
-
-    with open(path_to_output_file, "w") as f:
-        f.write("BLOCKGRAPH 0.1.0;\n")
-        f.write("Produced using: Topologiq.\n")
-
-        f.write("\nMETADATA: attr_name; value;\n")
-        f.write("pipe_length; 2.0;\n")
-        f.write(f"circuit_name; {circuit_name};\n")
-
-        f.write("\nCUBES: index;x;y;z;kind;label;\n")
-        f.writelines(
-            [
-                f"{cube_id};{';'.join([str(c) for c in cube_info[0]])};{cube_info[1]};{add_port_label(cube_id, in_spiders, out_spiders)};\n"
-                for cube_id, cube_info in lat_nodes.items()
-            ]
-        )
-
-        f.write("\nPIPES: src;tgt;kind;\n")
-        f.writelines(
-            [
-                f"{src_id!s};{tgt_id!s};{pipe_info[0]};\n"
-                for (src_id, tgt_id), pipe_info in lat_edges.items()
-            ]
-        )
-
-
 def prep_stats_n_log(
     stats_type: str,
     op_success: bool,

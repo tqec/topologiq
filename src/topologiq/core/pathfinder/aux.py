@@ -1,4 +1,4 @@
-"""Utilities to assist the management of the pathfinder.
+"""Auxiliary functions for the management of the pathfinder.
 
 Usage:
     Call any function/class from a separate script.
@@ -9,11 +9,7 @@ from collections import deque
 
 from topologiq.core.blocks import PositionedZXBlock
 from topologiq.utils.classes import StandardBlock, StandardCoord
-from topologiq.utils.misc import get_max_manhattan
-
-#################
-# HEALTH CHECKS #
-#################
+from topologiq.utils.manhattan import get_max_manhattan
 
 
 ########
@@ -68,10 +64,14 @@ def gen_exit_conditions(
     if cross_edge or special_target_kind:
         tgts_to_fill = 1
         src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
-        max_manhattan = max(
-            get_max_manhattan(src_coords, taken) * 2,
-            max_span,
-        )
+        if cross_edge:
+            max_manhattan = max(
+                get_max_manhattan(src_coords, taken) * 2,
+                max_span,
+            )
+        else:
+            max_manhattan = src_tgt_manhattan + 6
+
     else:
         tgts_to_fill = int(len(tent_coords) * min_success_rate / 100)
         max_manhattan = get_max_manhattan(src_coords, tent_coords) * 2

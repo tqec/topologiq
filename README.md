@@ -4,13 +4,11 @@
 [![Unitary Foundation](https://img.shields.io/badge/Supported%20By-UNITARY%20FOUNDATION-FFFF00.svg?style=for-the-badge)](https://unitary.foundation)
 
 ## ✨ Overview
-Topologiq is a greedy BFS algorithm that attempts to minimise the volume of the final build, which we call BlockGraph but is also often referred to as space-time or pipe diagram.
-
 The general algorithmic rationale is as follows:
-- Topologiq traverses the input circuit graph using a BFS rationale, one edge at a time.
+- Topologiq traverses the input circuit graph using one of several BFS queue rationales, one edge at a time.
 - On each iteration, it greedily converts the edge into the shortest topologically-correct 3D path it can find.
   - Realised paths often correspond to the actual shortest path possible.
-  - Where not the case, it is typically because a shortest path is deemed an unavoidable obstacle for future placements.
+  - Where not the case, it can be because a shortest path is deemed an obstacle for future placements.
 
 An animated visualisation is given below, and the algorithm is described [here](docs/concepts/topologiq_algorithm.md).
 
@@ -21,7 +19,7 @@ An animated visualisation is given below, and the algorithm is described [here](
 ## 🔗 Gate support
 Topologiq supports the following gate set and combinations thereof:
 
-> NB! The block patterns in the images below are **NOT hard patterns**. Topologiq yields the patterns in the images if there are no other gates in the circuit. However, the patterns are flexible and will be bent and stretched in all sort of manners during the lattice surgery. That is, *literally*, what Topologiq does. It bends new patterns around old patterns in ways that do not break the topology of the computation.
+> NB! The block patterns in the images below are **SOFT patterns**. Topologiq yields the patterns in the images if there are no other gates in the circuit. However, the patterns are flexible and will bend and stretch during the lattice surgery. That is, *literally*, what Topologiq does. It bends patterns around in ways that do not break the topology of the computation.
 
 | CLIFFORD | | NON-CLIFFORD | |
 | -------- | ------------ | ------------ | ------------ |
@@ -32,7 +30,7 @@ Topologiq supports the following gate set and combinations thereof:
 | **S:** | ![Block pattern (S)](./docs/media/s.png) |  |  |
 
 ## 🏛️ Architecture
-Topologiq is designed to be (or at the very least, become) highly modular. The final goal is to allow others to easily use tailored component and/or develop end-to-end "flavours" re-interpreting several components. 
+Topologiq is designed to be (or at the very least, become) highly modular. The final goal is to allow others to easily use tailored components and/or develop end-to-end "flavours" re-interpreting several components.
 
 An overview of Topologiq's general architecture is available [here](docs/concepts/architecture.md).
 

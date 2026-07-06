@@ -1,4 +1,4 @@
-"""Utils shared by the core graph manager and pathfinder algorithms.
+"""Utilities to assist time-related operations in Topologiq.
 
 Usage:
     Call any function/class from a separate script.
@@ -8,6 +8,9 @@ Usage:
 from datetime import datetime
 
 
+######################################
+# TIMESTAMP & DURATION JOINT MANAGER #
+######################################
 def datetime_manager(
     t_1: datetime | None = None, t_2: datetime | None = None
 ) -> tuple[datetime, float]:

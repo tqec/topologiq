@@ -19,7 +19,7 @@ Example:
             "first_id_strategy": FIRST_ID_STRATEGY,
             "beams_len_short": BEAMS_SHORT_LEN,
             "seed": SEED,
-            "vis_options": (None, None),
+            "animate": ANIMATE,
             "max_attempts": MAX_ATTEMPTS,
             "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
             "min_succ_rate": MIN_SUCC_RATE,
@@ -47,16 +47,34 @@ Notes:
 
 """
 
-# Weights for the main value function to choose best of several valid paths (length of path, beams broken by path)
+# Weights for the main value function to choose best path
+# Hyperparams A tuple of integers where 1st item weighs the length of path and 2nd the number of beams broken by path.
+# Z_stretch: Int or None, to favour paths that move along Z axis and apply graph bounds.
+# Gravity: Int or None, to favour paths that end closer to a specific point in graph
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
+Z_STRETCH = 0
+GRAVITY = 0
 
 # Strategy for selecting the ID of the first spider processed by the algorithm
-# centrality-majority: Use a majority vote from several centrality measures
-# centrality-random: Pick randomly from a list of central spiders
-# first-spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
+# - first-spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
+# - random: Pick randomly from all non-boundary spiders
+# - centrality-random: Pick randomly from a list of central spiders
+# - centrality-majority: Use a majority vote from several centrality measures
+# - central-qubit: First spider in central qubit (per )
+# - central-in-first-cycle: Pick the central spider from the first cycle in graph (per nx.cycle_basis).
 FIRST_ID_STRATEGY = "first-spider"
 
-# Deterministic or randomised running mode
+# Strategy for graph traversing
+# - bfs: Standard BFS tree search including cross edges
+# - bfs-cross: Standard BFS giving priority to cross edges
+# - bfs-cross-boundaries-last: Standard BFS giving priority to cross edges and holding boundaries for the end
+# - bfs-cycles: BFS per cycles (per nx.cycle_basis) with bridge recovery subroutine (to join disconnected cycles) and boundary handling at the end
+# - bfs-rows: BFS per (ZX) rows in the graph, one row at a time
+# - bfs-cnots: BFS using central qubit and graph CNOTs as pillars (almost no longer a BFS but let's say it is).
+GRAPH_TRAVERSE_MODE = "bfs-cross"
+
+# Length of short beams
+# (Long beams are always np.inf)
 BEAMS_SHORT_LEN = 2
 
 # Single seed to use across any randomised operations
@@ -87,7 +105,7 @@ DEBUG = 0
 FIRST_CUBE = (None, None)
 
 # Default vis options
-VIS_OPTIONS = (None, None)
+ANIMATE = None
 
-# Strategy for graph traversing (bfs, bfs-cross, bfs-rows)
-GRAPH_TRAVERSE_MODE = "bfs-cross"
+# Whether to check and add twins
+TWINS = True

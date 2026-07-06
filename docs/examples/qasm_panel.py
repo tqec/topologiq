@@ -17,7 +17,7 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # Note. Topologiq auto-completes any KWARGs not given explicitly.
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
-kwargs = {"debug": 0}
+kwargs = {"debug": 1}
 
 
 #######

@@ -6,7 +6,6 @@ Usage:
 """
 
 import random
-from fractions import Fraction
 
 import matplotlib
 import matplotlib.figure
@@ -14,6 +13,8 @@ import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType
+
+from topologiq.utils.zx import apply_bialgebra, rm_unnecessary_phases
 
 
 ######################
@@ -34,7 +35,33 @@ def xyi(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure
     pyzx_circuit = zx.Circuit(1)
     pyzx_circuit.add_gate("NOT", 0)
     pyzx_graph = pyzx_circuit.to_graph()
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
+
+    fig = None
+    if draw_graph:
+        fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def memory(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Produce a PyZX graph with a single X and a single Z spider.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    pyzx_circuit = zx.Circuit(1)
+    pyzx_circuit.add_gate("Z", 0)
+    pyzx_circuit.add_gate("Z", 0)
+    pyzx_circuit.add_gate("Z", 0)
+    pyzx_graph = pyzx_circuit.to_graph()
+    rm_unnecessary_phases(pyzx_graph)
 
     fig = None
     if draw_graph:
@@ -62,7 +89,7 @@ def cnot_cz(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.fi
     pyzx_graph.remove_vertices([0, 3])
     pyzx_graph.set_inputs(tuple([1]))
     pyzx_graph.set_outputs(tuple([2]))
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
 
     fig = None
     if draw_graph:
@@ -95,7 +122,7 @@ def one_hadamard(
     pyzx_graph.remove_vertices([0, 3])
     pyzx_graph.set_inputs(tuple([1]))
     pyzx_graph.set_outputs(tuple([2]))
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
     fig = None
@@ -186,12 +213,13 @@ def simple_mess(
 
 
 def steane(
-    draw_graph: bool = False,
+    draw_graph: bool = False, use_bialgebra=True
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Return a PyZX graph of a Steane code.
 
     Args:
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
+        use_bialgebra: Whether to apply the bialgebra rule to graph or not.
 
     Returns:
         pyzx_graph: The PyZX graph corresponding to the requested circuit.
@@ -222,15 +250,96 @@ def steane(
     zx.phase_free_simp(pyzx_graph)
 
     # Re-organise rows
-    rows = {0: [43, 44, 45, 47], 1: [11, 13, 15, 25], 2: [10, 20, 30], 3: [46, 48, 49]}
+    rows = {0: [43, 44, 45, 47], 4: [11, 13, 15, 25], 8: [10, 20, 30], 12: [46, 48, 49]}
+    qubits = {0: [10, 11, 43, 46], 2: [13, 20, 44, 48], 4: [15, 30, 45, 49], 6: [25, 47]}
     for r, spider_ids in rows.items():
         for spider_id in spider_ids:
             pyzx_graph.set_row(spider_id, r)
+    for q, spider_ids in qubits.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_qubit(spider_id, q)
+
+    if use_bialgebra:
+        zx.draw(pyzx_graph, labels=True)
+        apply_bialgebra(pyzx_graph)
+        zx.simplify.id_simp(pyzx_graph)
 
     # Draw if needed
     fig = None
     if draw_graph:
         fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def bialg(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph of a Steane code.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    spiders = {0: [9, 10, 11, 12], 1: [1, 2, 3], 2: [5, 6]}
+    edges = {
+        1: [
+            (1, 5),
+            (2, 6),
+            (3, 6),
+            (2, 5),
+            (1, 6),
+            (9, 1),
+            (10, 2),
+            (11, 5),
+            (12, 6),
+        ]
+    }
+
+    rows = {0: [11, 12], 1: [3, 5, 6], 2: [1, 2], 3: [9, 10]}
+    qubits = {0: [1, 5, 9, 11], 1: [2, 6, 10, 12], 2: [3]}
+
+    # Foundational graph
+    pyzx_graph = zx.Graph()
+
+    # Add spiders
+    for k, spider_ids in spiders.items():
+        for i, spider_id in enumerate(spider_ids):
+            pyzx_graph.add_vertex(ty=k, index=spider_id)
+
+    for k, edge_pairs in edges.items():
+        for u, v in edge_pairs:
+            pyzx_graph.add_edge((u, v), edgetype=k)
+
+    # Re-organise rows
+    for r, spider_ids in rows.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_row(spider_id, r)
+    for q, spider_ids in qubits.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_qubit(spider_id, q)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    zx.draw(pyzx_graph, labels=True)
+    # zx.simplify.bialg_op_simp.apply(pyzx_graph, [5, 6, 1, 2])
+    zx.draw(pyzx_graph, labels=True)
+
+    pyzx_graph.add_vertex(ty=2, index=13, qubit=2, row=0)
+    pyzx_graph.remove_edges([(12, 6), (3, 6)])
+    pyzx_graph.add_edges([(12, 13), (6, 13), (13, 3)])
+    zx.draw(pyzx_graph, labels=True)
+
+    zx.simplify.bialg_op_simp.apply(pyzx_graph, [5, 6, 1, 2])
+    zx.draw(pyzx_graph, labels=True)
 
     return pyzx_graph, fig
 
@@ -249,24 +358,24 @@ def steane_obfuscated(
 
     """
 
-    spiders = {0: [9, 10, 11, 12, 13, 14, 15], 1: [1, 5, 6, 7], 2: [2, 3, 4, 8]}
+    spiders = {0: [9, 10, 11, 12, 13, 14, 15], 1: [1, 5, 6, 7], 2: [4, 8, 3, 2]}
     edges = {
         1: [
-            (1, 2),
-            (1, 3),
-            (1, 4),
-            (1, 9),
-            (2, 5),
-            (2, 10),
-            (3, 6),
-            (3, 11),
+            (4, 1),
             (4, 7),
-            (4, 12),
-            (5, 8),
+            (8, 7),
+            (8, 6),
+            (8, 5),
+            (3, 6),
+            (3, 1),
+            (2, 5),
+            (2, 1),
+            (1, 9),
+            (2, 12),
+            (3, 11),
+            (4, 10),
             (5, 13),
-            (6, 8),
             (6, 14),
-            (7, 8),
             (7, 15),
         ]
     }
@@ -282,7 +391,7 @@ def steane_obfuscated(
             row = 2 if k == 1 else 1
         for i, spider_id in enumerate(spider_ids):
             if k == 0:
-                row = 3 if spider_id in [13, 14, 15] else 0
+                row = 3 if spider_id in [9, 13, 14, 15] else 0
             pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=i, row=row)
 
     for k, edge_pairs in edges.items():
@@ -497,7 +606,7 @@ def random_graph(
         # Generate a graph
         if graph_type == "cnot_had_phase":
             pyzx_circuit = zx.generate.CNOT_HAD_PHASE_circuit(
-                qubits=qubit_n, depth=depth, clifford=False
+                qubits=qubit_n, depth=depth, clifford=False, p_t=0.1
             )
             pyzx_graph = pyzx_circuit.to_graph()
         elif graph_type == "cnot":
@@ -589,7 +698,7 @@ def s(
     # GHZ encoding
     pyzx_circuit.add_gates("S", 0)
     pyzx_graph = pyzx_circuit.to_graph()
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
     fig = None
@@ -616,7 +725,7 @@ def msc(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure
     # GHZ encoding
     pyzx_circuit.add_gates("T NOT", 0)
     pyzx_graph = pyzx_circuit.to_graph()
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
     pyzx_graph.remove_vertices([0, 3])
     pyzx_graph.set_inputs(tuple([1]))
     pyzx_graph.set_outputs(tuple([2]))
@@ -652,7 +761,7 @@ def t(
     # Gadgetise
     zx.simplify.gadgetize(pyzx_graph, graphlike=False)
     zx.id_simp(pyzx_graph)
-    _rm_unnecessary_phases(pyzx_graph)
+    rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
     fig = None
@@ -662,16 +771,81 @@ def t(
     return pyzx_graph, fig
 
 
-#######
-# AUX #
-#######
-def _rm_unnecessary_phases(pyzx_graph: zx.Graph):
-    """Remove 1/1 phases for prettier visualisation."""
-    [
-        pyzx_graph.set_phase(i, 0)
-        for i in pyzx_graph.vertices()
-        if pyzx_graph.phase(i) == Fraction(1, 1)
-    ]
+def split_loops(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph with two separate cycles connected via a central bridge.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    spiders = {0: [14, 15, 16], 1: [1, 3, 5, 7, 9, 11, 13], 2: [2, 4, 6, 8, 10, 12]}
+    edges = {
+        1: [
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 1),
+            (4, 6),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+            (10, 11),
+            (11, 12),
+            (12, 8),
+            (7, 13),
+            (5, 14),
+            (13, 15),
+            (10, 16),
+        ]
+    }
+
+    # Foundational graph
+    pyzx_graph = zx.Graph()
+
+    # Add spiders
+    for k, spider_ids in spiders.items():
+        for spider_id in spider_ids:
+            qubit = (
+                1
+                if spider_id in [1, 2, 3, 12]
+                else 3
+                if spider_id in [13, 14, 16]
+                else 2
+                if spider_id != 15
+                else 4
+            )
+            row = (
+                1
+                if spider_id in [5, 14]
+                else 7
+                if spider_id in [13, 15]
+                else 9
+                if spider_id in [12, 16]
+                else spider_id
+            )
+            pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=qubit, row=row)
+
+    for k, edge_pairs in edges.items():
+        for u, v in edge_pairs:
+            pyzx_graph.add_edge((u, v), edgetype=k)
+
+    pyzx_graph.set_outputs(spiders[0])
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
 
 
 ##############
@@ -693,8 +867,9 @@ __all__ = [  # noqa: RUF022  (do not sort: circuits organised in increasing orde
     "s",
     "msc",
     "t",
+    "split_loops",
 ]
 
 
 if __name__ == "__main__":
-    pyzx_graph, _ = msc(draw_graph=True)
+    pyzx_graph, _ = steane(draw_graph=True)

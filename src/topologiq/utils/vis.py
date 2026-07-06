@@ -1,4 +1,4 @@
-"""Visualisation utils shared by features across the codebase.
+"""Utilities to assist visualisation across Topologiq.
 
 Usage:
     Call any constant/function/class from a separate script.

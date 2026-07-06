@@ -6,7 +6,7 @@ Usage:
 """
 
 from topologiq.core.blocks import PositionedZXBlock
-from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.utils.classes import GraphBounds, StandardBlock, StandardCoord
 
 
 #######################
@@ -49,13 +49,16 @@ def get_coords_for_current_move(
 # CONSTRAINTS #
 ###############
 def gen_bounding_box(
-    taken: list[StandardCoord], cross_edge: bool = False
+    taken: list[StandardCoord],
+    cross_edge: bool = False,
+    graph_bounds: GraphBounds | None = None,
 ) -> tuple[dict[str, dict[str, int]], int]:
     """Determine min/max coordinates for any second pass search.
 
     Args:
         taken: A list of all coordinates occupied by any previously-placed blocks/pipes.
         cross_edge: A boolean flag to determine if search is a primary or `cross_edge` search.
+        graph_bounds (optional): A tuple of max_x and max_y coordinates to maintain build within bounds.
 
     Returns:
         bounding_box: A box made of min. and max. coordinates for each axis, which make a box
@@ -64,21 +67,38 @@ def gen_bounding_box(
 
     """
 
-    # Get the bounds of pre-existing blocks.
-    bounds_x = [x for (x, _, _) in taken] if taken else [0, 0, 0]
-    bounds_y = [y for (_, y, _) in taken] if taken else [0, 0, 0]
-    bounds_z = [z for (_, _, z) in taken] if taken else [0, 0, 0]
+    margin = 0
+    if graph_bounds and graph_bounds.x and graph_bounds.y:
+        # Get the bounds of pre-existing blocks.
+        bounds_z = [z for (_, _, z) in taken] if taken else [0, 0, 0]
 
-    # Add small leeway depending on type of search
-    margin = 30 if cross_edge else 21
-    min_x, max_x = (min(bounds_x) - margin, max(bounds_x) + margin)
-    min_y, max_y = (min(bounds_y) - margin, max(bounds_y) + margin)
-    min_z, max_z = (min(bounds_z) - margin, max(bounds_z) + margin)
-    bounding_box = {
-        "x": {"min": min_x - margin, "max": max_x + margin},
-        "y": {"min": min_y - margin, "max": max_y + margin},
-        "z": {"min": min_z - margin, "max": max_z + margin},
-    }
+        # Add small leeway depending on type of search
+        min_x, max_x = (0, graph_bounds.x)
+        min_y, max_y = (0, graph_bounds.y)
+        min_z, max_z = (min(bounds_z), max(bounds_z))
+        bounding_box = {
+            "x": {"min": min_x, "max": max_x},
+            "y": {"min": min_y, "max": max_y},
+            "z": {"min": min_z - 6, "max": max_z + 6},
+        }
+
+    # Calculate bounds from taken
+    else:
+        # Get the bounds of pre-existing blocks.
+        bounds_x = [x for (x, _, _) in taken] if taken else [0, 0, 0]
+        bounds_y = [y for (_, y, _) in taken] if taken else [0, 0, 0]
+        bounds_z = [z for (_, _, z) in taken] if taken else [0, 0, 0]
+
+        # Add small leeway depending on type of search
+        margin = 30 if cross_edge else 21
+        min_x, max_x = (min(bounds_x) - margin, max(bounds_x) + margin)
+        min_y, max_y = (min(bounds_y) - margin, max(bounds_y) + margin)
+        min_z, max_z = (min(bounds_z) - margin, max(bounds_z) + margin)
+        bounding_box = {
+            "x": {"min": min_x - margin, "max": max_x + margin},
+            "y": {"min": min_y - margin, "max": max_y + margin},
+            "z": {"min": min_z - margin, "max": max_z + margin},
+        }
 
     # Calculate maximum span across all axes
     max_span = max(
@@ -130,7 +150,7 @@ def check_skip_move(
                 or nxt_y < bounding_box["y"]["min"]
                 or nxt_y > bounding_box["y"]["max"]
                 or nxt_z < bounding_box["z"]["min"]
-                or nxt_x > bounding_box["z"]["max"]
+                or nxt_z > bounding_box["z"]["max"]
             ):
                 return True
 

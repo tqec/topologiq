@@ -1,4 +1,4 @@
-"""Util facilities for logging and reading stats.
+"""Create animation from a series of images.
 
 Usage:
     Call `create_animation` from a separate script when there is a need
@@ -11,18 +11,18 @@ Notes:
 """
 
 import os
-import shutil
 from pathlib import Path
 
 import imageio.v2 as iio
 
 
 def create_animation(
+    input_dir: Path,
+    output_dir: Path,
     filename_prefix: str = "animation",
-    duration: int = 2,
+    duration: int = 1400,
     restart_delay: int = 1000,
-    remove_temp_images: bool = True,
-    video: bool = False,
+    format: str = "GIF",
 ):
     """Create a GIF or MP4 animation from snapshots of the process.
 
@@ -31,55 +31,53 @@ def create_animation(
     images to exist in `./output/temp/`.
 
     Args:
+        input_dir: Directory where snapshot PNGs are located.
+        output_dir: Directory where animation should be saved to.
         filename_prefix: filename to use for animation.
         duration: duration of each frame.
         restart_delay: helper variable to ensure a pause at the end of any GIF animation.
-        remove_temp_images:
-            True: delete the temp snapshots used to create the animation.
-            False: do NOT delete the temp snapshots used to create the animation.
-        video:
-            False: save animation as GIF
-            True: save the animation as MP4 (requires FFmpeg)
+        format:
+            GIF: save animation as GIF
+            MP4: save the animation as MP4 (requires FFmpeg)
 
     """
 
-    # ASSEMBLE LIST OF IMAGES FILENAMES TO ANIMATE
-    images = []
-    repo_root: Path = Path(__file__).resolve().parent.parent.parent.parent
-    output_folder_path = repo_root / "output/media"
-    temp_folder_path = repo_root / "output/temp"
+    # Ensure necessary directories exist
+    if not Path.exists(input_dir):
+        print("Animation called but no files for animation found.")
+        return
 
-    image_filenames = os.listdir(temp_folder_path)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Assemble image filenames
+    images = []
+    image_filenames = os.listdir(input_dir)
     image_filenames = sorted([img for img in image_filenames if img.endswith(".png")])
 
-    # APPEND IMAGES TO AN IMAGES ARRAY
     for filename in image_filenames:
         try:
-            image_path = temp_folder_path / filename
+            image_path = input_dir / filename
             image = iio.imread(image_path)
             images.append(image)
         except FileNotFoundError:
             return
 
-    # BUILD THE GIF
+    # Build animation
     if images:
-        Path(output_folder_path).mkdir(parents=True, exist_ok=True)
-
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
         iter_duration = [duration] * (len(images) - 1) + [restart_delay]
-        if video:
-            output_file_path = Path(output_folder_path, f"{filename_prefix}.mp4")
-            # Important! Videos require FFmpeg (the actual thing, not just the Python wrapper)
-            iio.mimsave(output_file_path, images, fps=0.7)
+
+        # Video (requires FFmpeg)
+        if format == "MP4":
+            output_file_path = Path(output_dir, f"{filename_prefix}.mp4")
+            iio.mimsave(output_file_path, images, fps=2)
+
+        # GIF
         else:
-            output_file_path = Path(output_folder_path, f"{filename_prefix}.gif")
+            output_file_path = Path(output_dir, f"{filename_prefix}.gif")
             iio.mimsave(
                 output_file_path,
                 images,
                 duration=iter_duration,
                 loop=0,
             )
-
-    # CLEAN UP TEMPORARY IMAGES
-    if remove_temp_images:
-        if temp_folder_path.exists():
-            shutil.rmtree(temp_folder_path)

@@ -18,7 +18,7 @@ from matplotlib.figure import Figure
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from topologiq.input.utils import ZXColors, ZXEdgeTypes, ZXTypes
+from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 from topologiq.ux.utils.aux import create_split_controls
 
 

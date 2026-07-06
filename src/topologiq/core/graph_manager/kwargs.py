@@ -12,11 +12,13 @@ Usage:
 """
 
 from topologiq.kwargs import (
+    ANIMATE,
     BEAMS_SHORT_LEN,
     DEBUG,
     FIRST_CUBE,
     FIRST_ID_STRATEGY,
     GRAPH_TRAVERSE_MODE,
+    GRAVITY,
     HIDE_PORTS,
     LOG_STATS,
     MAX_ATTEMPTS,
@@ -24,10 +26,11 @@ from topologiq.kwargs import (
     SEED,
     STOP_ON_FIRST_SUCCESS,
     STRIP_PORTS,
+    TWINS,
     VALUE_FUNCTION_HYPERPARAMS,
-    VIS_OPTIONS,
+    Z_STRETCH,
 )
-from topologiq.utils.core import datetime_manager
+from topologiq.utils.time import datetime_manager
 
 
 ##################
@@ -43,13 +46,29 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
 
     """
 
+    switch_strategy = {
+        "bfs-rows": "central-qubit",
+        "bfs-cross-boundaries-last": "centrality-majority",
+        "bfs-cycles": "central-in-first-cycle",
+        "bfs-cnots": "central-qubit",
+        "bfs-cnot-cycles": "central-qubit",
+        "tfs-cnots": "central-qubit",
+    }
+
+    if "graph_traverse_mode" in kwargs and kwargs["graph_traverse_mode"] in switch_strategy:
+        kwargs["first_id_strategy"] = switch_strategy[kwargs["graph_traverse_mode"]]
+
     if len(kwargs) == 0:
         kwargs = {
             "weights": VALUE_FUNCTION_HYPERPARAMS,
-            "first_id_strategy": FIRST_ID_STRATEGY,
+            "first_id_strategy": (
+                FIRST_ID_STRATEGY
+                if GRAPH_TRAVERSE_MODE not in switch_strategy
+                else switch_strategy[kwargs["graph_traverse_mode"]]
+            ),
             "beams_len_short": BEAMS_SHORT_LEN,
             "seed": SEED,
-            "vis_options": VIS_OPTIONS,
+            "animate": ANIMATE,
             "max_attempts": MAX_ATTEMPTS,
             "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
             "min_succ_rate": MIN_SUCC_RATE,
@@ -59,19 +78,26 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
             "log_stats_id": None,
             "debug": DEBUG,
             "first_cube": FIRST_CUBE,
-            "graph_traversing_mode": GRAPH_TRAVERSE_MODE,
+            "graph_traverse_mode": GRAPH_TRAVERSE_MODE,
+            "z_stretch": Z_STRETCH,
+            "gravity": GRAVITY,
+            "twins": TWINS,
         }
 
     if "weights" not in kwargs:
         kwargs["weights"] = VALUE_FUNCTION_HYPERPARAMS
     if "first_id_strategy" not in kwargs:
-        kwargs["first_id_strategy"] = FIRST_ID_STRATEGY
+        kwargs["first_id_strategy"] = (
+            FIRST_ID_STRATEGY
+            if GRAPH_TRAVERSE_MODE not in switch_strategy
+            else switch_strategy[kwargs["graph_traverse_mode"]]
+        )
     if "beams_len_short" not in kwargs:
         kwargs["beams_len_short"] = BEAMS_SHORT_LEN
     if "seed" not in kwargs:
         kwargs["seed"] = SEED
-    if "vis_options" not in kwargs:
-        kwargs["vis_options"] = VIS_OPTIONS
+    if "animate" not in kwargs:
+        kwargs["animate"] = ANIMATE
     if "max_attempts" not in kwargs:
         kwargs["max_attempts"] = MAX_ATTEMPTS
     if "stop_on_first_success" not in kwargs:
@@ -90,8 +116,14 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
         kwargs["debug"] = DEBUG
     if "first_cube" not in kwargs:
         kwargs["first_cube"] = FIRST_CUBE
-    if "graph_traversing_mode" not in kwargs:
-        kwargs["graph_traversing_mode"] = GRAPH_TRAVERSE_MODE
+    if "graph_traverse_mode" not in kwargs:
+        kwargs["graph_traverse_mode"] = GRAPH_TRAVERSE_MODE
+    if "z_stretch" not in kwargs:
+        kwargs["z_stretch"] = Z_STRETCH
+    if "gravity" not in kwargs:
+        kwargs["gravity"] = GRAVITY
+    if "twins" not in kwargs:
+        kwargs["twins"] = TWINS
 
     # Create unique run ID if stats logging is on
     if kwargs["log_stats"]:

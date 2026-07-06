@@ -13,7 +13,7 @@ from typing import TypedDict
 import numpy as np
 
 from topologiq.kwargs import BEAMS_SHORT_LEN
-from topologiq.utils.misc import get_manhattan
+from topologiq.utils.manhattan import get_manhattan
 
 # Types & class for input ZX graph
 GraphNode = tuple[int, str]
@@ -203,6 +203,17 @@ class PathBetweenNodes:
 
         return self.len_of_path * path_len_hp + self.beams_broken_by_path * beams_broken_hp
 
+
+#######
+# AUX #
+#######
+@dataclass
+class GraphBounds:
+    """Class to initialise and hold graph boundaries."""
+
+    x: int | None = None
+    y: int | None = None
+    z: None = None
 
 # Misc classes
 class Colors:
