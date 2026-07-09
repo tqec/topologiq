@@ -12,6 +12,7 @@ AI disclaimer:
 import asyncio
 from pathlib import Path
 
+import pyzx as zx
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -40,20 +41,28 @@ class CircuitIDE(QWidget):
 
     def __init__(self, manager, parent=None):
         """Initialise IDE canvas."""
+
+        # Init init, init
         super().__init__(parent)
+
+        # Set manager
         self.manager = manager
+
+        # Trackers
         self.current_file_path = None
         self.highlighter = None
         self._tasks = set()
+
+        # Call layout
         self.setup_ui()
 
     def setup_ui(self):
         """Define the IDE layout."""
 
         # Main layout
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.setSpacing(5)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(5)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
 
@@ -101,7 +110,7 @@ class CircuitIDE(QWidget):
         )
 
         self.btn_draw_only = QPushButton("↓↓↓ DRAW ASCII ↓↓↓")
-        self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
+        self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(draw_only=True))
 
         var_layout.addWidget(var_label)
         var_layout.addWidget(self.var_input)
@@ -138,8 +147,8 @@ class CircuitIDE(QWidget):
         # Footer
         self.footer_bar = self._create_footer_bar()
 
-        self.layout.addWidget(self.v_splitter)
-        self.layout.addWidget(self.footer_bar)
+        self.main_layout.addWidget(self.v_splitter)
+        self.main_layout.addWidget(self.footer_bar)
         self.setMinimumWidth(0)
 
     def _create_header_bar(self):
@@ -148,9 +157,8 @@ class CircuitIDE(QWidget):
         # Layout
         bar = QFrame()
         bar.setStyleSheet("background: #222;")
-
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(0, 0, 0, 0)  # Left margin for title/file buttons
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
 
         # File Actions
@@ -161,7 +169,6 @@ class CircuitIDE(QWidget):
             layout.addWidget(btn)
         self.btn_load.clicked.connect(self._handle_open_file)
         self.btn_save.clicked.connect(self._handle_save_file)
-
         layout.addStretch()
 
         # Layout controls
@@ -184,9 +191,9 @@ class CircuitIDE(QWidget):
         self.mode_label = QLabel("SOURCE: TEXT")
 
         # ZX graph generation
-        self.btn_to_zx = QPushButton("GENERATE ZX GRAPH →")
+        self.btn_to_zx = QPushButton("STAGE TO CANVAS →")
         self.btn_to_zx.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
-        self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
+        self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(draw_only=False))
         layout.addStretch()
 
         # Add to layout
@@ -194,28 +201,99 @@ class CircuitIDE(QWidget):
 
         return bar
 
-    def _handle_open_file(self):
-        """Load file by extension (.py or .qasm)."""
+    def _connect_internal_signals(self):
+        """Link local IDE buttons to Manager."""
+        # Draw button (no pane switch)
+        self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(draw_only=True))
+        # Generate ZX (switch pane)
+        self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(draw_only=False))
 
-        # Open dialogue
-        file_filter = "Quantum Source (*.py *.qasm);;Python (*.py);;OpenQASM (*.qasm)"
+    def _handle_selection_sync(self):
+        """Sync variable name highligth/selection."""
+        cursor = self.code_editor.textCursor()
+        if cursor.hasSelection():
+            text = cursor.selectedText().strip()
+            if text.isidentifier():
+                self.var_input.setText(text)
+
+    def _handle_open_file(self):
+        """Load file by extension (.py, .qasm, .json, or .zxg)."""
+        # Define OS file system selection filters covering standard formats
+        file_filter = "Quantum Source (*.py *.qasm *.json *.zxg);;Python (*.py);;OpenQASM (*.qasm);;PyZX Graph (*.json *.zxg)"
         path, _ = QFileDialog.getOpenFileName(self, "Open Circuit Source", "", file_filter)
 
-        # Handle file
         if path:
-            # Map mode
             self.current_file_path = Path(path)
             ext = self.current_file_path.suffix.lower()
-            mode = "python" if ext == ".py" else "qasm"
 
-            # Set mode
-            self.code_editor.setPlainText(self.current_file_path.read_text())
-            self.mode_label.setText(f"SOURCE: {mode.upper()}")
+            # Native PyZX formats bypass qBraid transpilation
+            if ext in (".json", ".zxg"):
+                try:
+                    # Ingest raw string
+                    raw_content = self.current_file_path.read_text(encoding="utf-8")
+                    g = zx.Graph.from_json(raw_content)
+                    target_key = self.current_file_path.stem
 
-            # Code highlights
-            if self.highlighter:
-                self.highlighter.setDocument(None)
-            self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
+                    # Query application layout hierarchy for ZXCanvas
+                    top_window = self.window()
+                    canvas = top_window.findChild(QWidget, "ZXCanvas") if top_window else None
+                    if not canvas and top_window:
+                        for child in top_window.findChildren(QWidget):
+                            if child.__class__.__name__ == "ZXCanvas":
+                                canvas = child
+                                break
+
+                    # Inject graph directly into canvas if engine layers are online
+                    if canvas and hasattr(canvas, "zxlive_app"):
+                        canvas.zxlive_app.edit_graph(g, target_key)
+                        canvas.current_graph_key = target_key
+                        canvas.centre_graph_view()
+
+                        # Evict initial generic "Workspace" tab if present
+                        if hasattr(canvas.raw_window, "tab_widget"):
+                            tw = canvas.raw_window.tab_widget
+                            for i in range(tw.count()):
+                                if tw.tabText(i) == "Workspace":
+                                    tw.removeTab(i)
+                                    break
+
+                        # Update IDE editor metadata to show static JSON graph layout
+                        self.code_editor.setPlainText(
+                            f"// Successfully loaded graph tab: {target_key}"
+                        )
+                        self.mode_label.setText("SOURCE: JSON")
+                        self.var_input.setText(target_key)
+
+                        # Strip syntax highlighter (editing is disabled for static JSON)
+                        if self.highlighter:
+                            self.highlighter.setDocument(None)
+                    else:
+                        raise RuntimeError(
+                            "Global application widget scan failed to locate ZXCanvas engine instance."
+                        )
+
+                except Exception as e:
+                    # Reset UI indicators and print traceback natively into the code panel
+                    self.code_editor.setPlainText(f"// GRAPH STRUCTURAL LOAD FAILURE:\n// {e!s}")
+                    self.mode_label.setText("SOURCE: ERROR")
+                    if self.highlighter:
+                        self.highlighter.setDocument(None)
+                    print(f"Direct Ingestion Error: {e}")
+
+            # Programmatic scripts or input files (Python/OpenQASM)
+            else:
+                # Get raw content
+                raw_content = self.current_file_path.read_text(encoding="utf-8")
+                self.code_editor.setPlainText(raw_content)
+
+                # Determine context mode
+                mode = "python" if ext == ".py" else "qasm"
+
+                # Drop old highlighter instance and attach new tokeniser parser
+                self.mode_label.setText(f"SOURCE: {mode.upper()}")
+                if self.highlighter:
+                    self.highlighter.setDocument(None)
+                self.highlighter = PygmentsHighlighter(self.code_editor.document(), mode)
 
     def _handle_save_file(self):
         """Save current editor content to disk."""
@@ -240,36 +318,56 @@ class CircuitIDE(QWidget):
         except Exception as e:
             self.window().status_bar.showMessage(f"Save failed: {e}", 5000)
 
-    def _handle_selection_sync(self):
-        """Sync variable name highligth/selection."""
-        cursor = self.code_editor.textCursor()
-        if cursor.hasSelection():
-            text = cursor.selectedText().strip()
-            if text.isidentifier():
-                self.var_input.setText(text)
+    def _handle_direct_json_load(self):
+        """Execute a direct PyZX JSON parse bypassing the circuit compilation layers."""
+        # Get JSON data
+        json_data = self.code_editor.toPlainText().strip()
+        graph_key = self.var_input.text().strip()
+        if not graph_key:
+            graph_key = "imported_json_graph"
+            self.var_input.setText(graph_key)
 
-    def _connect_internal_signals(self):
-        """Link local IDE buttons to Manager."""
-        # Draw button (no pane switch)
-        self.btn_draw_only.clicked.connect(lambda: self._process_and_emit(switch_pane=False))
-        # Generate ZX (switch pane)
-        self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(switch_pane=True))
+        # Trigger native execution loop asynchronously inside the Manager layer
+        task = asyncio.ensure_future(
+            self.manager.handle_load_json_graph(json_str=json_data, graph_key=graph_key)
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
-    def _process_and_emit(self, switch_pane: bool):
-        """Process circuit and emit results."""
+    def _process_and_emit(self, draw_only: bool):
+        """Process circuit or raw JSON input and emit results."""
+        # Query active header state tracking strings to determine underlying format types
+        mode_text = self.mode_label.text().upper()
+
+        # JSON files bypass text extraction loops completely.
+        if "JSON" in mode_text:
+            # ASCII layout strings are text-circuit specific
+            if draw_only:
+                self.manager.status_changed.emit(
+                    "ASCII visualisation is unavailable for raw JSON structures."
+                )
+                return
+            # Pass directly to JSON ingest workflows
+            self._handle_direct_json_load()
+            return
+
+        # Fetch contents of the main viewport text buffer frame
         code = self.code_editor.toPlainText()
-        mode = "python" if "PYTHON" in self.mode_label.text().upper() else "qasm"
+        mode = "python" if "PYTHON" in mode_text else "qasm"
 
-        # Get key (circuit name)
+        # Sanitise text tokens inside target circuit input variables
         circuit_key = self.var_input.text().strip()
         if not circuit_key:
             circuit_key = "untitled_circuit"
             self.var_input.setText(circuit_key)
 
-        # Trigger Manager
+        # Offload text conversions to async engine loop
         task = asyncio.ensure_future(
             self.manager.handle_load_source_circuit(
-                source_design=code, mode=mode, var_name=circuit_key, switch_to_transform=switch_pane
+                source_circuit=code,
+                mode=mode,
+                var_name=circuit_key,
+                draw_only=draw_only,
             )
         )
         self._tasks.add(task)

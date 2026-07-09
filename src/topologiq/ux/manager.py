@@ -19,12 +19,13 @@ import pyzx as zx
 import qbraid
 from PySide6.QtCore import QObject, Signal
 
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.circuit_manager import CircuitManager
 from topologiq.input.zx_manager import AugmentedZXGraph, ZXGraphManager
 
 
 class UXManager(QObject):
-    """Controls data flows across UX and orchestrates top-level UX actions."""
+    """Data flow manager and top-level UX actions orchestrator."""
 
     # UI state signals
     status_changed = Signal(str)
@@ -36,7 +37,8 @@ class UXManager(QObject):
     zx_input_ready = Signal(object)  # Carries AugmentedZXGraph
 
     # Compilation result signals
-    blockgraph_ready = Signal(str)  # Carries graph key
+    zx_staged_ready = Signal(str, object)
+    blockgraph_ready = Signal(object)
     zx_output_ready = Signal(str)  # Carries graph key
 
     # Verification signals
@@ -63,12 +65,27 @@ class UXManager(QObject):
     def _init_store(self):
         """Initialise data store."""
         return {
+            "circuit_raw": "",
             "augmented_zx_graph_in": {},  # {key: AugZX}
-            "lattice_surgery": {},  # {key: (cubes, pipes)}
+            "lattice_surgery": {},  # {key: blockgraph_manager}
+            "compiled_figures": {},  # {key: matplotlib.figure.Figure} -> NEW FIGURE LEDGER
             "augmented_zx_graph_out": {},  # {key: AugZX}
             "graphs_match": {},  # {key: bool}
-            "circuit_raw": "",
         }
+
+    @property
+    def is_processing(self) -> bool:
+        """Communicate if there are processes running."""
+        return self._process_count > 0
+
+    def _set_processing(self, active: bool, message: str):
+        """Register process to process count."""
+        if active:
+            self._process_count += 1
+        else:
+            self._process_count = max(0, self._process_count - 1)
+        self.processing_state_changed.emit(self.is_processing)
+        self.status_changed.emit(message)
 
     def clear_session(self):
         """Reset sub-managers and data store."""
@@ -89,183 +106,331 @@ class UXManager(QObject):
         # Update UX message
         self.status_changed.emit(f"New input => new session (ID: {self._session_id})")
 
-    @property
-    def is_processing(self) -> bool:
-        """Communicate if there are processes running."""
-        return self._process_count > 0
-
-    def _set_processing(self, active: bool, message: str):
-        """Register process to process count."""
-        if active:
-            self._process_count += 1
-        else:
-            self._process_count = max(0, self._process_count - 1)
-        self.processing_state_changed.emit(self.is_processing)
-        self.status_changed.emit(message)
-
-    async def handle_load_source_circuit(
-        self,
-        source_design: str,
-        mode: str,
-        var_name: str = "circuit",
-        switch_to_transform: bool = False,
-    ):
-        """Ingest raw circuit."""
-
-        # Return early if there are any processes running
-        if self.is_processing and not switch_to_transform:
-            return
-
-        # Clear session to start with new ingestion cyrcle
-        self.clear_session()
-        self._set_processing(True, f"Executing {mode.upper()} source...")
-
-        # Reset state for ingestion cycle
-        aug_zx_to_emit = None
-        is_native_pyzx = False
-
-        # Ingest
-        try:
-            self._data_store["circuit_raw"] = source_design
-
-            if mode == "python":
-                # Prepare a fresh execution context: pre-inject zx and qbraid
-                # so user doesn't need to write import explicitly in IDE.
-                context = {"__name__": "__main__", "zx": zx, "qbraid": qbraid}
-
-                # Execute user code in a thread to keep the UI responsive
-                def _execute():
-                    exec(source_design, context)  # noqa: S102 (user responsible for its own scripts)
-                    return context.get(var_name)
-
-                target = await asyncio.to_thread(_execute)
-                if target is None:
-                    raise LookupError(f"Variable '{var_name}' not found in the script.")
-
-                # PATH A: NATIVE PyZX
-                if isinstance(target, zx.graph.base.BaseGraph):
-                    # Log and communicate path
-                    is_native_pyzx = True
-                    self.status_changed.emit("Integrating live PyZX graph...")
-
-                    # Pass the LIVE object as given
-                    aug_zx_to_emit = self.zx_manager_in.add_graph_from_pyzx(
-                        target, graph_key=var_name
-                    )
-
-                    # Sync Design pane text area
-                    try:
-                        self.qb_circuit_ready.emit(zx.to_qasm(target), "[Native PyZX Graph]")
-                    except Exception:
-                        self.qb_circuit_ready.emit("// Topology-only graph", "[Native PyZX Graph]")
-
-                # 4. PATH B: qBraid TRANSPILING
-                else:
-                    # Transpile the LIVE object (Qiskit, Cirq, etc.)
-                    qasm_str = qbraid.transpiler.transpile(target, "qasm2")
-                    self.circuit_manager.add_custom_circuit(qasm_str)
-
-            else:
-                # QASM string ingestion of CIRCUIT (also qBraid)
-                self.circuit_manager.add_custom_circuit(source_design)
-
-            # qBraid -> PyZX conversion
-            if not is_native_pyzx:
-                # Store
-                aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
-                self._data_store["augmented_qb_circuit"] = aug_qb
-
-                # Emit
-                self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
-
-                # Generate ZX graph so we can run surgery
-                aug_zx_to_emit = await asyncio.to_thread(
-                    self.zx_manager_in.add_graph_from_qasm, qasm_str=aug_qb.qasm, graph_key=var_name
-                )
-
-            # Transmit ZX graph (if all above succeeds)
-            if aug_zx_to_emit:
-                # Update data store
-                self._data_store["augmented_zx_graph_in"][var_name] = aug_zx_to_emit
-
-                # Trigger silent surgery
-                task = asyncio.create_task(self.handle_silent_surgery(var_name, aug_zx_to_emit))
-
-                # Store reference to tasks tracker
-                self._background_tasks.add(task)
-                task.add_done_callback(self._background_tasks.discard)
-
-                # UX Transition
-                if switch_to_transform:
-                    self.section_changed.emit("DESIGN")
-                    await asyncio.sleep(0.1)
-                    self.zx_input_ready.emit(aug_zx_to_emit)
-                    self.status_changed.emit(f"Ingested '{var_name}'.")
-                else:
-                    self.status_changed.emit(
-                        f"Ingested '{var_name}'. Surgery running in background."
-                    )
-            else:
-                self.status_changed.emit("Code executed, but no ZX graph was produced.")
-
-        except Exception as e:
-            self.status_changed.emit(f"Execution Error: {e!s}")
-        finally:
-            self._set_processing(False, "Ready")
-
-    async def handle_silent_surgery(self, graph_key: str, aug_zx_in: AugmentedZXGraph):
-        """Handle surgery -> transpile -> verify pipeline in silence."""
-
-        # Retrieve session ID and turn processing on
-        local_session = self._session_id
-        self._set_processing(True, f"Compiling {graph_key}...")
-
-        try:
-            # Store input
-            self._data_store["augmented_zx_graph_in"][graph_key] = aug_zx_in
-
-            # Surgery
-            cubes, pipes = await asyncio.to_thread(aug_zx_in.get_blockgraph)
-
-            # Store completed LS & emit
-            if local_session != self._session_id:
-                # SESSION GUARD: Abort if no longer in the same session
-                return
-            self._data_store["lattice_surgery"][graph_key] = (cubes, pipes)
-            self.blockgraph_ready.emit(graph_key)
-
-            # Reverse compilation (used for verification)
-            aug_zx_out = await asyncio.to_thread(
-                self.zx_manager_out.add_graph_from_blockgraph,
-                blockgraph_cubes=cubes,
-                blockgraph_pipes=pipes,
-                graph_key=f"{graph_key}",
-                other=aug_zx_in,
-            )
-
-            # Store reverse-compiled (output) ZX & emit
-            if local_session != self._session_id:
-                # SESSION GUARD: Abort if no longer in the same session
-                return
-            self._data_store["augmented_zx_graph_out"][graph_key] = aug_zx_out
-            self.zx_output_ready.emit(graph_key)
-
-            # Verify equality
-            match = await asyncio.to_thread(aug_zx_in.check_equality, aug_zx_out)
-            self._data_store["graphs_match"][graph_key] = match
-            self.verification_ready.emit(graph_key, match)
-
-        except Exception as e:
-            self.status_changed.emit(f"Pipeline Error [{graph_key}]: {e}")
-        finally:
-            self._set_processing(False, "Ready")
-
     def emergency_stop(self):
         """Abort processes."""
         if self._active_proc and self._active_proc.poll() is None:
             self._active_proc.kill()
             self._active_proc = None
             self.status_changed.emit("PROCESS TERMINATED")
+
+    async def handle_load_source_circuit(
+        self,
+        source_circuit: str,
+        mode: str,
+        var_name: str = "circuit",
+        draw_only: bool = True,
+    ):
+        """Ingest raw circuit string from a file path or user-facing script editor."""
+        # Prevent run if anything is processing
+        if self.is_processing and not draw_only:
+            return
+
+        # Clear store and session
+        self.clear_session()
+        self._set_processing(True, f"Executing {mode.upper()} source...")
+
+        # Placeholder attributes
+        aug_zx_to_emit = None
+        is_native_pyzx = False
+
+        try:
+            # Enforce strict alphanumeric sequencing for initial imports
+            base_key = f"{var_name}_0" if not var_name.endswith("_0") else var_name
+
+            # Cache raw script reference
+            self._data_store["circuit_raw"] = source_circuit
+
+            # Process using strategy corresponding to IDE contents
+            if mode == "python":
+                # Execute user-submitted script using a restricted dictionary context namespace
+                context = {"__name__": "__main__", "zx": zx, "qbraid": qbraid}
+
+                def _execute():
+                    exec(source_circuit, context)  # noqa: S102
+                    return context.get(var_name)
+
+                # Offload dynamic evaluation to thread pool to prevent GUI freeze
+                target = await asyncio.to_thread(_execute)
+                if target is None:
+                    raise LookupError(f"Variable '{var_name}' not found in the script.")
+
+                # Branch handling if target is an instantiated native PyZX graph
+                if isinstance(target, zx.graph.base.BaseGraph):
+                    is_native_pyzx = True
+                    self.status_changed.emit("Integrating live PyZX graph...")
+
+                    # Register within the internal incoming sub-manager registry
+                    aug_zx_to_emit = self.zx_manager_in.add_graph_from_pyzx(
+                        target, graph_key=base_key
+                    )
+
+                    # Quick rendering bypass short-circuit if user only requested an interactive layout draw pass
+                    if draw_only:
+                        self.qb_circuit_ready.emit(
+                            zx.to_qasm(target) if hasattr(zx, "to_qasm") else "// PyZX Source",
+                            "Graph is a native PyZX object. Ready to stage directly to interactive canvas.",
+                        )
+                        self.status_changed.emit(f"Parsed PyZX Graph '{base_key}'. Ready to stage.")
+                        return
+
+                    try:
+                        self.qb_circuit_ready.emit(zx.to_qasm(target), "[Native PyZX Graph]")
+                    except Exception:
+                        self.qb_circuit_ready.emit(
+                            "// Topology-only graph", "[Native PyZX Graph Layout]"
+                        )
+
+                else:
+                    # Ingest path for non-PyZX objects (e.g. Qiskit, Cirq, Amazon Braket, OpenQASM)
+                    # via qBraid
+                    qasm_str = qbraid.transpiler.transpile(target, "qasm2")
+                    self.circuit_manager.add_custom_circuit(qasm_str)
+
+            else:
+                # Direct string injection for native OpenQASM
+                self.circuit_manager.add_custom_circuit(source_circuit)
+
+            # Abstract syntax tree extraction block for qBraid representations
+            if not is_native_pyzx:
+                aug_qb = self.circuit_manager._collection[self.circuit_manager.primary_key]
+                self._data_store["augmented_qb_circuit"] = aug_qb
+                self.qb_circuit_ready.emit(str(aug_qb.qasm), str(aug_qb.draw()))
+
+                if draw_only:
+                    self.status_changed.emit(
+                        f"Generated text visualisation for '{base_key}'. Ready to stage."
+                    )
+                    return
+
+                # Convert OpenQASM -> ZX graph off-thread
+                aug_zx_to_emit = await asyncio.to_thread(
+                    self.zx_manager_in.add_graph_from_qasm,
+                    qasm_str=aug_qb.qasm,
+                    graph_key=base_key,
+                )
+
+            # Cascade and auto-stage valid generated data payloads
+            if aug_zx_to_emit:
+                self.handle_stage_to_compile(base_key, aug_zx_to_emit)
+                self.zx_input_ready.emit(aug_zx_to_emit)
+                self.status_changed.emit(
+                    f"Staged '{base_key}' natively into compilation pipelines."
+                )
+            else:
+                self.status_changed.emit(
+                    "Staging aborted: Code executed, but no downstream ZX representation was generated."
+                )
+
+        except Exception as e:
+            self.status_changed.emit(f"Execution Error: {e!s}")
+        finally:
+            self._set_processing(False, "Ready")
+
+    async def handle_load_json_graph(self, json_str: str, graph_key: str):
+        """Ingest and instantiate a native PyZX graph blueprint directly from JSON text."""
+        # Prevent run if anything is processing
+        if self.is_processing:
+            return
+
+        # Clear store and session
+        self.clear_session()
+
+        # Ensure naming consistency with the underscore suffix rule
+        base_key = f"{graph_key}_0" if not graph_key.endswith("_0") else graph_key
+        self._set_processing(True, f"Parsing JSON Topology for '{base_key}'...")
+
+        try:
+
+            def _parse():
+                g = zx.Graph.from_json(json_str)
+                return AugmentedZXGraph(zx_graph=g)
+
+            aug_zx_to_emit = await asyncio.to_thread(_parse)
+
+            # Force populate the main in-memory sub-manager data repository maps
+            self.zx_manager_in.add_graph(aug_zx_to_emit, graph_key=base_key)
+
+            self.qb_circuit_ready.emit(
+                "// PyZX JSON Specification Document Data Ingested",
+                "[Topology Ingestion Success]\nGraph bypasses qBraid and matches PyZX specifications natively.",
+            )
+
+            # Stage layout variables to active data dict trees
+            self.handle_stage_to_compile(base_key, aug_zx_to_emit)
+
+            # Inform active view panels of BOTH the graph object and target key reference
+            # so ZXCanvas knows exactly what tab entry text to build and focus
+            if hasattr(self, "zx_staged_ready"):
+                self.zx_staged_ready.emit(base_key, aug_zx_to_emit)
+
+            self.zx_input_ready.emit(aug_zx_to_emit)
+            self.status_changed.emit(
+                f"JSON Graph '{base_key}' auto-staged onto compilation profiles."
+            )
+
+        except Exception as e:
+            self.status_changed.emit(f"JSON Compilation Failure: {e!s}")
+        finally:
+            self._set_processing(False, "Ready")
+
+    async def handle_snapshot_zx_graph(self, pyzx_graph: zx.Graph, target_key: str):
+        """Register a modified PyZX graph instance into collection."""
+        # Prevent run if anything is processing
+        if self.is_processing:
+            return
+
+        self._set_processing(True, f"Snapshotting active layout variant as {target_key}...")
+
+        try:
+            # Instantiate a clean target container
+            sanitized_graph = zx.Graph()
+
+            # Spiders
+            for v in pyzx_graph.vertices():
+                r_val = pyzx_graph.row(v)
+                q_val = pyzx_graph.qubit(v)
+                rounded_row = int(r_val + 0.5) if r_val >= 0 else int(r_val - 0.5)
+                rounded_qubit = int(q_val + 0.5) if q_val >= 0 else int(q_val - 0.5)
+
+                sanitized_graph.add_vertex(
+                    ty=pyzx_graph.type(v),
+                    qubit=rounded_qubit,
+                    row=rounded_row,
+                    phase=pyzx_graph.phase(v),
+                )
+
+                switch_to_cube_val = pyzx_graph.vdata(v, "switch_to_cube", default=None)
+                if switch_to_cube_val is not None:
+                    sanitized_graph.set_vdata(v, "switch_to_cube", switch_to_cube_val)
+
+            # Edges
+            for v in pyzx_graph.vertices():
+                r_val = pyzx_graph.row(v)
+                q_val = pyzx_graph.qubit(v)
+                rounded_row = int(r_val + 0.5) if r_val >= 0 else int(r_val - 0.5)
+                rounded_qubit = int(q_val + 0.5) if q_val >= 0 else int(q_val - 0.5)
+
+                sanitized_graph.set_qubit(v, rounded_qubit)
+                sanitized_graph.set_row(v, rounded_row)
+
+            # Bind connectivity maps
+            for edge in pyzx_graph.edges():
+                u, v = edge[0], edge[1]
+                e_type = pyzx_graph.edge_type(edge)
+                sanitized_graph.add_edge((u, v), edgetype=e_type)
+
+            # Re-map I/O spiders
+            if hasattr(pyzx_graph, "inputs"):
+                sanitized_graph.set_inputs(list(pyzx_graph.inputs()))
+            if hasattr(pyzx_graph, "outputs"):
+                sanitized_graph.set_outputs(list(pyzx_graph.outputs()))
+
+            # Encapsulate into an internal wrapper
+            aug_zx_to_emit = AugmentedZXGraph(zx_graph=sanitized_graph)
+            self.zx_manager_in.add_graph(aug_zx_to_emit, graph_key=target_key)
+
+            self.qb_circuit_ready.emit(
+                zx.to_qasm(sanitized_graph)
+                if hasattr(zx, "to_qasm")
+                else "// Snapshot Branch State",
+                f"[Snapshot Success]\nCreated normalised, compilable variant checkpoint: {target_key}.",
+            )
+
+            # Auto-stage snapshot variations directly to compile targets
+            self.handle_stage_to_compile(target_key, aug_zx_to_emit)
+            self.zx_input_ready.emit(aug_zx_to_emit)
+            self.status_changed.emit(f"Snapshot variant '{target_key}' auto-staged.")
+
+        except Exception as e:
+            self.status_changed.emit(f"Snapshot Branching Failure: {e!s}")
+        finally:
+            self._set_processing(False, "Ready")
+
+    def handle_stage_to_compile(self, graph_key: str, aug_zx_in: AugmentedZXGraph):
+        """Stage a target graph layout and initialise pre-surgery."""
+        # Ensure state trees exist
+        if "augmented_zx_graph_in" not in self._data_store:
+            self._data_store["augmented_zx_graph_in"] = {}
+        self._data_store["augmented_zx_graph_in"][graph_key] = aug_zx_in
+
+        if "lattice_surgery" not in self._data_store:
+            self._data_store["lattice_surgery"] = {}
+
+        # Bind isolated block graph management context shell to track surgery
+        if hasattr(aug_zx_in, "zx_graph"):
+            bgraph_manager = BlockGraphManager(aug_zx_in.zx_graph)
+            self._data_store["lattice_surgery"][graph_key] = bgraph_manager
+
+        self.zx_staged_ready.emit(graph_key, aug_zx_in)
+
+    async def handle_compile(
+        self, graph_key: str, options: dict | None = None, write_bgraph: bool = False
+    ):
+        """Reset to baseline and execute compilation."""
+        # Fetch target blueprint definition metrics
+        aug_zx_in = self._data_store["augmented_zx_graph_in"].get(graph_key)
+        if not aug_zx_in or not hasattr(aug_zx_in, "zx_graph"):
+            self.status_changed.emit(
+                f"Compilation Aborted: Baseline layout data missing for '{graph_key}'."
+            )
+            return
+
+        # Isolate target context within a thread-safe instance
+        local_bgraph_manager = BlockGraphManager(aug_zx_in.zx_graph)
+        override_kwargs = options if options is not None else {}
+        local_session = self._session_id
+
+        self._set_processing(True, f"Compiling layout for {graph_key}...")
+        try:
+            # Execute compilation in thread to prevent GUI lockups
+            await asyncio.to_thread(local_bgraph_manager.build, override_kwargs=override_kwargs)
+
+            # Drop out if session updates occurred during execution
+            if local_session != self._session_id:
+                return
+
+            # Transaction success so it is safe to commit to the global ledger
+            self._data_store["lattice_surgery"][graph_key] = local_bgraph_manager
+
+            # Explicitly generate and store static MPL view
+            visualiser = local_bgraph_manager.draw_blockgraph(is_final_vis=True, embedded=True)
+            if visualiser and hasattr(visualiser, "view_3d") and hasattr(visualiser.view_3d, "fig"):
+                self._data_store["compiled_figures"][graph_key] = visualiser.view_3d.fig
+
+            # Instant UX refresh
+            self.blockgraph_ready.emit(self._data_store["lattice_surgery"])
+            self.zx_output_ready.emit(graph_key)
+            self.status_changed.emit(
+                f"Compilation complete for '{graph_key}'. Rendering visualisation..."
+            )
+
+            # Post-process file writes with session guard tracking
+            if write_bgraph:
+                if local_session != self._session_id:
+                    return
+                self.status_changed.emit(
+                    f"Writing BGRAPH structural topology files for '{graph_key}'..."
+                )
+                await asyncio.to_thread(local_bgraph_manager.write_bgraph, circuit_name=graph_key)
+
+            # Process animation matrices with session guard tracking
+            if override_kwargs.get("animate"):
+                if local_session != self._session_id:
+                    return
+                self.status_changed.emit(
+                    f"Compiling animation frames for '{graph_key}' in background..."
+                )
+                await asyncio.to_thread(local_bgraph_manager.animate, filename_prefix=graph_key)
+
+                if local_session == self._session_id:
+                    self.status_changed.emit(f"Animation rendering complete for '{graph_key}'.")
+
+        except Exception as e:
+            self.status_changed.emit(f"Surgery Engine Error [{graph_key}]: {e}")
+        finally:
+            # Secure processing toggles only if session thread scopes match
+            if local_session == self._session_id:
+                self._set_processing(False, "Ready")
 
     def get_data(self, key: str) -> Any:
         """Retrieve from data store."""

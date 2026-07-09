@@ -16,10 +16,12 @@ import os
 import sys
 from pathlib import Path
 
-# Force software rasterization for stability in specific environments
+# Force software rasterisation for stability in specific environments
 os.environ["QT_QUICK_BACKEND"] = "software"
 os.environ["QT_OPENGL"] = "software"
 os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
+os.environ["QT_NO_XDG_DESKTOP_PORTAL"] = "1"
+os.environ["QT_LOGGING_RULES"] = ("qt.multimedia.ffmpeg.info=false;qt.multimedia.ffmpeg.warning=false")
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QIcon
@@ -37,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from topologiq.ux.manager import UXManager
-from topologiq.ux.panes import CompilePane, DesignPane, SimulatePane, StatsPane
+from topologiq.ux.panes import CompilePane, LoadPane, StatsPane
 from topologiq.ux.utils import styles
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
@@ -48,6 +50,7 @@ class TopologiqApp(QMainWindow):
 
     def __init__(self, manager):
         """Initialise UX."""
+        # Init init, init
         super().__init__()
         self.manager = manager
         self.running = True
@@ -69,9 +72,8 @@ class TopologiqApp(QMainWindow):
 
         # Initialise panes
         self.panes = {
-            "DESIGN": DesignPane(self.manager),
+            "LOAD": LoadPane(self.manager),
             "COMPILE": CompilePane(self.manager),
-            "SIMULATE": SimulatePane(self.manager),
             "STATS": StatsPane(self.manager),
         }
         for pane in self.panes.values():
@@ -82,7 +84,7 @@ class TopologiqApp(QMainWindow):
         self._connect_signals()
 
         # Default pane
-        self._switch_tab("DESIGN")
+        self._switch_tab("LOAD")
 
     @Slot(str)
     def _switch_tab(self, section_name: str):
@@ -122,7 +124,7 @@ class TopologiqApp(QMainWindow):
 
         # Buttons
         self.nav_buttons = {}
-        for name in ["DESIGN", "COMPILE", "SIMULATE", "STATS"]:
+        for name in ["LOAD", "COMPILE", "STATS"]:
             btn = QPushButton(name)
             btn.setCheckable(True)
             btn.setStyleSheet(styles.NAV_BUTTON_STYLE)
@@ -142,31 +144,30 @@ class TopologiqApp(QMainWindow):
 
     def _connect_signals(self):
         """Manage top-level signals."""
-        # UX state
         self.manager.status_changed.connect(self.status_msg_label.setText)
         self.manager.section_changed.connect(self._switch_tab)
         self.manager.processing_state_changed.connect(self._handle_processing_ui)
 
         # Data pipelines (retrievers)
-        self.manager.zx_input_ready.connect(self.panes["DESIGN"].handle_zx_input)
-        self.manager.qb_circuit_ready.connect(self.panes["DESIGN"].update_visuals)
+        self.manager.zx_input_ready.connect(self.panes["LOAD"].handle_zx_input)
+        self.manager.qb_circuit_ready.connect(self.panes["LOAD"].update_visuals)
+
+        # Hooks manager staging event into CompilePane data readiness
+        self.manager.zx_staged_ready.connect(self._handle_graph_staged_event)
 
         # Partial outputs (ready) notifications
         self.manager.blockgraph_ready.connect(self.panes["COMPILE"].update_blockgraph)
         self.manager.zx_output_ready.connect(self.panes["COMPILE"].update_output)
         self.manager.verification_ready.connect(self.panes["COMPILE"].show_verification_result)
 
-        # Pane switchers
-        design_pane = self.panes["DESIGN"]
-        design_pane.zx_canvas.compile_requested.connect(self._bridge_to_compile)
-
-    def _bridge_to_compile(self, graph_key: str):
-        """Manage the transition between the Canvas and Compile panes."""
-        # Switch
-        self._switch_tab("COMPILE")
-
-        # Force focus on destination
-        self.panes["COMPILE"].set_focus_key(graph_key)
+    @Slot(str, object)
+    def _handle_graph_staged_event(self, graph_key: str, aug_zx: object):
+        """Pass the graph to the Compile Pane to prepare its configuration menus."""
+        if hasattr(self.panes["COMPILE"], "ready_graph_for_configuration"):
+            # Inform compile pane to expose settings profiles for this specific graph layout
+            self.panes["COMPILE"].ready_graph_for_configuration(graph_key, aug_zx)
+        elif hasattr(self.panes["COMPILE"], "set_focus_key"):
+            self.panes["COMPILE"].set_focus_key(graph_key)
 
     def _handle_processing_ui(self, is_active: bool):
         """Unify UX response to background processing."""
@@ -202,9 +203,11 @@ async def main():
     window.show()
 
     # Loopy McLoopy
-    while window.running:
+    while hasattr(window, "isVisible") and window.isVisible():
         app.processEvents()
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.005)
+
+    # Teardown on window close
     app.quit()
 
 

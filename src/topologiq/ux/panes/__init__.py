@@ -1,8 +1,7 @@
 """UX components/panes."""
 
 from .compile import CompilePane
-from .design import DesignPane
-from .simulate import SimulatePane
+from .load import LoadPane
 from .stats import StatsPane
 
-__all__ = ["CompilePane", "DesignPane", "SimulatePane", "StatsPane"]
+__all__ = ["CompilePane", "LoadPane", "StatsPane"]

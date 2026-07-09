@@ -1,6 +1,6 @@
 """UX panes initialisation.
 
-Initialises the different panes of the UX.
+Initialises the foundation for the different panes of the UX.
 
 AI disclaimer:
     category: Coding partner (see CONTRIBUTING.md for details).
@@ -18,11 +18,11 @@ class BasePane(QWidget):
     """Base widget for all UX panes.
 
     Provides a standardized layout and access to the UXManager
-    for signal/slot synchronization across the app.
+    for signal/slot synchronisation across the app.
     """
 
     def __init__(self, manager, name: str, parent=None):
-        """Initialise pane with manager access."""
+        """Init pane with manager access."""
         super().__init__(parent)
         self.manager = manager
         self.pane_id = name

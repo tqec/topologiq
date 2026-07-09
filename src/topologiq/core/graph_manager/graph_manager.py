@@ -136,26 +136,13 @@ class BlockGraphManager:
         self.phases: dict[int, int | Fraction] = self.in_phases.copy()
 
         # Introduce empty trackers for completion and time-order dependencies
+        self.cross_edge: bool = False
+        self.tent_coords: list[StandardCoord] = None
         self.completed_base_ids: list[int] = []
         self.completed_base_edges: dict[tuple[int, int], list[int]] = {}
         self.ante: dict[int, set[int]] = {}
         self.post: dict[int, set[int]] = {}
-
-        if self._kwargs["graph_traverse_mode"] == "cnot-cycles":
-            spiders_by_row: dict[int, set[int]] = {}
-            for spider_id, row_number in self.rows.items():
-                if row_number not in spiders_by_row:
-                    spiders_by_row[row_number] = set([spider_id])
-                else:
-                    spiders_by_row[row_number].add(spider_id)
-
-            prev_row = None
-            for curr_row, spider_ids_in_row in spiders_by_row.items():
-                if prev_row:
-                    for spider_id in spider_ids_in_row:
-                        pass
-                        # self.ante[spider_id] = spiders_by_row[prev_row]
-                prev_row = curr_row
+        self.twin_trace: dict[int, list[int]] = {}
 
         # Other trackers
         self.run_success: bool = False
@@ -198,31 +185,6 @@ class BlockGraphManager:
 
         # Calculate boundaries of theoretical chip surface
         self.get_bounds()
-
-        # Place the first cube at centre of available space
-        self.place_first_cube()
-
-        # Pre-calculate edge_queue based on graph traverse strategy
-        self.get_queue()
-
-        # Re-initialise trackers to keep trace of any changes introduced by graph rewrites
-        self.ids = set(self.bgraph.nodes())
-        self.types = {k: zx_block.zx_type for k, zx_block in self.bgraph.nodes(data="zx_block")}
-        self.degrees = {k: self.bgraph.degree(k) for k in self.bgraph.nodes()}
-        self.edge_types = {
-            (u, v): attrs["edge_type"] for u, v, attrs in self.bgraph.edges(data=True)
-        }
-        self.twin_trace: dict[int, list[int]] = {k: [k] for k in self.ids}
-        self.twin_trace_inverse: dict[int, int] = {}
-
-        # Rewrite pending information to reflect any changes introduced by graph rewrites
-        for spider_id in self.bgraph.nodes():
-            self.bgraph.nodes[spider_id]["completions"]["degree"] = self.bgraph.degree(spider_id)
-            self.bgraph.nodes[spider_id]["completions"]["pending"] = self.bgraph.degree(spider_id)
-
-        # Visualise base_graph
-        if self._kwargs["debug"] >= 4:
-            self.draw_zx(draw_style="zx")
 
     def handle_y_t_cubes(self):
         """Convert spiders with phases to Y- and T-cube patterns."""
@@ -379,6 +341,9 @@ class BlockGraphManager:
             if self._kwargs["debug"] >= 4:
                 self.draw_zx(draw_style="zx")
 
+        # Update any trackers that might have changed from transformations
+        self.update_base_trackers()
+
     def build_deps_from_pauli_webs(self):
         """Build a set of cube IDs that must be placed BEFORE their any arbitrary T-gate."""
 
@@ -467,18 +432,27 @@ class BlockGraphManager:
                     self.bgraph, s_gates_more_than_three=s_gates_more_than_three
                 )
 
-            # Update ID trackers to match changes in input graph
-            self.ids.update(new_ids.keys())
-            for new_id, ref_id in new_ids.items():
-                self.rows[new_id] = self.rows[ref_id]
-                self.qubits[new_id] = self.qubits[ref_id]
-                self.types[new_id] = self.types[ref_id]
-                self.phases[new_id] = 0
+            # Update any trackers that might have changed from transformations
+            self.update_base_trackers(new_ids=new_ids)
+
+    def update_base_trackers(self, new_ids: dict[int,int] = {}):
+            """Update ID trackers to match changes in input graph."""
+
+            if new_ids:
+                self.ids.update(new_ids.keys())
+                for new_id, ref_id in new_ids.items():
+                    self.rows[new_id] = self.rows[ref_id]
+                    self.qubits[new_id] = self.qubits[ref_id]
+                    self.types[new_id] = self.types[ref_id]
+                    self.phases[new_id] = 0
+            self.ids = set(self.bgraph.nodes())
+            self.types = {k: zx_block.zx_type for k, zx_block in self.bgraph.nodes(data="zx_block")}
+            self.degrees = {k: self.bgraph.degree(k) for k in self.bgraph.nodes()}
             self.edge_types = {
                 (u, v): attrs["edge_type"] for u, v, attrs in self.bgraph.edges(data=True)
             }
-            self.degrees = {k: self.bgraph.degree(k) for k in self.bgraph.nodes()}
-            self.twin_trace: dict[int, list[int]] = {k: [k] for k in self.bgraph.nodes()}
+            self.twin_trace: dict[int, list[int]] = {k: [k] for k in self.ids}
+            self.twin_trace_inverse: dict[int, int] = {}
 
     def place_first_cube(self):
         """Define and place the very first cube of the blockgraph."""
@@ -530,11 +504,33 @@ class BlockGraphManager:
             t_gates=self.t_gates,
         )
 
-    def build(self):
+    def build(self, override_kwargs: dict = {}):
         """Build the blockgraph using pre-defined edge queue."""
 
         # Start timer
         self.t1, _ = datetime_manager()
+
+        # Override KWARGs if needed
+        if override_kwargs:
+            self._kwargs = check_assemble_kwargs(**override_kwargs)
+
+        # Place the first cube at centre of available space
+        self.place_first_cube()
+
+        # Pre-calculate edge_queue based on graph traverse strategy
+        self.get_queue()
+
+        # Re-initialise trackers to keep trace of any changes ahead of build
+        self.update_base_trackers()
+
+        # Rewrite pending information to reflect any changes introduced by graph rewrites
+        for spider_id in self.bgraph.nodes():
+            self.bgraph.nodes[spider_id]["completions"]["degree"] = self.bgraph.degree(spider_id)
+            self.bgraph.nodes[spider_id]["completions"]["pending"] = self.bgraph.degree(spider_id)
+
+        # Visualise base_graph
+        if self._kwargs["debug"] >= 4:
+            self.draw_zx(draw_style="zx")
 
         # Loop through edge queue
         for raw_u, raw_v in self.edge_queue:
@@ -1263,12 +1259,15 @@ class BlockGraphManager:
             first_spider=self.first_id if draw_style == "nx-bfs" else None,
         )
 
-    def draw_blockgraph(self, is_final_vis: bool = True, iter_fail: bool = False):
+    def draw_blockgraph(
+        self, is_final_vis: bool = True, iter_fail: bool = False, embedded: bool = False
+    ) -> BlockGraphVisualiser | None:
         """Draw the NX blockgraph using ZX or NX styling.
 
         Args:
             is_final_vis: Boolean to flag if current visualisation is the final blockgraph.
             iter_fail: Boolean to flag if current visualisation comes right after an iteration failure.
+            embedded: Method is being called from the UX and visualisation will therefore be embedded.
 
         """
 
@@ -1303,7 +1302,7 @@ class BlockGraphManager:
         base_graph_draw_styles = {
             "bfs": "zx",
             "bfs-cross": "zx",
-            "bfs-cross-boundaries-last": "nx-fruchterman_reingold",
+            "bfs-cross-boundaries-last": "zx",
             "bfs-cycles": "nx-fruchterman_reingold",
             "bfs-rows": "zx",
             "bfs-cnots": "zx",
@@ -1333,7 +1332,10 @@ class BlockGraphManager:
 
         visualiser = BlockGraphVisualiser(vis_state)
         visualiser.build_layout()
-        visualiser.show()
+        if not embedded:
+            visualiser.show()
+
+        return visualiser
 
     def write_bgraph(
         self,

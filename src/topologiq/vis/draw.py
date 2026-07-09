@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib import ticker
+from matplotlib.figure import Figure
 from matplotlib.offsetbox import AnchoredOffsetbox, AnchoredText, HPacker, TextArea
 from matplotlib.widgets import Button, TextBox
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -352,7 +353,7 @@ class View3D:
         self.ctx = controller
 
         # Primary Figure and Ax
-        self.fig: plt.Figure = plt.figure(figsize=(12, 8))
+        self.fig: Figure = plt.figure(figsize=(12, 8))
         self.ax: matplotlib.axes.Axes = self.fig.add_subplot(projection="3d")
         self.ax.set_proj_type("persp")
         self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)

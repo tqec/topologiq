@@ -260,7 +260,6 @@ def steane(
             pyzx_graph.set_qubit(spider_id, q)
 
     if use_bialgebra:
-        zx.draw(pyzx_graph, labels=True)
         apply_bialgebra(pyzx_graph)
         zx.simplify.id_simp(pyzx_graph)
 
@@ -567,7 +566,12 @@ def ghz(
 
 
 def random_graph(
-    qubit_n: int, depth: int, p_t: int = 0.2, graph_type: str = "cnot", draw_graph: bool = False, **kwargs
+    qubit_n: int,
+    depth: int,
+    p_t: int = 0.2,
+    graph_type: str = "cnot",
+    draw_graph: bool = False,
+    **kwargs,
 ) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
     """Produce a random PyZX graph.
 

@@ -252,7 +252,7 @@ class AugmentedZXGraph:
 
         # Choose if to show visualisation of outcome or not
         if not kwargs:
-            kwargs = {"vis_options": ("final" if final_vis else None, None)}
+            kwargs = {}
 
         # Choose full or reduced ZX graph
         zx_graph = self.zx_graph_reduced if use_reduced else self.zx_graph

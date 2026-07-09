@@ -12,775 +12,446 @@ AI disclaimer:
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
-import numpy as np
 import pyzx as zx
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QMenu,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
-from vispy import scene
-from vispy.color import Color
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from zxlive.app import get_embedded_app
 
 from topologiq.input.zx_manager import AugmentedZXGraph
-from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 from topologiq.ux.utils import styles
-from topologiq.ux.utils.aux import create_split_controls
 
 
 class ZXCanvas(QWidget):
-    """Self-contained ZX canvas."""
+    """Interactive ZXLive canvas with integrated compilation and branch tracking management."""
 
     toggle_requested = Signal(str)
-    compile_requested = Signal(str)
 
     def __init__(self, manager, parent=None):
-        """Initialise ZX canvas."""
+        """Initialise the unified ZX canvas wrapper."""
 
-        # Manager & state trackers
+        # Init init, init
         super().__init__(parent)
         self.manager = manager
-
         self.current_aug_zx = None
-        self.experimental_zx = None
-        self.items = []
-        self._tasks = set()
-        self.is_reduced_view = False
-        self.last_points = []
-        self.hovered_node_idx = None
-        self.toggle_buttons = None
+        self.current_graph_key = "circuit"
 
-        # Main container
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.setSpacing(0)
+        # Match the IDE's main structural margins and spacing
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(5)
         self.setStyleSheet("ZXCanvas { background: #1a1a1a; }")
 
-        # Styled frame
+        # Establish the bounded visual container frame
         self.canvas_frame = QFrame()
         self.canvas_frame.setObjectName("MainCanvasFrame")
         self.canvas_frame.setStyleSheet("""
             #MainCanvasFrame {
-            border: 1px solid #999;
-            background: #a3a3a3;
+                border: 1px solid #222;
+                background: #050505;
+            }
+        """)
+        self.frame_layout = QVBoxLayout(self.canvas_frame)
+        self.frame_layout.setContentsMargins(0, 0, 0, 0)
+        self.frame_layout.setSpacing(0)
+
+        # Inject core engine components (Populates menus and visual engine)
+        self._embed_zxlive_engine()
+        self._ghost_parent_window()
+
+        # Add the framed canvas container to the main view
+        self.main_layout.addWidget(self.canvas_frame)
+
+        # Append the lower control HUD outside the border frame matching the IDE's footer
+        self._setup_control_hud()
+
+        # Focus monitor hook
+        self._connect_tab_change_listener()
+
+    def _embed_zxlive_engine(self):
+        """Instantiate ZXLive, capture its central core, and dock it natively with localised menus."""
+
+        # Get ZXLive as an embedded app
+        self.zxlive_app = get_embedded_app()
+        self.zxlive_app.edit_graph(zx.Graph(), "Workspace")
+
+        self.raw_window = self.zxlive_app.main_window
+        if self.raw_window is None:
+            raise RuntimeError("ZXLive failed to initialise its main_window component.")
+
+        # Force spider labels/IDs to show up by default via QSettings integration
+        if hasattr(self.raw_window, "settings"):
+            self.raw_window.settings.setValue("show-vertex-indices", True)
+            self.raw_window.settings.sync()
+
+        # Extract and localise the native Menu Bar
+        self.menu_bar = self.raw_window.menuBar()
+        if self.menu_bar:
+            self.menu_bar.setParent(self)
+            self.menu_bar.setStyleSheet("""
+                QMenuBar {
+                    background-color: #222222;
+                    color: #999999;
+                    border-bottom: 1px solid #333333;
+                    font-size: 11px;
+                }
+                QMenuBar::item {
+                    background-color: transparent;
+                    padding: 5px 12px;
+                }
+                QMenuBar::item:selected {
+                    background-color: #2a2a2a;
+                    color: #fbff00;
+                }
+                QMenu {
+                    background-color: #222222;
+                    color: #e0e0e0;
+                    border: 1px solid #444444;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                }
+                QMenu::item:selected {
+                    background-color: #2a2a2a;
+                    color: #fbff00;
+                }
+            """)
+            self.frame_layout.addWidget(self.menu_bar)
+
+        # Capture and dock the main canvas view panels directly beneath the local menu bar
+        self.zxlive_core_layout = self.raw_window.centralWidget()
+        if self.zxlive_core_layout is None:
+            raise RuntimeError(
+                "Could not resolve the central content layout from the ZXLive frame."
+            )
+
+        self.zxlive_core_layout.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid #999; background: #222;}
+            QTabBar::tab {
+                height: 25px;
+                margin-top: 10px;
+                font-size: 12px;
+                font-variant: small-caps;
+                background: #3a3a3a;
+                color: #f2f3fb;
+                padding: 0 14px;
+                border: 1px dashed #999;
+                border-bottom: 1px solid #333;
+            }
+            QTabBar::tab:selected {
+                height: 28px;
+                margin-top: 0;
+                background: #222;
+                padding: 3px 14px;
+                border: 1px solid #999;
+                border-bottom: 2px solid #666;
             }
         """)
 
-        # VisPy integration
-        self.canvas = scene.SceneCanvas(
-            keys="interactive",
-            show=True,
-            bgcolor="#909090",
-            config={"depth_size": 24},
-        )
-        self.canvas.native.setStyleSheet("border: none; background: transparent;")
+        self.frame_layout.addWidget(self.zxlive_core_layout)
+        self.zxlive_core_layout.show()
 
-        frame_layout = QVBoxLayout(self.canvas_frame)
-        frame_layout.setContentsMargins(0, 0, 0, 0)
-        frame_layout.addWidget(self.canvas.native)
+    def _ghost_parent_window(self):
+        """Render the leftover floating QMainWindow shell invisible."""
+        self.raw_window.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+        self.raw_window.setGeometry(-1000, -1000, 1, 1)
+        self.raw_window.show()
 
-        self.layout.addWidget(self.canvas_frame)
+    def _setup_control_hud(self):
+        """Dock the action layout beneath the canvas view frame matching the IDE footer alignment."""
+        # Create Hud
+        hud_layout = QHBoxLayout()
+        hud_layout.setContentsMargins(3, 0, 3, 0)
+        hud_layout.setSpacing(10)
 
-        self.view = self.canvas.central_widget.add_view()
-        self.view.camera = "panzoom"
+        # Pastel-white restoration button overlay for closed IDE frame recovery
+        self.btn_open_ide = QPushButton("OPEN IDE")
+        self.btn_open_ide.setFixedHeight(32)
+        self.btn_open_ide.setStyleSheet("""
+            QPushButton {
+                background: #f4f4f6;
+                color: #222;
+                font-weight: bold;
+                border-radius: 2px;
+                font-size: 11px;
+                padding: 0px 15px;
+                border: 1px solid #dcdcdf;
+            }
+            QPushButton:hover { background: #e8e8eb; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        self.btn_open_ide.clicked.connect(self._handle_open_ide_click)
 
-        self.canvas.events.mouse_press.connect(self.on_mouse_press)
-        self.canvas.events.mouse_move.connect(self.on_mouse_move)
-        self._setup_hud_anchors()
+        # Main direct-action compile switch button
+        self.btn_compile_nav = QPushButton("COMPILE →")
+        self.btn_compile_nav.setFixedHeight(32)
+        self.btn_compile_nav.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
+        self.btn_compile_nav.clicked.connect(self._handle_compile_nav_click)
 
-    def manage_aug_zx(self, aug_zx_graph: AugmentedZXGraph, key: str = "Graph"):
-        """Manage the incoming Augmented ZX graph."""
+        # Assembled HUD layout without the old staging button asset
+        hud_layout.addWidget(self.btn_open_ide)
+        hud_layout.addStretch()
+        hud_layout.addWidget(self.btn_compile_nav)
+
+        self.main_layout.addLayout(hud_layout)
+
+    def manage_aug_zx(self, aug_zx_graph: AugmentedZXGraph, key: str = "circuit"):
+        """Ingest graph from Topologiq's core manager and project it onto ZXLive."""
         try:
-            # Update registry dropdown selector
+            # Cache newly arrived AugZX
             self.current_aug_zx = aug_zx_graph
-            self._update_registry_list()
+            self.current_graph_key = key
 
-            # Render
-            self._refresh_render()
+            # Ensure data is structurally intact and contains a valid PyZX graph
+            if self.current_aug_zx and hasattr(self.current_aug_zx, "zx_graph"):
+                # Clear and populate fresh layout panels matching active collection
+                self._rebuild_canvas_tabs()
+                QTimer.singleShot(50, self.centre_graph_view)
 
-            # Message users
-            self.manager.status_changed.emit(f"Viewing: {key}")
+            # Communicate success to user
+            self.manager.status_changed.emit(f"Viewing interactively using ZX live: {key}")
         except Exception as e:
-            self.manager.status_changed.emit(f"Canvas Render Error: {e}")
+            # Communicate error to user
+            self.manager.status_changed.emit(f"Canvas embedding sync error: {e}")
 
-    def _handle_load_request(self, graph_key: str = "primary"):
-        path_str, _ = QFileDialog.getOpenFileName(
-            self, "Direct ZX Import (Raw QASM)", "", "OpenQASM (*.qasm)"
-        )
-
-        if not path_str:
+    def _rebuild_canvas_tabs(self):
+        """Clear out stale tabs and reconstruct the visual workspace mapping all collected variants."""
+        if not hasattr(self.raw_window, "tab_widget"):
             return
 
-        path = Path(path_str)
-        # Use filename as key if we are still using the default 'primary'
-        final_key = path.stem if graph_key == "primary" else graph_key
-
-        # 1. Nuclear Reset
-        self.manager.clear_session()
-        self._update_registry_list()
-
-        try:
-            # 2. Ingest into ZX Manager
-            new_aug_zx = self.manager.zx_manager_in.add_graph_from_qasm(
-                path_to_qasm_file=path,
-                graph_key=final_key,
-            )
-
-            # 3. Update Master Data Store (Keyed Dictionary)
-            self.manager._data_store["augmented_zx_graph_in"][final_key] = new_aug_zx
-
-            # 4. Trigger Background Surgery (Universal Trigger)
-            # We use the manager's background task set to prevent GC
-            task = asyncio.create_task(self.manager.handle_silent_surgery(final_key, new_aug_zx))
-            self.manager._background_tasks.add(task)
-            task.add_done_callback(self.manager._background_tasks.discard)
-
-            # 5. UI Synchronization
-            self._update_registry_list()
-            self.manage_aug_zx(new_aug_zx)
-
-            self.manager.status_changed.emit(f"Imported & Started Surgery: {path.name}")
-
-        except Exception as e:
-            self.manager.status_changed.emit(f"Direct Load Error: {e}")
-
-    def _handle_json_io(self, mode: str):
-        """Handle save and load of JSON ZX graphs."""
-
-        ext = "PyZX Graph as JSON (*.json)"
-        if mode == "SAVE":
-            if not self.current_aug_zx:
-                self.manager.status_changed.emit("Nothing to save.")
-                return
-
-            path_str, _ = QFileDialog.getSaveFileName(self, "Save Graph JSON", "", ext)
-
-            if not path_str:
-                return
-
-            try:
-                path = Path(path_str).with_suffix(".json")
-                g = (
-                    self.current_aug_zx.zx_graph_reduced
-                    if self.is_reduced_view
-                    else self.current_aug_zx.zx_graph
-                )
-                path.write_text(g.to_json())
-                self.manager.status_changed.emit(f"Graph saved: {path.name}")
-            except Exception as e:
-                self.manager.status_changed.emit(f"Save Error: {e}")
-
-        elif mode == "LOAD":
-            path_str, _ = QFileDialog.getOpenFileName(self, "Open Graph JSON", "", ext)
-            if not path_str:
-                return
-
-            path = Path(path_str)
-            graph_name = path.stem
-
-            self.manager.clear_session()
-            self._update_registry_list()
-
-            try:
-                # 1. Parse and Wrap
-                new_graph = zx.Graph.from_json(path.read_text())
-                new_aug_zx = AugmentedZXGraph(zx_graph=new_graph)
-
-                # 2. Register in Managers
-                self.manager.zx_manager_in.add_graph(new_aug_zx, graph_key=graph_name)
-                self.manager._data_store["augmented_zx_graph_in"][graph_name] = new_aug_zx
-
-                # 3. Trigger Background Surgery
-                task = asyncio.create_task(
-                    self.manager.handle_silent_surgery(graph_name, new_aug_zx)
-                )
-                self.manager._background_tasks.add(task)
-                task.add_done_callback(self.manager._background_tasks.discard)
-
-                # 4. Sync View
-                self._update_registry_list()
-                self.manage_aug_zx(new_aug_zx)
-                self.manager.status_changed.emit(f"JSON Loaded & Verifying: {graph_name}")
-
-            except Exception as e:
-                self.manager.status_changed.emit(f"Load Error: {e}")
-
-    def _handle_optimization_request(self, opt_name: str):
-        """Apply a PyZX reduction to a COPY of the current graph."""
-
-        if not self.current_aug_zx:
+        tw = self.raw_window.tab_widget
+        collection = self.manager.get_data("augmented_zx_graph_in") or {}
+        if not collection:
             return
 
-        temp_zx = self.current_aug_zx.zx_graph.copy()
-        self.manager.status_changed.emit(f"Applying {opt_name}...")
+        # Temporarily disable layout signals to prevent cascade rendering events
+        # or focus shifts while erasing active widgets
+        tw.blockSignals(True)
+        while tw.count() > 0:
+            tw.removeTab(0)
+        tw.blockSignals(False)
 
-        if opt_name == "Full Reduce":
-            zx.full_reduce(temp_zx)
-        elif opt_name == "Spider Fusion":
-            zx.spider_simp(temp_zx)
-        elif opt_name == "To RG":
-            zx.to_rg(temp_zx)
+        # Sorting layout subroutine
+        def _get_sort_key(k: str):
+            parts = k.split("_")
+            if len(parts) > 1 and parts[-1].isdigit():
+                return (parts[0], int(parts[-1]))
+            return (k, 0)
 
-        # Update Sandbox view
-        self.current_aug_zx = AugmentedZXGraph(temp_zx)
-        self._refresh_render()
-        self.manager.status_changed.emit(f"Sandbox: Applied {opt_name}")
+        target_index = 0
+        sorted_items = sorted(collection.items(), key=lambda item: _get_sort_key(item[0]))
 
-    def _commit_to_registry(self):
-        if not self.current_aug_zx:
-            return
+        # Feed sorted graph structures back
+        for graph_key, aug_graph in sorted_items:
+            self.zxlive_app.edit_graph(aug_graph.zx_graph, graph_key)
+            if graph_key == self.current_graph_key:
+                target_index = tw.count() - 1
 
-        count = len(self.manager.zx_manager_in._collection)
-        new_name = f"mod_{count}"
+        # Restore selection state indices
+        if tw.count() > 0:
+            tw.blockSignals(True)
+            tw.setCurrentIndex(target_index)
+            tw.blockSignals(False)
+            self.current_graph_key = tw.tabText(target_index)
 
-        try:
-            # 1. Update Managers
-            self.manager.zx_manager_in.add_graph(self.current_aug_zx, graph_key=new_name)
-            self.manager._data_store["augmented_zx_graph_in"][new_name] = self.current_aug_zx
-
-            # 2. TRIGGER via the existing Event Loop
-            # We don't need a new loop; we just need to schedule it on the running one
-            loop = asyncio.get_event_loop()
-
-            # Schedule the coroutine
-            task = loop.create_task(
-                self.manager.handle_silent_surgery(new_name, self.current_aug_zx)
-            )
-            self.manager._background_tasks.add(task)
-            task.add_done_callback(self.manager._background_tasks.discard)
-
-            # 3. UI Update
-            self._update_registry_list()
-            self.combo_registry.setCurrentText(new_name)
-
-        except Exception as e:
-            self.manager.status_changed.emit(f"Commit Error: {e}")
-
-    def _handle_registry_change(self, text):
-        """Switch current graph when dropdown changes."""
-        # Guard against empty states or initialization noise
-        if not text or text == "No Graphs Loaded" or not self.combo_registry.isEnabled():
-            return
-
-        # Sanitize key (just in case of whitespace)
-        key = text.strip()
-
-        try:
-            # 1. Retrieve from Manager
-            registry_graph = self.manager.zx_manager_in.get_graph(graph_key=key)
-
-            # 2. Optimization: Don't re-render if it's already the active graph
-            if self.current_aug_zx == registry_graph:
-                return
-
-            # 3. Update State and View
-            self.current_aug_zx = registry_graph
-            self._refresh_render()
-
-            self.manager.status_changed.emit(f"Switched to Registry: {key}")
-
-        except Exception as e:
-            self.manager.status_changed.emit(f"Registry Access Error: {e}")
-
-    def _update_registry_list(self):
-        """Force the UI to match the current Manager state."""
-        self.combo_registry.blockSignals(True)
-        self.combo_registry.clear()
-
-        # 1. Get keys from the current zx_manager_in
-        try:
-            keys = list(self.manager.zx_manager_in._collection.keys())
-        except (AttributeError, TypeError):
-            keys = []
-
-        # 2. Populate and set selection
-        if not keys:
-            self.combo_registry.addItem("No Graphs Loaded")
-            self.combo_registry.setEnabled(False)
-        else:
-            self.combo_registry.setEnabled(True)
-            self.combo_registry.addItems(keys)
-
-            # Auto-select the latest one (the one just added/loaded)
-            self.combo_registry.setCurrentIndex(len(keys) - 1)
-
-        self.combo_registry.blockSignals(False)
-
-    def _handle_faux_compile_click(self):
-        """Emit the current key and request pane switch."""
-        current_key = self.combo_registry.currentText()
-        if not current_key or current_key == "No Graphs Loaded":
-            self.manager.status_changed.emit("No graph selected to compile.")
-            return
-
-        # Emit the key so the CompilePane can 'catch' it
-        self.compile_requested.emit(current_key)
-
-    def _trigger_surgery(self, use_reduced: bool):
-        """Initiate lattice surgery via the manager."""
-        self._run_async(self.manager.handle_lattice_surgery(use_reduced=use_reduced))
-
-    def _run_async(self, coro):
-        """Manage task references and avoid GC warnings."""
-        task = asyncio.ensure_future(coro)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-
-    def _setup_hud_anchors(self):
-        """Initialise all HUD components parented to the styled canvas_frame."""
-        # Top-Left: Registry Selection + File/Opt/Registry Actions
-        self._setup_graph_controls()
-
-        # Top-Right: Layout Controls (Split, Maximize, Close)
-        self._setup_layout_controls()
-
-        # Bottom-Left: Camera Reset ONLY
-        self._setup_navigation_controls()
-
-        # Prep sizes for the first resizeEvent
-        self.graph_control_hud.adjustSize()
-        self.layout_control_hud.adjustSize()
-
-    def _setup_graph_controls(self):
-        """Top-Left HUD: Registry selection and Icon-driven actions."""
-        self.graph_control_hud = QFrame(self.canvas_frame)
-
-        # Shared styling for the HUD bar and its buttons
-        self.graph_control_hud.setStyleSheet("""
-            QFrame { background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }
-            QComboBox {
-                background: #2a2a2a; color: #eee; border: 1px solid #555;
-                padding: 4px; font-size: 10px; font-weight: bold;
-                min-width: 120px; border-radius: 3px;
-            }
-            QPushButton {
-                background: transparent; color: #aaa; border: none;
-                font-size: 16px; padding: 2px 8px;
-            }
-            QPushButton:hover { color: #fff; background: #444; border-radius: 3px; }
-            QPushButton::menu-indicator { image: none; }
-        """)
-
-        layout = QHBoxLayout(self.graph_control_hud)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(6)
-
-        # 1. Registry Dropdown
-        self.combo_registry = QComboBox()
-        self._update_registry_list()
-        self.combo_registry.currentTextChanged.connect(self._handle_registry_change)
-        layout.addWidget(self.combo_registry)
-
-        # 2. FILE ACTIONS (Icon: 📂)
-        self.btn_files = QPushButton("📂")
-        file_menu = QMenu(self)
-        file_menu.addAction("Load QASM", self._handle_load_request)
-        file_menu.addAction("Load JSON", lambda: self._handle_json_io("LOAD"))
-        file_menu.addSeparator()
-        file_menu.addAction("Save JSON", lambda: self._handle_json_io("SAVE"))
-        self.btn_files.setMenu(file_menu)
-        layout.addWidget(self.btn_files)
-
-        # 3. OPTIMISE (Icon: ⚡)
-        self.btn_opt = QPushButton("⚡")
-        opt_menu = QMenu(self)
-        opt_menu.addAction("Full Reduce", lambda: self._handle_optimization_request("Full Reduce"))
-        opt_menu.addSeparator()
-        opt_menu.addAction(
-            "Spider Fusion", lambda: self._handle_optimization_request("Spider Fusion")
-        )
-        opt_menu.addAction("To RG Form", lambda: self._handle_optimization_request("To RG"))
-        self.btn_opt.setMenu(opt_menu)
-        layout.addWidget(self.btn_opt)
-
-        # 4. REGISTRY COMMIT (Icon: 💾)
-        self.btn_commit = QPushButton("💾")
-        self.btn_commit.clicked.connect(self._commit_to_registry)
-        layout.addWidget(self.btn_commit)
-
-    def _setup_layout_controls(self):
-        """Top-Right HUD: VS Code Style Layout Controls."""
-        # Using the same helper we used for the IDE
-        self.layout_control_hud = create_split_controls(
-            self.canvas_frame, ["◫", "□", "✕"], self.toggle_requested.emit
-        )
-        self.layout_control_hud.setStyleSheet(
-            self.layout_control_hud.styleSheet()
-            + "QFrame { background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }"
-        )
-
-    def _set_view_mode(self, reduced: bool):
-        """Toggle between full and reduced versions of the CURRENT graph."""
-        self.is_reduced_view = reduced
-        self.manager.status_changed.emit(f"Mode: {'Reduced' if reduced else 'Full'}")
-        self._refresh_render()
-
-    def _make_action_btn(self, text):
-        """Create the dark action buttons."""
-        btn = QPushButton(text)
-        btn.setFixedSize(130, 30)
-        btn.setStyleSheet("""
-            QPushButton {
-            background-color: #1a1a2e; color: #aaccff; border: 1px solid #3e3e5e;
-            border-radius: 15px; font-size: 9px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #252545; }
-        """)
-        return btn
-
-    def render_zx(self, g):
-        """Proxy-Vectorized renderer: High performance with individual node addressability."""
-
-        if g is None or g.num_vertices() == 0:
-            self._clear_scene()
-            return
-
-        self._clear_scene()
-
-        # --- 1. INITIALIZE BUFFERS & REGISTRY ---
-        v_list = list(g.vertices())
-        num_v = len(v_list)
-
-        # Permanent buffers for real-time manipulation
-        self.node_positions = np.zeros((num_v, 3), dtype=np.float32)
-        self.node_colors = np.zeros((num_v, 4), dtype=np.float32)
-        self.base_node_colors = self.node_colors.copy()
-        self.node_registry = {}  # v_id -> buffer_index
-        self.idx_to_node = {}  # buffer_index -> v_id
-
-        for i, v in enumerate(v_list):
-            # Map PyZX coords to VisPy space
-            self.node_positions[i] = [g.row(v) * 2.0, -g.qubit(v) * 2.0, 0.0]
-            self.node_registry[v] = i
-            self.idx_to_node[i] = v
-
-            # Color Mapping
-            try:
-                standard_type = ZXTypes(g.type(v)).name
-                hex_v = ZXColors.lookup(standard_type)
-            except Exception:
-                hex_v = ZXColors.SIMPLE
-            self.node_colors[i] = Color(hex_v).rgba
-            self.base_node_colors = self.node_colors.copy()
-
-        # --- 2. EDGE RENDERING (Order 1) ---
-        edges = list(g.edges())
-        if edges:
-            num_e = len(edges)
-            self.edge_coords = np.zeros((num_e * 2, 3), dtype=np.float32)
-            self.edge_colors = np.zeros((num_e * 2, 4), dtype=np.float32)
-            self.edge_to_indices = {}  # edge -> (idx_start, idx_end)
-
-            for i, (u, v) in enumerate(edges):
-                idx_u, idx_v = self.node_registry[u], self.node_registry[v]
-                self.edge_coords[i * 2] = self.node_positions[idx_u]
-                self.edge_coords[i * 2 + 1] = self.node_positions[idx_v]
-
-                # Track edge indices for rubber-banding logic later
-                self.edge_to_indices[(u, v)] = (i * 2, i * 2 + 1)
-
-                hex_e = (
-                    ZXColors.HADAMARD
-                    if g.edge_type((u, v)) == ZXEdgeTypes.HADAMARD
-                    else ZXColors.SIMPLE
-                )
-                rgba_e = Color(hex_e).rgba
-                self.edge_colors[i * 2] = self.edge_colors[i * 2 + 1] = rgba_e
-
-            self.edge_visual = scene.visuals.Line(
-                pos=self.edge_coords,
-                connect="segments",
-                color=self.edge_colors,
-                width=1.5,
-                parent=self.view.scene,
-            )
-            self.edge_visual.set_gl_state(depth_test=False)
-            self.edge_visual.order = 1
-            self.items.append(self.edge_visual)
-
-        # --- 3. NODE RENDERING (Order 2) ---
-        self.current_node_size = np.clip(14 - (num_v / 120), 6, 14)
-        self.node_visual = scene.visuals.Markers(
-            pos=self.node_positions,
-            face_color=self.node_colors,
-            edge_color="#f2f3fb",
-            edge_width=1,
-            size=self.current_node_size,
-            symbol="square",
-            parent=self.view.scene,
-        )
-        self.node_visual.set_gl_state(depth_test=False)
-        self.node_visual.order = 2
-        # Enable picking for mouse interactions
-        self.node_visual.interactive = True
-        self.items.append(self.node_visual)
-
-        # --- 4. TEXT RENDERING (Order 3) ---
-        dynamic_font_size = np.clip(11 - (num_v / 80), 0, 11)
-        if dynamic_font_size > 1.5:
-            self.text_visual = scene.visuals.Text(
-                text=[str(v) for v in v_list],
-                pos=self.node_positions,
-                font_size=dynamic_font_size,
-                anchor_x="left",
-                anchor_y="top",
-                bold=True,
-                parent=self.view.scene,
-            )
-        self.text_visual.set_gl_state("translucent", depth_test=False)
-        self.text_visual.order = 3
-        self.items.append(self.text_visual)
-
-        # Finalize view
-        self.last_points = self.node_positions
-        self._reset_camera_view()
-        self.node_visual.interactive = True
-        self.canvas.update()
-
-    def _clear_scene(self):
-        """Vaporise all existing VisPy visual items to prevent layering."""
-        for item in self.items:
-            try:
-                item.parent = None
-            except Exception as e:
-                self.manager.status_changed.emit(f"Canvas Clear Warning: {e}")
-                self.items.clear()
-
-    def _reset_camera_view(self):
-        """Reset PanZoom camera."""
-
-        # Use .size to check if the array is empty
-        if (
-            hasattr(self, "last_points")
-            and self.last_points is not None
-            and self.last_points.size > 0
-        ):
-            pts = self.last_points
-
-            # Extract bounds
-            x_min, x_max = pts[:, 0].min(), pts[:, 0].max()
-            y_min, y_max = pts[:, 1].min(), pts[:, 1].max()
-
-            # Calculate width/height with a 10% padding
-            w = x_max - x_min
-            h = y_max - y_min
-            padding = max(w, h, 2) * 0.1
-
-            # PanZoom camera.rect is (x, y, width, height)
-            self.view.camera.rect = (
-                x_min - padding,
-                y_min - padding,
-                w + (padding * 2),
-                h + (padding * 2),
-            )
-
-        else:
-            # Default fallback if no graph is loaded
-            self.view.camera.rect = (-5, -5, 10, 10)
+    def _connect_tab_change_listener(self):
+        """Attach a reactive event monitor to fit the viewport instantly whenever a tab gains focus."""
+        if hasattr(self.raw_window, "tab_widget"):
+            tw = self.raw_window.tab_widget
+            tw.currentChanged.connect(lambda _: QTimer.singleShot(30, self.centre_graph_view))
 
     def resizeEvent(self, event):  # noqa: N802
-        """Keep HUD elements anchored and cleanly spaced."""
-        if not hasattr(self, "layout_control_hud"):
-            return
-
+        """Handle layout resising actions to maintain proper camera centering and toggle visibility."""
         super().resizeEvent(event)
-        fw, fh = self.canvas_frame.width(), self.canvas_frame.height()
-        m = 15  # Margin
 
-        # Top Corners
-        self.graph_control_hud.move(m, m)
-        self.layout_control_hud.move(fw - self.layout_control_hud.width() - m, m)
+        # Calculate width percentage dynamically within the local frame bounds
+        if self.parentWidget():
+            parent_w = self.parentWidget().width()
+            if parent_w > 0:
+                canvas_percentage = self.width() / parent_w
 
-        # Bottom Left (Reset Cam stands alone now)
-        self.btn_reset_cam.move(m, fh - self.btn_reset_cam.height() - m)
+                # Show the button only if the canvas expands to occupy 95% or more of the view space
+                if canvas_percentage >= 0.95:
+                    self.btn_open_ide.show()
+                else:
+                    self.btn_open_ide.hide()
 
-        # Bottom Right
-        self.btn_faux_compile.move(
-            fw - self.btn_faux_compile.width() - m, fh - self.btn_faux_compile.height() - m
-        )
+        QTimer.singleShot(10, self.centre_graph_view)
 
-    def _toggle_reduction(self):
-        self.is_reduced_view = self.btn_reduce.isChecked()
-        new_text = "REDUCED [ON]" if self.is_reduced_view else "REDUCED [OFF]"
-        self.btn_reduce.setText(new_text)
+    def _handle_open_ide_click(self):
+        """Signal the parent load container splitter shell to restore the workspace to 40/60 split ratios."""
+        self.toggle_requested.emit("40/60")
 
-        # --- Force Layout Recalculation ---
-        self.btn_reduce.adjustSize()
-        self.top_right_hud.adjustSize()
-
-        w = self.width()
-        self.top_right_hud.move(w - self.top_right_hud.width() - 15, 10)
-
-        self._refresh_render()
-
-    def _refresh_render(self):
-        if not self.current_aug_zx:
-            return
-        g = (
-            self.current_aug_zx.zx_graph_reduced
-            if self.is_reduced_view
-            else self.current_aug_zx.zx_graph
-        )
-        self.render_zx(g)
-
-    def _setup_action_bar(self):
-        """Top-Right HUD: Consolidated Categorized Menus with forced styling."""
-        self.top_right_hud = QFrame(self.canvas_frame)
-
-        # 1. Define the shared Style Variable
-        menu_style = """
-            QMenu { background-color: #2a2a2a; border: 1px solid #555; border-radius: 3px; padding: 1px; }
-            QMenu::item { background-color: transparent; color: #eee; font-size: 10px; padding: 4px 20px 4px 10px; border-radius: 1px; }
-            QMenu::item:selected { background-color: #3a3a3a; color: #fff; }
-            QMenu::separator { height: 1px; background: #444; margin: 4px 8px; }
-        """
-        self.top_right_hud.setStyleSheet("""
-            QFrame { background: rgba(35, 35, 35, 220); border-radius: 4px; border: 1px solid #444; }
-            QPushButton {
-                background: #2a2a2a; color: #eee; font-size: 10px; font-weight: bold;
-                padding: 4px 12px; border: 1px solid #555; border-radius: 3px;
-                text-align: left; min-width: 80px;
-            }
-            QPushButton::menu-indicator { image: none; }
-            QPushButton:hover { background: #3a3a3a; border-color: #777; }
-        """)
-
-        layout = QHBoxLayout(self.top_right_hud)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(8)
-
-        # --- 1. PROJECT MENU ---
-        self.btn_project = QPushButton("▾ File actions")
-        project_menu = QMenu(self)
-        project_menu.setStyleSheet(menu_style)  # <--- FORCING STYLE HERE
-        project_menu.addAction("Load QASM", lambda: self._handle_load_request())
-        project_menu.addAction("Load JSON", lambda: self._handle_json_io("LOAD"))
-        project_menu.addSeparator()
-        project_menu.addAction("Save JSON", lambda: self._handle_json_io("SAVE"))
-        self.btn_project.setMenu(project_menu)
-
-        # --- 2. OPTIMIZE MENU ---
-        self.btn_optimize = QPushButton("▾ Optimise")
-        opt_menu = QMenu(self)
-        opt_menu.setStyleSheet(menu_style)  # <--- FORCING STYLE HERE
-        opt_menu.addAction(
-            "Spider Fusion", lambda: self._handle_optimization_request("Spider Fusion")
-        )
-        opt_menu.addAction("To RG Form", lambda: self._handle_optimization_request("To RG"))
-        self.btn_optimize.setMenu(opt_menu)
-
-        # --- 3. REGISTRY MENU ---
-        self.btn_registry_actions = QPushButton("▾ Graph registry")
-        reg_menu = QMenu(self)
-        reg_menu.setStyleSheet(menu_style)  # <--- FORCING STYLE HERE
-        reg_menu.addAction("Commit to registry", self._commit_to_registry)
-        self.btn_registry_actions.setMenu(reg_menu)
-
-        for btn in [self.btn_project, self.btn_optimize, self.btn_registry_actions]:
-            layout.addWidget(btn)
-
-    def _setup_navigation_controls(self):
-        """Bottom-Left HUD: Layout toggles and camera resets."""
-        # 2. Camera Reset (The Round Button)
-        self.btn_reset_cam = QPushButton("⟲", self.canvas_frame)
-        self.btn_reset_cam.setFixedSize(30, 30)
-        self.btn_reset_cam.setStyleSheet(
-            styles.STYLE_CLOSE_BTN
-            + "QPushButton { background: #333; border: 1px solid #000; border-radius: 15px; font-size: 16px; }"
-            "QPushButton:hover { background: #555; }"
-        )
-        self.btn_reset_cam.clicked.connect(self._reset_camera_view)
-
-        # NEW: Bottom-Right "Faux Compile" Button
-        self.btn_faux_compile = QPushButton("COMPILE CURRENT →", self.canvas_frame)
-        self.btn_faux_compile.setFixedSize(160, 32)
-        self.btn_faux_compile.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
-        self.btn_faux_compile.clicked.connect(self._handle_faux_compile_click)
-
-    def on_mouse_press(self, event):  # noqa: D102
-        # GUARD: If no nodes are rendered yet, ignore the click
-        if not hasattr(self, "node_visual") or self.node_visual is None:
+    def _handle_stage_to_compile_click(self):
+        """Extract the active graph layout and stage it into the compilation control pane."""
+        # Query state management engine to pull down all input variant tracks
+        collection = self.manager.get_data("augmented_zx_graph_in") or {}
+        if not collection:
+            self.manager.status_changed.emit("No graphs found in collection to stage.")
             return
 
-        tr = self.view.scene.node_transform(self.node_visual)
-        pos = tr.map(event.pos)[:2]
+        # Fallback default tracking marker
+        active_key = self.current_graph_key
 
-        button_map = {1: "Left", 2: "Right", 3: "Middle"}
-        btn = button_map.get(event.button, "Unknown")
+        # Pull down precise runtime layout indices from the embedded window instance properties
+        if hasattr(self.raw_window, "tab_widget"):
+            tw = self.raw_window.tab_widget
+            if tw.count() > 0:
+                # Extract structural identity tags straight out of tab text
+                active_key = tw.tabText(tw.currentIndex())
 
-        self.manager.status_changed.emit(f"Mouse {btn} Click at: x={pos[0]:.2f}, y={pos[1]:.2f}")
-
-    def on_mouse_move(self, event):  # noqa: D102
-        if not hasattr(self, "node_positions") or not hasattr(self, "node_visual"):
+        # Resolve the active baseline object mapping for verification
+        target_aug_zx = collection.get(active_key)
+        if not target_aug_zx:
+            self.manager.status_changed.emit(
+                f"Staging Aborted: Key '{active_key}' not found in data store."
+            )
             return
 
-        # Map pixel (event.pos) -> World Coord (pos)
-        # imap = Inverse Map (Screen to Scene)
-        pos = self.view.camera.transform.imap(event.pos)[:2]
+        # Sync state frames and push focus down to the rewrite panels
+        self.manager.handle_stage_to_compile(active_key, target_aug_zx)
 
-        # Vectorized Distance
-        dist = np.linalg.norm(self.node_positions[:, :2] - pos, axis=1)
-        closest_idx = np.argmin(dist)
+    def _handle_snapshot_click(self):
+        """Extract live layout mutations from the active view pane and commit them as a new circuit_n key."""
+        # Fallback to last known tracking key
+        active_key = self.current_graph_key
 
-        # 0.8 is a safe radius for your 2.0-unit spacing
-        if dist[closest_idx] < 0.8:
-            if self.hovered_node_idx != closest_idx:
-                self._apply_hover_effect(closest_idx)
+        # Resolve active tab string identity directly from the visual workspace
+        if hasattr(self.raw_window, "tab_widget"):
+            tw = self.raw_window.tab_widget
+            if tw.count() > 0:
+                active_key = tw.tabText(tw.currentIndex())
+
+        # Guard against uninitialised workspace states
+        if not active_key or active_key == "Workspace":
+            self.manager.status_changed.emit("No active canvas tab found to snapshot.")
+            return
+
+        # Pull a clean snapshot copy from the underlying ZXLive canvas engine
+        live_graph = self._pull_graph_from_zxlive(active_key)
+        if not live_graph:
+            self.manager.status_changed.emit(
+                f"Could not extract a valid live graph instance for '{active_key}'."
+            )
+            return
+
+        # Determine naming convention prefix based on existing data
+        existing_inputs = self.manager.get_data("augmented_zx_graph_in") or {}
+        if existing_inputs:
+            first_key = sorted(existing_inputs.keys())[0]
+            base_prefix = first_key.split("_")[0]
         else:
-            if self.hovered_node_idx is not None:
-                self._clear_hover_effect()
+            base_prefix = "circuit"
 
-    def _apply_hover_effect(self, idx):
-        """Highlight a node without wiping its style properties."""
-        self.hovered_node_idx = idx
-        v_id = self.idx_to_node.get(idx, "???")
+        # Calculate next increment offset and update local tracking keys
+        next_index = len(existing_inputs)
+        next_key = f"{base_prefix}_{next_index}"
+        self.current_graph_key = next_key
 
-        edge_colors = np.full(
-            (len(self.node_positions), 4), [0.95, 0.95, 0.98, 1.0], dtype=np.float32
-        )
+        # Core task dispatch
+        task = asyncio.create_task(self.manager.handle_snapshot_zx_graph(live_graph, next_key))
 
-        # 2. Apply Yellow Highlight [R, G, B, A]
-        edge_colors[idx] = self.node_colors[idx]
-
-        # 3. Update the Visual with explicit property enforcement
-        try:
-            self.node_visual.set_data(
-                pos=self.node_positions.astype(np.float32),
-                face_color=self.node_colors,
-                edge_color=edge_colors,
-                symbol="square",
-                size=self.current_node_size,
+        # Register task to guard thread safety boundaries
+        if hasattr(self.manager, "_tasks"):
+            self.manager._tasks.add(task)
+            task.add_done_callback(
+                lambda t: QTimer.singleShot(0, lambda: self.manager._tasks.discard(t))
             )
-            self.node_visual.update()
-            self.canvas.update()
-            self.manager.status_changed.emit(f"Hovering Node ID: {v_id}")
-        except Exception as e:
-            self.manager.status_changed.emit(f"Hover Error: {e}")
 
-    def _clear_hover_effect(self):
-        """Restore original colors and styles."""
-        if self.hovered_node_idx is None:
+    def _handle_compile_nav_click(self):
+        """Compare live graph against its tab's baseline. Updates focus or auto-increments the key."""
+        # Resolve active canvas identifier tracking token
+        active_key = self.current_graph_key
+        if hasattr(self.raw_window, "tab_widget"):
+            tw = self.raw_window.tab_widget
+            if tw.count() > 0:
+                active_key = tw.tabText(tw.currentIndex())
+
+        # Fall back to compilation pane if workspace is uninitialised or generic
+        if not active_key or active_key == "Workspace":
+            self.manager.section_changed.emit("COMPILE")
             return
 
-        self.hovered_node_idx = None
+        # Retrieve a duplicate snapshot of live model
+        live_graph = self._pull_graph_from_zxlive(active_key)
+        if not live_graph:
+            self.manager.section_changed.emit("COMPILE")
+            return
 
-        try:
-            self.node_visual.set_data(
-                pos=self.node_positions.astype(np.float32),
-                face_color=self.base_node_colors.astype(np.float32),
-                edge_color="#f2f3fb",
-                symbol="square",
-                size=self.current_node_size,
+        existing_inputs = self.manager.get_data("augmented_zx_graph_in") or {}
+        baseline_obj = existing_inputs.get(active_key)
+
+        # Isolate structural edits compared against baseline properties
+        is_mutated = True
+        if baseline_obj and hasattr(baseline_obj, "zx_graph"):
+            g = baseline_obj.zx_graph
+            if (
+                g.num_vertices() == live_graph.num_vertices()
+                and g.num_edges() == live_graph.num_edges()
+            ):
+                is_mutated = False
+
+        if not is_mutated:
+            # Advance view directly utilising current context reference tracking
+            self._finalise_compile_navigation(active_key)
+            return
+
+        # Handle mutated state tracking increments safely
+        base_prefix = active_key.split("_")[0] if "_" in active_key else "circuit"
+        next_index = len(existing_inputs)
+        new_version_key = f"{base_prefix}_{next_index}"
+
+        # Dispatch snapshot compilation block via the standardised manager task layout
+        task = asyncio.create_task(
+            self.manager.handle_snapshot_zx_graph(live_graph, new_version_key)
+        )
+
+        # Use localised protective set variables to enforce linter compliance safely
+        if hasattr(self.manager, "_tasks"):
+            self.manager._tasks.add(task)
+            task.add_done_callback(self.manager._tasks.discard)
+
+        # Guard thread context boundaries during pane navigation switches
+        task.add_done_callback(
+            lambda t: QTimer.singleShot(
+                0, lambda: self._finalise_compile_navigation(new_version_key)
             )
-            self.node_visual.update()
-            self.canvas.update()
+        )
+
+    def _finalise_compile_navigation(self, target_key: str):
+        """Force synchronise the data store registries and execute the COMPILE view setup."""
+        data_map = self.manager.get_data("augmented_zx_graph_in") or {}
+        target_obj = data_map.get(target_key)
+
+        # Synchronise active frame keys directly across configuration layers safely
+        main_win = self.window()
+        if hasattr(main_win, "panes") and "COMPILE" in main_win.panes:
+            main_win.panes["COMPILE"].active_key = target_key
+
+        self.manager.handle_stage_to_compile(target_key, target_obj)
+        self.manager.section_changed.emit("COMPILE")
+
+    def _pull_graph_from_zxlive(self, current_key: str) -> zx.Graph:
+        """Extract the current live state of a named graph from the editor space."""
+        return self.zxlive_app.get_copy_of_graph(current_key)
+
+    def centre_graph_view(self):
+        """Force the embedded engine to recalculate its bounds and centre camera layout."""
+        QTimer.singleShot(50, self._execute_safe_centre)
+
+    def _execute_safe_centre(self):
+        """Centre graph once layout parameters are calculated."""
+        try:
+            if not hasattr(self, "raw_window") or not self.raw_window:
+                return
+            if hasattr(self.raw_window, "tab_widget"):
+                tw = self.raw_window.tab_widget
+                current_panel = tw.currentWidget()
+                if current_panel and hasattr(current_panel, "graph_view"):
+                    gv = current_panel.graph_view
+                    if hasattr(gv, "zoom_to_fit"):
+                        gv.zoom_to_fit()
+                    elif hasattr(gv, "fitInView") and gv.scene():
+                        gv.fitInView(gv.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
         except Exception as e:
-            self.manager.status_changed.emit(f"Hover Clear Error: {e}")
+            print(f"Canvas Layout Realignment Alert: {e}")

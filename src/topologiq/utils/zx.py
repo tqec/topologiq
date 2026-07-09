@@ -174,7 +174,6 @@ def _clean_bialgebra_pattern(pyzx_graph: BaseGraph | GraphS, match_candidates: l
             if neigh_id not in match_candidates:
                 pyzx_graph.remove_edge((s_id, neigh_id))
                 pyzx_graph.add_edge((twin_id, neigh_id))
-        zx.draw(pyzx_graph, labels=True)
 
 
 #####################
