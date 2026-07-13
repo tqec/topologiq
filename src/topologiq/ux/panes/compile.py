@@ -206,6 +206,7 @@ class CompilePane(QWidget):
                 "bfs-cnots",
                 "bfs-cnot-cycles",
                 "tfs-cnots",
+                "tfs",
             ]
         )
         drawer_layout.addWidget(self.bfs_label)

@@ -9,20 +9,23 @@ from topologiq.input.zx_manager import ZXGraphManager
 # Note 1. Topologiq auto-completes KWARGs, so only give explicitly any KWARGs that deviate from defaults.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
 
-# Note 2. This script uses a standard graph_traverse_mode but not necessarily the optimal for all graphs.
+# Note 2. Script uses a all-terrain graph_traverse_mode that is not necessarily optimal across all cases.
 # Note 3. To get minimal volumes, change "twins" to `False`.
-# Contributions geared to automatically choosing optimal KWARGs given graph type are extremely welcome.
+# Contributions geared to automatically choosing optimal graph traverse mode given graph type are welcome.
 
 # Note 4. Not all "first_id_strategy" and "graph_traverse_mode" are compatible with all graphs.
 # Contributinos geared to create fallbacks for when specialised strategies fail are welcome.
 kwargs = {
-    "debug": 0,
-    "first_id_strategy": "first-spider",
-    "graph_traverse_mode": "bfs-cross",
-    "gravity": 10,
-    "z_stretch": 0,
-    "twins": True,
+    "debug": 0,  # Verbosity. Change to `3` for step by step visuals.
+    "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID.
+    "graph_traverse_mode": "bfs",  # Graph traversing strategy
+    "gravity": 7,  # Integer weight that pulls paths towards graph centre
+    "twins": True,  # Boolean flag to enable "twins", which safeguards completion at the expense of volume
 }
+# Available `first_id_strategy` values:
+# - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first"]
+# Available `graph_traverse_mode` values:
+# - ["bfs", "bfs-cross", "bfs-cross-boundaries-last", "bfs-cycles", "bfs-rows", "bfs-cnots", "tfs-cnots", "tfs"]
 
 #######
 # RUN #

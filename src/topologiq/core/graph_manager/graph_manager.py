@@ -435,24 +435,24 @@ class BlockGraphManager:
             # Update any trackers that might have changed from transformations
             self.update_base_trackers(new_ids=new_ids)
 
-    def update_base_trackers(self, new_ids: dict[int,int] = {}):
-            """Update ID trackers to match changes in input graph."""
+    def update_base_trackers(self, new_ids: dict[int, int] = {}):
+        """Update ID trackers to match changes in input graph."""
 
-            if new_ids:
-                self.ids.update(new_ids.keys())
-                for new_id, ref_id in new_ids.items():
-                    self.rows[new_id] = self.rows[ref_id]
-                    self.qubits[new_id] = self.qubits[ref_id]
-                    self.types[new_id] = self.types[ref_id]
-                    self.phases[new_id] = 0
-            self.ids = set(self.bgraph.nodes())
-            self.types = {k: zx_block.zx_type for k, zx_block in self.bgraph.nodes(data="zx_block")}
-            self.degrees = {k: self.bgraph.degree(k) for k in self.bgraph.nodes()}
-            self.edge_types = {
-                (u, v): attrs["edge_type"] for u, v, attrs in self.bgraph.edges(data=True)
-            }
-            self.twin_trace: dict[int, list[int]] = {k: [k] for k in self.ids}
-            self.twin_trace_inverse: dict[int, int] = {}
+        if new_ids:
+            self.ids.update(new_ids.keys())
+            for new_id, ref_id in new_ids.items():
+                self.rows[new_id] = self.rows[ref_id]
+                self.qubits[new_id] = self.qubits[ref_id]
+                self.types[new_id] = self.types[ref_id]
+                self.phases[new_id] = 0
+        self.ids = set(self.bgraph.nodes())
+        self.types = {k: zx_block.zx_type for k, zx_block in self.bgraph.nodes(data="zx_block")}
+        self.degrees = {k: self.bgraph.degree(k) for k in self.bgraph.nodes()}
+        self.edge_types = {
+            (u, v): attrs["edge_type"] for u, v, attrs in self.bgraph.edges(data=True)
+        }
+        self.twin_trace: dict[int, list[int]] = {k: [k] for k in self.ids}
+        self.twin_trace_inverse: dict[int, int] = {}
 
     def place_first_cube(self):
         """Define and place the very first cube of the blockgraph."""
@@ -637,7 +637,7 @@ class BlockGraphManager:
 
         # Overload tentative coords generation if applicable
         overload = 0
-        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]:
+        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots", "tfs"]:
             if (
                 self.curr_src_id in self.qubits
                 and self.curr_tgt_id in self.qubits
@@ -647,8 +647,22 @@ class BlockGraphManager:
                     == self.qubits[self.curr_tgt_id]
                 )
             ):
-                overload = 0
-                step = self._kwargs["z_stretch"]
+                if self._kwargs["graph_traverse_mode"] == "tfs-cnots" and (
+                    self.qubits[self.first_id]
+                    == self.qubits[self.curr_src_id]
+                    == self.qubits[self.curr_tgt_id]
+                ):
+                    overload = 0
+                    step = self._kwargs["z_stretch"]
+                elif (
+                    self._kwargs["graph_traverse_mode"] == "tfs"
+                    and self.curr_src_id in self.rows
+                    and self.curr_tgt_id in self.rows
+                    and (self.rows[self.curr_src_id] != self.qubits[self.curr_tgt_id])
+                ):
+                    overload = 0
+                    step = self._kwargs["z_stretch"]
+
             else:
                 overload = 2 if self.curr_tgt_zx_type in ["Y", "XZ"] else 0
         elif self.curr_tgt_zx_type in ["Y", "XZ"]:
@@ -728,8 +742,8 @@ class BlockGraphManager:
                 self.winner_path = CandidatePath(
                     **{
                         "full_path": list(self.valid_paths.values())[0],
-                        "tgt_beams": self.beams[self.curr_tgt_id],
-                        "tgt_beams_short": self.beams_short[self.curr_tgt_id],
+                        "tgt_beams": self.beams[self.curr_tgt_id] if self.curr_tgt_id in self.beams else None,
+                        "tgt_beams_short": self.beams_short[self.curr_tgt_id] if self.curr_tgt_id in self.beams else None,
                         "beams_broken_by_path": 0,  # Not calculated (pathfinder handles beams tolerances internally for cross-edges)
                         "tgt_unobstr_exit_n": self.bgraph.nodes[self.curr_tgt_id]["completions"][
                             "pending"
@@ -1308,6 +1322,7 @@ class BlockGraphManager:
             "bfs-cnots": "zx",
             "bfs-cnot-cycles": "zx",
             "tfs-cnots": "zx",
+            "tfs": "zx",
         }
 
         self.get_stats()

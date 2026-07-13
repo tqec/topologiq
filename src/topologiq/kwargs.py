@@ -71,6 +71,8 @@ FIRST_ID_STRATEGY = "first-spider"
 # - bfs-cycles: BFS per cycles (per nx.cycle_basis) with bridge recovery subroutine (to join disconnected cycles) and boundary handling at the end
 # - bfs-rows: BFS per (ZX) rows in the graph, one row at a time
 # - bfs-cnots: BFS using central qubit and graph CNOTs as pillars (almost no longer a BFS but let's say it is).
+# - tfs-cnots: Combines BFS cnots with priority queuing of all edges needed to complete T-gates before traversing rest of the graph.
+# - tfs: Starts at any given node and finds shortest paths between visited spiders and all T-gates, then traverses the graph BFS.
 GRAPH_TRAVERSE_MODE = "bfs-cross"
 
 # Length of short beams

@@ -274,7 +274,7 @@ class UXManager(QObject):
             self._set_processing(False, "Ready")
 
     async def handle_snapshot_zx_graph(self, pyzx_graph: zx.Graph, target_key: str):
-        """Register a modified PyZX graph instance into collection."""
+        """Register a modified PyZX graph instance into collection while matching original vertex IDs."""
         # Prevent run if anything is processing
         if self.is_processing:
             return
@@ -285,45 +285,53 @@ class UXManager(QObject):
             # Instantiate a clean target container
             sanitized_graph = zx.Graph()
 
-            # Spiders
-            for v in pyzx_graph.vertices():
+            # High-water mark allocation: pre-generate vertices up to the maximum ID found.
+            # This allows us to use the exact same integer indices natively.
+            if pyzx_graph.num_vertices() > 0:
+                max_id = max(pyzx_graph.vertices())
+                # add_vertices(n) creates vertices with IDs 0 to n-1
+                sanitized_graph.add_vertices(max_id + 1)
+
+            # Keep a track of valid vertices to drop any unused pre-allocated indices later
+            active_vertices = set(pyzx_graph.vertices())
+
+            # Configure properties for the active vertices using their original IDs
+            for v in active_vertices:
                 r_val = pyzx_graph.row(v)
                 q_val = pyzx_graph.qubit(v)
                 rounded_row = int(r_val + 0.5) if r_val >= 0 else int(r_val - 0.5)
                 rounded_qubit = int(q_val + 0.5) if q_val >= 0 else int(q_val - 0.5)
 
-                sanitized_graph.add_vertex(
-                    ty=pyzx_graph.type(v),
-                    qubit=rounded_qubit,
-                    row=rounded_row,
-                    phase=pyzx_graph.phase(v),
-                )
+                # Overwrite the pre-allocated vertex configuration data
+                sanitized_graph.set_type(v, pyzx_graph.type(v))
+                sanitized_graph.set_qubit(v, rounded_qubit)
+                sanitized_graph.set_row(v, rounded_row)
+                sanitized_graph.set_phase(v, pyzx_graph.phase(v))
 
                 switch_to_cube_val = pyzx_graph.vdata(v, "switch_to_cube", default=None)
                 if switch_to_cube_val is not None:
                     sanitized_graph.set_vdata(v, "switch_to_cube", switch_to_cube_val)
 
-            # Edges
-            for v in pyzx_graph.vertices():
-                r_val = pyzx_graph.row(v)
-                q_val = pyzx_graph.qubit(v)
-                rounded_row = int(r_val + 0.5) if r_val >= 0 else int(r_val - 0.5)
-                rounded_qubit = int(q_val + 0.5) if q_val >= 0 else int(q_val - 0.5)
+            # Purge the unused intermediate gap vertices from our pre-allocation pass
+            total_allocated = max_id + 1 if pyzx_graph.num_vertices() > 0 else 0
+            all_allocated_ids = list(range(total_allocated))
+            vertices_to_remove = [v for v in all_allocated_ids if v not in active_vertices]
+            if vertices_to_remove:
+                sanitized_graph.remove_vertices(vertices_to_remove)
 
-                sanitized_graph.set_qubit(v, rounded_qubit)
-                sanitized_graph.set_row(v, rounded_row)
-
-            # Bind connectivity maps
+            # Bind connectivity maps using the preserved original IDs
             for edge in pyzx_graph.edges():
                 u, v = edge[0], edge[1]
                 e_type = pyzx_graph.edge_type(edge)
                 sanitized_graph.add_edge((u, v), edgetype=e_type)
 
-            # Re-map I/O spiders
+            # Map inputs and outputs using the preserved original IDs
             if hasattr(pyzx_graph, "inputs"):
-                sanitized_graph.set_inputs(list(pyzx_graph.inputs()))
+                sanitized_graph.set_inputs([i for i in pyzx_graph.inputs() if i in active_vertices])
             if hasattr(pyzx_graph, "outputs"):
-                sanitized_graph.set_outputs(list(pyzx_graph.outputs()))
+                sanitized_graph.set_outputs(
+                    [o for o in pyzx_graph.outputs() if o in active_vertices]
+                )
 
             # Encapsulate into an internal wrapper
             aug_zx_to_emit = AugmentedZXGraph(zx_graph=sanitized_graph)

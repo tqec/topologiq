@@ -372,14 +372,17 @@ class ZXCanvas(QWidget):
             self.manager.section_changed.emit("COMPILE")
             return
 
-        # Retrieve a duplicate snapshot of live model
+        # Retrieve a duplicate snapshot of live model using the exact tab label string
         live_graph = self._pull_graph_from_zxlive(active_key)
         if not live_graph:
             self.manager.section_changed.emit("COMPILE")
             return
 
+        # Clean the key for Topologiq ledger processing (strip dirty-state asterisks and spaces)
+        cleaned_active_key = active_key.lstrip("*").strip()
+
         existing_inputs = self.manager.get_data("augmented_zx_graph_in") or {}
-        baseline_obj = existing_inputs.get(active_key)
+        baseline_obj = existing_inputs.get(cleaned_active_key)
 
         # Isolate structural edits compared against baseline properties
         is_mutated = True
@@ -392,12 +395,22 @@ class ZXCanvas(QWidget):
                 is_mutated = False
 
         if not is_mutated:
-            # Advance view directly utilising current context reference tracking
-            self._finalise_compile_navigation(active_key)
+            # Advance view directly utilising clean tracked reference token
+            self._finalise_compile_navigation(cleaned_active_key)
             return
 
-        # Handle mutated state tracking increments safely
-        base_prefix = active_key.split("_")[0] if "_" in active_key else "circuit"
+        # Handle mutated state or new derivation proof tracks safely
+        if baseline_obj or ("_" in cleaned_active_key and "Proof" not in cleaned_active_key):
+            base_prefix = cleaned_active_key.split("_")[0]
+        else:
+            # Revert back to the project default schema prefix for derivations/proofs
+            if existing_inputs:
+                # Filter out any lingering legacy keys that contain asterisks from earlier frames
+                s_keys = [k.lstrip("*") for k in existing_inputs.keys()]
+                base_prefix = sorted(s_keys)[0].split("_")[0] if s_keys else "circuit"
+            else:
+                base_prefix = "circuit"
+
         next_index = len(existing_inputs)
         new_version_key = f"{base_prefix}_{next_index}"
 

@@ -77,6 +77,7 @@ def get_first_cube_data(
 # ID/KIND GEN #
 ###############
 
+
 def pick_id_and_kind(
     bgraph: nx.Graph,
     first_id_strategy: str,
@@ -217,14 +218,21 @@ def pick_first_id(
         first_id = max(set(central_nodes), key=central_nodes.count)
 
     elif first_id_strategy == "central-in-first-cycle":
-        first_cycle = nx.cycle_basis(bgraph)[0]
-        central_id, max_degree = (None, 0)
-        for spider_id in first_cycle:
-            degree = bgraph.degree[spider_id]
-            if degree > max_degree:
-                max_degree = degree
-                central_id = spider_id
-        first_id = central_id
+        try:
+            # Try determining central spider in first cycle
+            # Will fail when the circuit has no cycles
+            first_cycle = nx.cycle_basis(bgraph)[0]
+            central_id, max_degree = (None, 0)
+            for spider_id in first_cycle:
+                degree = bgraph.degree[spider_id]
+                if degree > max_degree:
+                    max_degree = degree
+                    central_id = spider_id
+            first_id = central_id
+        except IndexError:
+            # If circuit has no cycles use a centrality measure
+            degree_centrality = nx.betweenness_centrality(bgraph)
+            first_id = sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0]
 
     # Random choice from central spiders
     elif first_id_strategy in ["centrality-random", "random"]:

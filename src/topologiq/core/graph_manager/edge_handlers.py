@@ -61,11 +61,15 @@ def queue_precalc(
     if graph_traverse_strategy == "bfs-cycles":
         edge_queue = _queue_bfs_cycles(bgraph, first_id)
 
-    # Layered BFS
+    # Layered BFS (by rows)
     if graph_traverse_strategy == "bfs-rows":
         edge_queue = _queue_bfs_rows(
-            bgraph, first_id, rows, inputs, graph_traverse_strategy, other_first_ids
+            bgraph, first_id, rows, inputs, other_first_ids=other_first_ids, t_gates=t_gates
         )
+
+    # Layered BFS (by T-gates)
+    if graph_traverse_strategy == "tfs":
+        edge_queue = _queue_tfs(bgraph, first_id, inputs, t_gates=t_gates)
 
     # An almost-no-longer-BFS that lays out the central qubit before traversing CNOTs
     if graph_traverse_strategy == "bfs-cnots":
@@ -94,33 +98,47 @@ def queue_precalc(
 ####################
 # QUEUE RATIONALES #
 ####################
-def _queue_bfs_cross(bgraph: nx.Graph, first_id: int) -> list[tuple[int, int]]:
+def _queue_bfs_cross(
+    bgraph: nx.Graph,
+    first_id: int,
+    edge_queue: list[tuple[int, int]] = [],
+    standard_edges: list[tuple[int, int]] = [],
+    cross_edges: list[tuple[int, int]] = [],
+) -> list[tuple[int, int]]:
     """Build queue using a BFS with priority cross-edges strategy.
 
     Args:
         bgraph: The BlockGraph currently being built.
         first_id: The spider ID at which to begin traversing (needed for some algorithms).
+        edge_queue (optional): A pre-existing edge-queue with some edges already completed.
+        standard_edges (optional): Pre-built NX BFS (avoids duplication if running in a different hander).
+        cross_edges (optional): Pre-built list of cross edges (avoids duplication if running in a different hander).
 
     Returns:
         edge_queue: A list of (u, v) tuples to use as queue.
 
     """
 
-    # Initialise edge queue
-    edge_queue: list[tuple[int, int]] = []
-
     # Get native NX queues to use as basis for construction
-    standard_edges = list(nx.bfs_edges(bgraph, first_id))
-    edge_bfs = list(nx.edge_bfs(bgraph, first_id))
-    cross_edges = [e for e in edge_bfs if e not in standard_edges]
+    if not standard_edges:
+        standard_edges = list(nx.bfs_edges(bgraph, first_id))
+
+    if not cross_edges:
+        edge_bfs = list(nx.edge_bfs(bgraph, first_id))
+        cross_edges = [e for e in edge_bfs if e not in standard_edges]
 
     visited = []
     for u, v in standard_edges:
-        if (u, v) not in edge_queue:
+        if (u, v) not in edge_queue and (v, u) not in edge_queue:
             [
                 edge_queue.append((uu, vv))
                 for uu, vv in cross_edges
-                if (uu, vv) not in edge_queue and uu in visited and vv in visited
+                if (
+                    (uu, vv) not in edge_queue
+                    and (vv, uu) not in edge_queue
+                    and uu in visited
+                    and vv in visited
+                )
             ]
             edge_queue.append((u, v))
             visited.extend([u, v])
@@ -144,6 +162,14 @@ def _queue_bfs_cycles(bgraph: nx.Graph, first_id: int) -> list[tuple[int, int]]:
         d = [path_lens[n] for n in cycle if n in path_lens]
         return min(d) if d else np.info
 
+    # Get NX cycles
+    nx_cycles_init = nx.cycle_basis(bgraph, first_id)
+
+    # Fallback to standard BFS if circuit has no cycles
+    if not nx_cycles_init:
+        print("Circuit has no cycles, returning a standard BFS")
+        return list(nx.edge_bfs(bgraph, first_id))
+
     # Initialise key objects
     edge_queue: list[tuple[int, int]] = []
     visited: set[int] = set([first_id])
@@ -152,9 +178,6 @@ def _queue_bfs_cycles(bgraph: nx.Graph, first_id: int) -> list[tuple[int, int]]:
 
     # Get native NX queue as basis for construction
     edge_bfs = list(nx.edge_bfs(bgraph, first_id))
-
-    # Get NX cycles
-    nx_cycles_init = nx.cycle_basis(bgraph, first_id)
 
     # Check that first id is in first cycle
     if first_id not in nx_cycles_init[0]:
@@ -295,26 +318,12 @@ def _queue_bfs_cross_boundaries_last(bgraph: nx.Graph, first_id: int) -> list[tu
 
     """
 
-    # Initialise edge queue
-    edge_queue: list[tuple[int, int]] = []
-
-    # Get native NX queues to use as basis for construction
+    # Get native NX queues
     standard_edges = list(nx.bfs_edges(bgraph, first_id))
     edge_bfs = list(nx.edge_bfs(bgraph, first_id))
     cross_edges = [e for e in edge_bfs if e not in standard_edges]
 
-    visited = []
-    for u, v in standard_edges:
-        if (u, v) not in edge_queue:
-            [
-                edge_queue.append((uu, vv))
-                for uu, vv in cross_edges
-                if (uu, vv) not in edge_queue and uu in visited and vv in visited
-            ]
-            edge_queue.append((u, v))
-            visited.extend([u, v])
-
-    # Shuffle edges around so cross edges happen after normal edges but before boundaries
+    # Shuffle edges into a ckear standard -> cross -> boundary edges
     boundary_edges = [
         (u, v)
         for u, v in standard_edges
@@ -334,8 +343,8 @@ def _queue_bfs_rows(
     first_id: int,
     rows: dict[int, int],
     inputs: list[int],
-    graph_traverse_strategy: str,
     other_first_ids: list[int] = [],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
 ) -> list[tuple[int, int]]:
     """Build queue using a row by row graph traverse strategy.
 
@@ -344,8 +353,8 @@ def _queue_bfs_rows(
         first_id: The spider ID at which to begin traversing (needed for some algorithms)
         rows: Spiders organised by row.
         inputs: The inputs of the base graph.
-        graph_traverse_strategy: The graph traversing strategy.
         other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy)
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
 
     Returns:
         edge_queue: A list of (u, v) tuples to use as queue.
@@ -370,27 +379,51 @@ def _queue_bfs_rows(
 
     # Calculate all layers of a multi-source BFS starting at inputs
     spiders_by_row: dict[int, set[int]] = {}
+    ids_in_t_patterns: set[int] = set()
+    for pat in t_gates.values():
+        ids_in_t_patterns.update(tuple(x for edge in pat for x in edge))
+
     for spider_id, row_number in rows.items():
-        if spider_id in inputs:
+        if spider_id in inputs or spider_id in ids_in_t_patterns:
             continue
         if row_number not in spiders_by_row:
             spiders_by_row[row_number] = set([spider_id])
         else:
             spiders_by_row[row_number].add(spider_id)
 
+    # Add rest of spiders row by row
     visited = set(inputs)
     for row_number, spider_ids_in_row in spiders_by_row.items():
-        cross_edges = set()
+        # Resete list of same row edges (CNOT/CZ/T-gadgets)
+        same_row_edges = []
+
+        # Visit each neighbour of each spider in row
         for spider_id in spider_ids_in_row:
             neighs = bgraph.neighbors(spider_id)
             for neigh_id in neighs:
-                if rows[neigh_id] < rows[spider_id]:
-                    if neigh_id in visited:
-                        edge_queue.append((neigh_id, spider_id))
-                        visited.add(spider_id)
-                if rows[neigh_id] == rows[spider_id]:
-                    cross_edges.add(tuple(sorted([spider_id, neigh_id])))
-        edge_queue.extend(list(cross_edges))
+                # If edge to current neighbour not already in queue
+                if (neigh_id, spider_id) not in edge_queue and (
+                    spider_id,
+                    neigh_id,
+                ) not in edge_queue:
+                    # Handle edges to prior spiders
+                    if rows[neigh_id] < rows[spider_id]:
+                        if neigh_id in visited:
+                            edge_queue.append((neigh_id, spider_id))
+                            visited.add(spider_id)
+                    # Handle edges between spiders in same row
+                    if rows[neigh_id] == rows[spider_id]:
+                        # Check that cross edge is not being duplicated
+                        if tuple(sorted([spider_id, neigh_id])) not in same_row_edges:
+                            # Add the actual edge to list of same row edges
+                            same_row_edges.append(tuple(sorted([spider_id, neigh_id])))
+                            # Add any associated T-pattern to list of same row edges
+                            if neigh_id in t_gates:
+                                same_row_edges.extend(t_gates[neigh_id])
+                                (visited.update([u, v]) for u, v in t_gates[neigh_id])
+
+        # Add list of same row edges to edge queue
+        edge_queue.extend(same_row_edges)
 
     return edge_queue
 
@@ -638,13 +671,7 @@ def _queue_tfs_cnots(
     visited_edges: set[tuple[int, int]] = set()
     central_qubit = qubits[other_first_ids[0]]
 
-    # Extract T-gate patterns is applicable
-    t_gate_pats_ids = set()
-    for edges_in_t_pat in t_gates.values():
-        if edges_in_t_pat:
-            t_gate_pats_ids.update([i for e in edges_in_t_pat for i in e])
-
-    # # Traverse central qubit
+    # Traverse central qubit
     spiders_by_qubit_row: dict[int, list[tuple[int, int]]] = {}
     for spider_id, qubit_number in qubits.items():
         if qubit_number not in spiders_by_qubit_row:
@@ -672,7 +699,7 @@ def _queue_tfs_cnots(
                 ) not in edge_queue:
                     hold_cnots.append((spider_id, neigh_id))
 
-    # Resolve T-gates first
+    # Resolve T-gates
     if t_gates:
         for t_pattern in t_gates.values():
             # If first edge in a T-pattern is in visited, all T-pattern is in visited
@@ -701,6 +728,62 @@ def _queue_tfs_cnots(
                 visited_edges.add((u, v))
 
     edge_queue = _bfs_remainder(bgraph, visited, visited_edges, edge_queue, qubits)
+
+    return edge_queue
+
+
+def _queue_tfs(
+    bgraph: nx.Graph,
+    first_id: int,
+    inputs: list[int],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        inputs: The inputs of the base graph.
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Strategy only works if first_spider is an input
+    if not inputs:
+        raise ValueError(
+            "CNOT cycles graph traversing requires the base graph to have at least one input"
+        )
+
+    # Initialise key objects
+    edge_queue: list[tuple[int, int]] = []
+    visited = set([first_id])
+    visited_edges: set[tuple[int, int]] = set()
+
+    # Resolve T-gates first
+    if t_gates:
+        for t_pattern in t_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if t_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the T-pattern
+                edge_queue.extend(t_pattern)
+                visited_edges.update(t_pattern)
+
+    # Complete remainder using a NX BFS strategy with cross edge priority
+    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue)
 
     return edge_queue
 

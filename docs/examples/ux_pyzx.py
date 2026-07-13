@@ -8,7 +8,17 @@ simply using a circuit available in an existing codebase.
 
 import random
 
-from topologiq.assets.pyzx_graphs import ghz, random_graph, steane, t
+from topologiq.assets.pyzx_graphs import (
+    cnot_cz,
+    memory,
+    msc,
+    one_hadamard,
+    random_graph,
+    s,
+    t,
+    xyi,
+    yi,
+)
 
 ###############
 # PYZX KWARGS #
@@ -30,7 +40,7 @@ if __name__ == "__main__":
         random.seed(pyzx_kwargs["seed"])
 
     # Retrieve circuit
-    had_phase = False
+    had_phase = True
     qubit_n, depth = (4, 10)
     pyzx_random, _ = random_graph(
         qubit_n,
@@ -41,10 +51,5 @@ if __name__ == "__main__":
         **pyzx_kwargs,
     )
 
-    pyzx_steane, _ = steane(draw_graph=False)
-
-    pyzx_ghz, _ = ghz(draw_graph=False)
-
-    pyzx_t, _ = t(draw_graph=False)
-
+    g, _ = xyi(draw_graph=False)
 
