@@ -98,6 +98,20 @@ Examples of how to use Topologiq with [TQEC/tqec](https://github.com/tqec/tqec).
 - $\textcolor{red}{\textsf{[Pending]}}$ Using Topologiq and TQEC as part of a shared environment: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
 - $\textcolor{red}{\textsf{[Pending]}}$ Using Topologiq from within a TQEC environment: [Open an issue to contribute an example](https://github.com/tqec/topologiq/issues/new/choose).
 
+## 🕹️ Desktop UX
+
+Topologiq has an interactive Desktop User Interface (UX), which is highly recommended for:
+*   **Learning:** The UX makes it easy to visually explore Topologiq's capabilities and understand how specific parameter choices impact outputs.
+*   **Research:** The UX makes it easy to create a collection of slightly-different versions of a given circuit and compare the respective outputs.
+
+You can launch the UX from the root of the repository (no additional installation steps needed).
+
+```bash
+uv run src/topologiq/app.py
+```
+
+You can also find a video showing usage of the UX by clicking [here](docs/media/ux_intro.mp4).
+
 ## 👷🏽‍♂️ Contributing
 Pull requests and issues are more than welcomed!
 
