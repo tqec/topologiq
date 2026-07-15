@@ -21,7 +21,9 @@ os.environ["QT_QUICK_BACKEND"] = "software"
 os.environ["QT_OPENGL"] = "software"
 os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
 os.environ["QT_NO_XDG_DESKTOP_PORTAL"] = "1"
-os.environ["QT_LOGGING_RULES"] = ("qt.multimedia.ffmpeg.info=false;qt.multimedia.ffmpeg.warning=false")
+os.environ["QT_LOGGING_RULES"] = (
+    "qt.multimedia.ffmpeg.info=false;qt.multimedia.ffmpeg.warning=false"
+)
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QIcon
@@ -37,6 +39,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from zxlive.mainwindow import MainWindow as ZXMainWindow
 
 from topologiq.ux.manager import UXManager
 from topologiq.ux.panes import CompilePane, LoadPane, StatsPane
@@ -192,6 +195,29 @@ class TopologiqApp(QMainWindow):
 
 async def main():
     """Run the UX app."""
+    # Patch ZXLive's teardown sequence to prevent "C++ object already deleted" crashes
+    try:
+        # Capture the original property's getter function
+        _orig_active_panel_getter = ZXMainWindow.active_panel.fget
+
+        @property
+        def safe_active_panel(self):
+            """Wrapper property to prevent 'Internal C++ object already deleted' crashes on teardown."""
+            try:
+                # If the tab widget or its underlying C++ object is dead, this raises a RuntimeError
+                if hasattr(self, "tab_widget") and self.tab_widget:
+                    _ = self.tab_widget.parent()
+                    return _orig_active_panel_getter(self)
+            except RuntimeError:
+                # The C++ widget has already been destroyed by Qt's garbage collection
+                return None
+            return None
+
+        # Re-apply our safe getter as a proper property descriptor
+        ZXMainWindow.active_panel = safe_active_panel
+    except ImportError:
+        pass  # Safe fallback if zxlive is missing or structural paths change
+
     # Fire App
     app = QApplication(sys.argv)
 

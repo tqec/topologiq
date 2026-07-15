@@ -29,9 +29,10 @@ from matplotlib.widgets import Button, TextBox
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from numpy.typing import NDArray
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import ZXBlock
 from topologiq.core.pathfinder.symbolic import rotate_pipe
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.utils.classes import StandardCoord
 from topologiq.utils.vis import node_hex_map
 from topologiq.utils.zx import ZXColors
 

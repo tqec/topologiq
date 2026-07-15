@@ -17,7 +17,7 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # Note. Topologiq auto-completes any KWARGs not given explicitly.
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
-kwargs = {"debug": 1}
+kwargs = {"debug": 0}
 
 
 #######
@@ -37,13 +37,13 @@ if __name__ == "__main__":
 
         # QASM -> PyZX
         zx_graph_manager = ZXGraphManager()
-        aug_zx_in = zx_graph_manager.add_graph_from_qasm(
+        aug_zx = zx_graph_manager.add_graph_from_qasm(
             path_to_qasm_file=path_to_qasm_file, graph_key=circuit_name
         )
-        zx.draw(aug_zx_in.zx_graph)
+        zx.draw(aug_zx.zx_graph)
 
         # Run Topologiq
-        bgraph_manager = aug_zx_in.get_blockgraph(**kwargs)
+        bgraph_manager = aug_zx.get_blockgraph(**kwargs)
 
         # Visualise results
         bgraph_manager.draw_blockgraph()

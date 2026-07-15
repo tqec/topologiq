@@ -21,7 +21,8 @@ from typing import ClassVar
 
 import numpy as np
 
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.core.beams import CubeBeams
+from topologiq.utils.classes import StandardCoord
 from topologiq.utils.zx import ZXColors, kind_to_zx_type
 
 
@@ -348,7 +349,7 @@ class CandidatePath:
     def weighed_value(self, **kwargs) -> int:
         """Return the weighed value of a given path.
 
-        This function returns the weighed value of a given PathBetweenNodes,
+        This function returns the weighed value of a given path,
         which can be used for comparing many paths.
 
         Args:

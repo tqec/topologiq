@@ -23,7 +23,7 @@ kwargs = {
     "twins": True,  # Boolean flag to enable "twins", which safeguards completion at the expense of volume
 }
 # Available `first_id_strategy` values:
-# - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first"]
+# - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
 # Available `graph_traverse_mode` values:
 # - ["bfs", "bfs-cross", "bfs-cross-boundaries-last", "bfs-cycles", "bfs-rows", "bfs-cnots", "tfs-cnots", "tfs"]
 

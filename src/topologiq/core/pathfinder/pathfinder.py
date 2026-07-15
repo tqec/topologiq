@@ -25,6 +25,7 @@ from collections import deque
 import networkx as nx
 import numpy as np
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import PositionedZXBlock, ZXBlock, ZXBlockRegistry
 from topologiq.core.pathfinder.aux import gen_exit_conditions, init_bfs
 from topologiq.core.pathfinder.spatial import (
@@ -33,7 +34,7 @@ from topologiq.core.pathfinder.spatial import (
     gen_bounding_box,
     get_coords_for_current_move,
 )
-from topologiq.utils.classes import CubeBeams, GraphBounds, StandardBlock, StandardCoord
+from topologiq.utils.classes import GraphBounds, StandardBlock, StandardCoord
 from topologiq.utils.manhattan import get_manhattan
 
 

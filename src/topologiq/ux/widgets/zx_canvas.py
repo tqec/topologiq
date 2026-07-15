@@ -468,3 +468,23 @@ class ZXCanvas(QWidget):
                         gv.fitInView(gv.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
         except Exception as e:
             print(f"Canvas Layout Realignment Alert: {e}")
+
+    def closeEvent(self, event):  # noqa: N802 (native method)
+        """Handle force close events."""
+        self.running = False
+
+        # 1. Trigger manager-specific emergency teardown
+        if hasattr(self, "manager"):
+            self.manager.emergency_stop()
+
+            # 2. Hard-cancel any active background asyncio tasks running on the event loop
+            if hasattr(self.manager, "_tasks"):
+                for task in list(self.manager._tasks):
+                    if not task.done():
+                        task.cancel()
+                self.manager._tasks.clear()
+
+        # 3. Block incoming signals to the window to prevent late-rendering paint calls
+        self.blockSignals(True)
+
+        event.accept()

@@ -9,9 +9,10 @@ import random
 
 import networkx as nx
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import ZXBlock, ZXBlockRegistry
 from topologiq.core.pathfinder.symbolic import check_exits_add_beams
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.utils.classes import StandardCoord
 
 
 ###########

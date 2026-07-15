@@ -11,9 +11,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from topologiq.core.pathfinder.utils import get_manhattan
 from topologiq.kwargs import BEAMS_SHORT_LEN
 from topologiq.utils.classes import StandardCoord
+from topologiq.utils.manhattan import get_manhattan
 
 
 @dataclass
@@ -111,7 +111,13 @@ class SingleBeam:
     def contains(self, coords_to_check: StandardCoord) -> bool:
         """Check if beam contains a given coordinate."""
         x, y, z = coords_to_check
-        return self.x.contains(x) and self.y.contains(y) and self.z.contains(z)
+        if not self.z.contains(z):
+            return False
+        if not self.y.contains(y):
+            return False
+        if not self.x.contains(x):
+            return False
+        return True
 
     def intersects(self, other: SingleBeam, short_beams: bool = True) -> bool:
         """Check if two beams intersect one another."""

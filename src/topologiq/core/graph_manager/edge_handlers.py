@@ -44,7 +44,7 @@ def queue_precalc(
     """
 
     # Init empty edge queue
-    edge_queue: list[tuple[int, int]] = None
+    edge_queue: list[tuple[int, int]] = []
 
     # Standard edge BFS
     if graph_traverse_strategy == "bfs":
@@ -101,9 +101,9 @@ def queue_precalc(
 def _queue_bfs_cross(
     bgraph: nx.Graph,
     first_id: int,
-    edge_queue: list[tuple[int, int]] = [],
-    standard_edges: list[tuple[int, int]] = [],
-    cross_edges: list[tuple[int, int]] = [],
+    edge_queue: list[tuple[int, int]] | None = None,
+    standard_edges: list[tuple[int, int]] | None = None,
+    cross_edges: list[tuple[int, int]] | None = None,
 ) -> list[tuple[int, int]]:
     """Build queue using a BFS with priority cross-edges strategy.
 
@@ -119,13 +119,17 @@ def _queue_bfs_cross(
 
     """
 
+    # Instantiate empty edge queue if not given
+    edge_queue = edge_queue if edge_queue else []
+
     # Get native NX queues to use as basis for construction
-    if not standard_edges:
-        standard_edges = list(nx.bfs_edges(bgraph, first_id))
+    standard_edges = standard_edges if standard_edges else list(nx.bfs_edges(bgraph, first_id))
 
     if not cross_edges:
         edge_bfs = list(nx.edge_bfs(bgraph, first_id))
         cross_edges = [e for e in edge_bfs if e not in standard_edges]
+    else:
+        cross_edges = []
 
     visited = []
     for u, v in standard_edges:

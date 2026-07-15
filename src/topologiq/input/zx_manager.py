@@ -235,7 +235,6 @@ class AugmentedZXGraph:
     def get_blockgraph(
         self: AugmentedZXGraph,
         use_reduced: bool = False,
-        final_vis=False,
         **kwargs,
     ) -> BlockGraphManager | None:
         """Perform algorithmic lattice surgery on ZX graph.

@@ -19,17 +19,20 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
 kwargs = {
-    "first_id_strategy": "central-in-first-cycle",  #[first-spider, random, centrality-random, centrality-majority, central-qubit, central-in-first-cycle]
-    "seed": 5,  # 1330
+    "first_id_strategy": "central-qubit",
+    "seed": 1330,
     "debug": 1,
     "size_of_chip": (12, 12),
     "k": 3,
     "graph_traverse_mode": "tfs-cnots",
     "gravity": 7,
-    "z_stretch": 1,
+    "z_stretch": 2,
 }
+# Available `first_id_strategy` values:
+# - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
+# Available `graph_traverse_mode` values:
+# - ["bfs", "bfs-cross", "bfs-cross-boundaries-last", "bfs-cycles", "bfs-rows", "bfs-cnots", "tfs-cnots", "tfs"]
 
-["bfs", "bfs-cross", "bfs-cross-boundaries-last", "bfs-cycles", "bfs-rows", "tfs", "bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]
 #######
 # RUN #
 #######
@@ -40,7 +43,7 @@ if __name__ == "__main__":
 
     # Retrieve circuit
     had_phase = True
-    qubit_n, depth = (4, 10)
+    qubit_n, depth = (4, 20)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph, _ = random_graph(
         qubit_n,

@@ -8,7 +8,8 @@ Usage:
 import networkx as nx
 import numpy as np
 
-from topologiq.utils.classes import CubeBeams, StandardCoord
+from topologiq.core.beams import CubeBeams
+from topologiq.utils.classes import StandardCoord
 
 
 ##############

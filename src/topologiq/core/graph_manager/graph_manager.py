@@ -21,6 +21,7 @@ import numpy as np
 import pyzx as zx
 from pyzx.pauliweb import compute_pauli_webs
 
+from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import CandidatePath, PositionedZXBlock, ZXBlockRegistry
 from topologiq.core.graph_manager.beams import (
     check_beam_clashes,
@@ -37,7 +38,7 @@ from topologiq.core.graph_manager.spatial import (
 )
 from topologiq.core.pathfinder.pathfinder import pathfinder
 from topologiq.core.pathfinder.symbolic import check_exits_add_beams
-from topologiq.utils.classes import CubeBeams, GraphBounds, StandardCoord
+from topologiq.utils.classes import GraphBounds, StandardCoord
 from topologiq.utils.file import rm_temp_files
 from topologiq.utils.manhattan import get_manhattan
 from topologiq.utils.time import datetime_manager

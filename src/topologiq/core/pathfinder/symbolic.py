@@ -7,13 +7,9 @@ Usage:
 
 import numpy as np
 
+from topologiq.core.beams import BeamAxisComponent, CubeBeams, SingleBeam
 from topologiq.core.blocks import ZXBlock
-from topologiq.utils.classes import (
-    BeamAxisComponent,
-    CubeBeams,
-    SingleBeam,
-    StandardCoord,
-)
+from topologiq.utils.classes import StandardCoord
 
 
 #########################
