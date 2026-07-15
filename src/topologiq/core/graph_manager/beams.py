@@ -171,7 +171,9 @@ def check_beam_clashes_for_twins(
     [
         ids_to_twin.add(cube_id)
         for cube_id, attrs in bgraph.nodes(data=True)
-        if attrs["coords"] and attrs["completions"]["pending"] > 0 and cube_id not in all_beams_to_check
+        if attrs["coords"]
+        and attrs["completions"]["pending"] > 0
+        and cube_id not in all_beams_to_check
     ]
 
     # Check beams of all cubes against target beams
