@@ -15,7 +15,7 @@ import asyncio
 
 import pyzx as zx
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from zxlive.app import get_embedded_app
 
 from topologiq.input.zx_manager import AugmentedZXGraph
@@ -182,6 +182,19 @@ class ZXCanvas(QWidget):
         """)
         self.btn_open_ide.clicked.connect(self._handle_open_ide_click)
 
+        # ZXLive attribution
+        self.lbl_attribution = QLabel(
+            'ZX canvas powered by <a href="https://github.com/zxcalc/zxlive" style="color: #bee0ff; text-decoration: none;">ZXLive</a>'
+        )
+        self.lbl_attribution.setOpenExternalLinks(True)
+        self.lbl_attribution.setStyleSheet("""
+            QLabel {
+                color: #999;
+                font-size: 11px;
+                padding-left: 2px;
+            }
+        """)
+
         # Main direct-action compile switch button
         self.btn_compile_nav = QPushButton("COMPILE →")
         self.btn_compile_nav.setFixedHeight(32)
@@ -190,6 +203,7 @@ class ZXCanvas(QWidget):
 
         # Assembled HUD layout without the old staging button asset
         hud_layout.addWidget(self.btn_open_ide)
+        hud_layout.addWidget(self.lbl_attribution)
         hud_layout.addStretch()
         hud_layout.addWidget(self.btn_compile_nav)
 

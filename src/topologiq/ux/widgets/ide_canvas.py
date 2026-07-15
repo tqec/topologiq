@@ -185,7 +185,21 @@ class CircuitIDE(QWidget):
         # Layout
         bar = QFrame()
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(3, 0, 0, 0)
+        layout.setContentsMargins(3, 0, 3, 0)
+
+        # PyZX & qBraid attribution
+        self.lbl_attribution = QLabel(
+            'IDE canvas powered by <a href="https://github.com/zxcalc/pyzx" style="color: #bee0ff; text-decoration: none;">PyZX</a> '
+            '&amp; <a href="https://github.com/qBraid/qBraid" style="color: #bee0ff; text-decoration: none;">qBraid</a>'
+        )
+        self.lbl_attribution.setOpenExternalLinks(True)
+        self.lbl_attribution.setStyleSheet("""
+            QLabel {
+                color: #999;
+                font-size: 11px;
+                padding-left: 2px;
+            }
+        """)
 
         # Label (not shown but functionally required: buttons get content-type from it)
         self.mode_label = QLabel("SOURCE: TEXT")
@@ -194,9 +208,10 @@ class CircuitIDE(QWidget):
         self.btn_to_zx = QPushButton("STAGE TO CANVAS →")
         self.btn_to_zx.setStyleSheet(styles.PRIMARY_ACTION_STYLE)
         self.btn_to_zx.clicked.connect(lambda: self._process_and_emit(draw_only=False))
-        layout.addStretch()
 
         # Add to layout
+        layout.addWidget(self.lbl_attribution)
+        layout.addStretch()
         layout.addWidget(self.btn_to_zx)
 
         return bar
