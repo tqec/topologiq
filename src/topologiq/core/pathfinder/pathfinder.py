@@ -261,6 +261,10 @@ def pathfinder(
                         tgts_to_fill,
                         pruned_taken,
                         z_bounds=z_bounds,
+                        bgraph=bgraph,
+                        beams_short=beams_short,
+                        curr_src_id=curr_src_id,
+                        curr_tgt_id=curr_tgt_id,
                     ):
                         break_for_success = True
                         break
@@ -280,19 +284,19 @@ def pathfinder(
 # AUX #
 #######
 def _check_beams_clashes(
-    bgraph,
+    bgraph: nx.Graph,
     curr_block_positioned,
     cross_edge,
     path,
     beams,
     beams_short,
-    curr_src_id,
-    curr_tgt_id,
+    curr_src_id: int,
+    curr_tgt_id: int,
     path_clashes,
     out_pendings,
     src_tgt_adjusts,
     strict=False,
-):
+) -> bool:
     """Check if there are beam clashes."""
 
     if not cross_edge:
@@ -333,6 +337,37 @@ def _check_beams_clashes(
         path_clashes[curr_block_positioned] = {}
         for out_id, out_beams in beams_to_check.items():
             path_clashes[curr_block_positioned][out_id] = np.array([False for _ in out_beams])
+
+    return False
+
+
+def _check_beams_clashes_magic_state(
+    bgraph: nx.Graph,
+    all_magic_coords: list[StandardCoord],
+    beams_short,
+    curr_src_id: int,
+    curr_tgt_id: int,
+) -> bool:
+    """Check if there are beam clashes."""
+
+    # Check each cube against all other cubes
+    for out_id, out_beams in beams_short.items():
+        # Check if any magic coordinate is contained in current beam
+        broken_beams = np.array([
+            any([out_beam.contains(check_coord) for check_coord in all_magic_coords])
+            for out_beam in out_beams
+        ])
+
+        # Determine if clashes are within tolerance
+        src_tgt_adjusts = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
+        pendings = (
+            min(1, bgraph.nodes[out_id]["completions"]["pending"])
+            if src_tgt_adjusts == 0
+            else bgraph.nodes[out_id]["completions"]["pending"]
+        )
+
+        if len(out_beams) + src_tgt_adjusts - broken_beams.sum() < pendings:
+            return True
 
     return False
 
@@ -404,6 +439,10 @@ def _check_for_success(
     tgts_to_fill: int,
     pruned_taken: set[StandardCoord],
     z_bounds: dict[str, int | None] = {},
+    bgraph: nx.Graph | None = None,
+    beams_short: CubeBeams | None = None,
+    curr_src_id: int | None = None,
+    curr_tgt_id: int | None = None,
 ) -> tuple[dict[PositionedZXBlock, list[PositionedZXBlock]], bool]:
     """Check if iteration achieved success.
 
@@ -416,6 +455,10 @@ def _check_for_success(
         tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
         pruned_taken: A pruned version of taken not containing source and target coordinates.
         z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
+        bgraph (optional): The BlockGraph currently being built.
+        beams_short (optional): The short beams for all the cubes in blockgraph that need beams.
+        curr_src_id (optional): The ID of the current source cube.
+        curr_tgt_id (optional): The ID of the current target cube.
 
     Return:
         [bool]: True if success was achieved in this iteration, else False.
@@ -445,11 +488,26 @@ def _check_for_success(
         fail_special_cube_constraints = nxt_coords in list([c for c, _ in valid_paths.keys()])
         if tent_tgt_kinds == ["TTO"]:
             curr_path_coords = [coords for coords, _ in path[nxt_block_positioned]]
-            for i in range(1, 4):
-                check_coords = (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i)
-                fail_special_cube_constraints = (
-                    check_coords in pruned_taken or check_coords in curr_path_coords
+            all_magic_coords = [
+                (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i) for i in range(1, 4)
+            ]
+            fail_special_cube_constraints = any(
+                [
+                    (check_coords in pruned_taken or check_coords in curr_path_coords)
+                    for check_coords in all_magic_coords
+                ]
+            )
+            if (
+                not fail_special_cube_constraints
+                and bgraph
+                and beams_short
+                and curr_src_id
+                and curr_tgt_id
+            ):
+                fail_special_cube_constraints = _check_beams_clashes_magic_state(
+                    bgraph, all_magic_coords, beams_short, curr_src_id, curr_tgt_id
                 )
+
     if fail_special_cube_constraints:
         return False
 
@@ -477,7 +535,9 @@ def _check_for_success(
             ]
             valid_paths[(nxt_coords, xz_block)] = path[(nxt_coords, xz_block)]
         else:
-            if nxt_block_positioned not in valid_paths or len(path[nxt_block_positioned]) < len(valid_paths[nxt_block_positioned]):
+            if nxt_block_positioned not in valid_paths or len(path[nxt_block_positioned]) < len(
+                valid_paths[nxt_block_positioned]
+            ):
                 valid_paths[nxt_block_positioned] = path[nxt_block_positioned]
 
         if tgt_block_zx_type not in ["Y", "T", "O", "XZ"]:
