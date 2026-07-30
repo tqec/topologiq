@@ -474,6 +474,8 @@ class BlockGraphManager:
                 self._kwargs["beams_len_short"],
                 first_coords=self.first_coords,
                 override_first_cube=self._kwargs["first_cube"],
+                s_gates=self.s_gates,
+                t_gates=self.t_gates,
                 random_seed=self._kwargs["seed"],
             )
         )
@@ -514,6 +516,7 @@ class BlockGraphManager:
         # Override KWARGs if needed
         if override_kwargs:
             self._kwargs = check_assemble_kwargs(**override_kwargs)
+            self._kwargs["debug"] = 1
 
         # Place the first cube at centre of available space
         self.place_first_cube()
@@ -638,38 +641,28 @@ class BlockGraphManager:
 
         # Overload tentative coords generation if applicable
         overload = 0
-        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots", "tfs"]:
+        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]:
             if (
                 self.curr_src_id in self.qubits
                 and self.curr_tgt_id in self.qubits
-                and (
-                    self.qubits[self.first_id]
-                    == self.qubits[self.curr_src_id]
-                    == self.qubits[self.curr_tgt_id]
-                )
+                and self.qubits[self.curr_src_id] == self.qubits[self.curr_tgt_id]
             ):
-                if self._kwargs["graph_traverse_mode"] == "tfs-cnots" and (
-                    self.qubits[self.first_id]
-                    == self.qubits[self.curr_src_id]
-                    == self.qubits[self.curr_tgt_id]
-                ):
+                if self.qubits[self.first_id] == self.qubits[self.curr_src_id]:
                     overload = 0
                     step = self._kwargs["z_stretch"]
-                elif (
-                    self._kwargs["graph_traverse_mode"] == "tfs"
-                    and self.curr_src_id in self.rows
-                    and self.curr_tgt_id in self.rows
-                    and (self.rows[self.curr_src_id] != self.qubits[self.curr_tgt_id])
-                ):
-                    overload = 0
-                    step = self._kwargs["z_stretch"]
-
             else:
-                overload = 2 if self.curr_tgt_zx_type in ["Y", "XZ"] else 0
-        elif self.curr_tgt_zx_type in ["Y", "XZ"]:
-            overload = 2
+                overload = 1
         elif self._kwargs["z_stretch"]:
+            overload = self._kwargs["z_stretch"]
+
+        if twin_mode:
             overload = 1
+
+        if self.curr_tgt_zx_type in ["Y", "XZ"]:
+            overload = 2
+
+        if self.curr_tgt_zx_type in ["T"]:
+            overload = 2
 
         # Set time constraints if applicable
         if self.curr_tgt_id in self.ante:
@@ -697,7 +690,7 @@ class BlockGraphManager:
         # Loop until path is found
         if not step or step == 0:
             step = 1
-        max_step = step + 10
+        max_step = step + 100
         while step < max_step:
             # Get many tentative coordinates or set a specific target coordinate
             self.tent_coords = (
@@ -743,8 +736,12 @@ class BlockGraphManager:
                 self.winner_path = CandidatePath(
                     **{
                         "full_path": list(self.valid_paths.values())[0],
-                        "tgt_beams": self.beams[self.curr_tgt_id] if self.curr_tgt_id in self.beams else None,
-                        "tgt_beams_short": self.beams_short[self.curr_tgt_id] if self.curr_tgt_id in self.beams else None,
+                        "tgt_beams": self.beams[self.curr_tgt_id]
+                        if self.curr_tgt_id in self.beams
+                        else None,
+                        "tgt_beams_short": self.beams_short[self.curr_tgt_id]
+                        if self.curr_tgt_id in self.beams
+                        else None,
                         "beams_broken_by_path": 0,  # Not calculated (pathfinder handles beams tolerances internally for cross-edges)
                         "tgt_unobstr_exit_n": self.bgraph.nodes[self.curr_tgt_id]["completions"][
                             "pending"
@@ -1073,11 +1070,11 @@ class BlockGraphManager:
             # Prune beams so edge fulfillment starts with clean slate
             self.prune_beams()
 
-            # Edge fulfillment: try finding paths using increasing max search distance
+            # Edge fulfillment
             self.call_pathfinder(twin_mode=True)
 
+            # Add path
             if self.winner_path:
-                # Add path to blockgraph
                 self.add_path()
                 if self._kwargs["debug"] >= 3 or self._kwargs["animate"]:
                     self.draw_blockgraph(is_final_vis=False)
@@ -1207,10 +1204,16 @@ class BlockGraphManager:
                 centre_x, centre_y, _ = centre_coords
                 x, y, _ = last_coords
                 pull_to_centre = -self._kwargs["gravity"] * (abs(x - centre_x) + abs(y - centre_y))
-            elif self.curr_tgt_zx_type in ["T", "XZ"]:
+            elif self.curr_tgt_zx_type in ["Y", "T", "XZ"]:
                 centre_x, centre_y, _ = centre_coords
+                centre_z = self.bgraph.nodes[self.curr_src_id]["coords"][2] - (
+                    1 if self.curr_tgt_zx_type in ["Y", "T", "XZ"] else 0
+                )
                 mean_d_to_centre = np.sum(
-                    [(abs(x - centre_x) + abs(y - centre_y)) for x, y, _ in coords_in_path]
+                    [
+                        (abs(x - centre_x) + abs(y - centre_y) + abs(z - centre_z))
+                        for x, y, z in coords_in_path
+                    ]
                 ) / len(coords_in_path)
                 pull_to_centre = -self._kwargs["gravity"] * mean_d_to_centre
 
@@ -1297,6 +1300,7 @@ class BlockGraphManager:
             "edge_types": self.in_edge_types,
             "degrees": self.in_degrees,
             "types": self.in_types,
+            "t_gates": self.t_gates,
             "completed_edges": self.completed_in_zx_edges,
         }
 
@@ -1311,6 +1315,7 @@ class BlockGraphManager:
             "edge_types": self.edge_types,
             "degrees": self.degrees,
             "types": self.types,
+            "t_gates": self.t_gates,
             "completed_edges": self.completed_base_edges,
         }
 
