@@ -25,6 +25,7 @@ import numpy as np
 from matplotlib import ticker
 from matplotlib.figure import Figure
 from matplotlib.offsetbox import AnchoredOffsetbox, AnchoredText, HPacker, TextArea
+from matplotlib.patches import FancyArrowPatch
 from matplotlib.widgets import Button, TextBox
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from numpy.typing import NDArray
@@ -346,7 +347,15 @@ class BlockGraphVisualiser:
 
 
 class View3D:
-    """Encapsulates Matplotlib 3D projections, text box inputs, and window frames."""
+    """Encapsulates the primary 3D visualisation of the BlockGraph.
+
+    Manages Matplotlib 3D projections, text box inputs, and window frames for the
+    primary 3D visualisation.
+
+    AI disclaimer:
+        category: Coding partner (see CONTRIBUTING.md for details).
+        model: Gemini, 3.5 Flash.
+    """
 
     def __init__(self, controller: BlockGraphVisualiser):
         """Initialise 3D view."""
@@ -869,7 +878,15 @@ class View3D:
 
 
 class View2D:
-    """Manages secondary multi-axis layouts for flat mathematical circuit representations."""
+    """Encapsulates the secondary 2D (layover) visualisation of the input ZX and the base graph.
+
+    Manages secondary multi-axis layouts for flat mathematical ZX-graph representations.
+
+    AI disclaimer:
+        category: Coding partner (see CONTRIBUTING.md for details).
+        model: Gemini, 3.5 Flash.
+
+    """
 
     def __init__(self, controller: BlockGraphVisualiser):
         """Initialise 2D View."""
@@ -1039,6 +1056,29 @@ class View2D:
                             zorder=5,
                         )
 
+    def extract_t_gate_gadgets(self, graph_data: dict[str, Any]) -> dict[int, dict[str, Any]]:
+        """Unpack T-gate edge structures into classified node roles."""
+        t_gates = graph_data.get("t_gates", {})
+        parsed_gadgets = {}
+
+        for z_root, edges in t_gates.items():
+            if not edges or len(edges) < 4:
+                continue
+
+            _, a1 = edges[0]
+            _, x_gadget = edges[1]
+            _, x_n1 = edges[2]
+            _, x_n2 = edges[3]
+
+            parsed_gadgets[z_root] = {
+                "z_root": z_root,
+                "a1": a1,
+                "x_gadget": x_gadget,
+                "x_neighbors": [x_n1, x_n2],
+            }
+
+        return parsed_gadgets
+
     def _compute_overlay_layout(
         self,
         graph_data: dict[str, Any],
@@ -1047,7 +1087,6 @@ class View2D:
         draw_style: str,
     ) -> dict[str, list[float]]:
         """Calculate spatial arrangements using geometric constraints or NetworkX force models."""
-        # Fall back to algorithmic force-directed layout if specified
         positions = {}
 
         # Fall back to algorithmic force-directed layout if specified
@@ -1055,7 +1094,7 @@ class View2D:
             layout_ref_g = nx.Graph()
             layout_ref_g.add_nodes_from(subgraph_nodes)
 
-            # FIX: Explicitly unpack the 2-tuple key using inner parentheses
+            # Explicitly unpack the 2-tuple key using inner parentheses
             for u, v in graph_data.get("edge_types", {}).keys():
                 layout_ref_g.add_edge(u, v)
 
@@ -1067,9 +1106,25 @@ class View2D:
                 return nx.fruchterman_reingold_layout(layout_ref_g, seed=19)
             return nx.spring_layout(layout_ref_g, seed=1, iterations=50)
 
-        # Build grid coordinates using row/qubit indexing
+        # Unpack T-gate gadgets if present in the active graph
+        t_gadgets = self.extract_t_gate_gadgets(graph_data)
+
+        # Track gadget child nodes so they are omitted from standard grid/row calculations
+        gadget_child_nodes = set()
+        subgraph_nodes_set = set(subgraph_nodes)
+        for gadget in t_gadgets.values():
+            # Only treat as gadget children if they exist in the current graph
+            if gadget["z_root"] in subgraph_nodes_set:
+                gadget_child_nodes.add(gadget["a1"])
+                gadget_child_nodes.add(gadget["x_gadget"])
+                gadget_child_nodes.update(gadget["x_neighbors"])
+
+        # Build grid coordinates using row/qubit indexing for main nodes
         coord_groups = {}
         for spider_id in subgraph_nodes:
+            if spider_id in gadget_child_nodes:
+                continue  # Positioned relative to z_root below
+
             r = graph_data["rows"].get(spider_id, -1)
             q = graph_data["qubits"].get(spider_id, -1)
             spider_type = types_map.get(spider_id, "Z")
@@ -1077,20 +1132,20 @@ class View2D:
             if q < 0 and spider_type == "Z":  # Filter out tracking paths above base rows
                 coord_groups.setdefault((r, q), []).append(spider_id)
             else:
-                positions[spider_id] = [r, -q]
+                positions[spider_id] = [float(r), float(-q)]
 
         # Resolve grid collisions on overlapping baseline Z-anchors
         z_displacements = {}
         for (r, q), spider_ids in coord_groups.items():
             has_collision = len(spider_ids) > 1
             for idx, spider_id in enumerate(spider_ids):
-                orig_x, orig_y = r, -q
+                orig_x, orig_y = float(r), float(-q)
                 if not has_collision or idx == 0:
                     positions[spider_id] = [orig_x, orig_y]
                 else:
-                    y_baseline = -q + 1.0
-                    offset = 0.35 * (idx - 1)
-                    new_x = r + 0.35 + offset
+                    y_baseline = -q + 1.8
+                    offset = 0.65 * (idx - 1)
+                    new_x = orig_x + 0.65 + offset
                     new_y = y_baseline + offset
 
                     positions[spider_id] = [new_x, new_y]
@@ -1121,14 +1176,31 @@ class View2D:
                         gadget_assignments.setdefault(node, []).append(z_id)
 
             for node, controlling_zs in gadget_assignments.items():
-                avg_dx = sum(z_displacements[z_id][0] for z_id in controlling_zs) / len(
-                    controlling_zs
-                )
-                avg_dy = sum(z_displacements[z_id][1] for z_id in controlling_zs) / len(
-                    controlling_zs
-                )
-                positions[node][0] += avg_dx
-                positions[node][1] += avg_dy
+                if node in positions:
+                    avg_dx = sum(z_displacements[z_id][0] for z_id in controlling_zs) / len(
+                        controlling_zs
+                    )
+                    avg_dy = sum(z_displacements[z_id][1] for z_id in controlling_zs) / len(
+                        controlling_zs
+                    )
+                    positions[node][0] += avg_dx
+                    positions[node][1] += avg_dy
+
+        # Position T-gate gadget children tightly around their Z_root anchor
+        for z_root, gadget in t_gadgets.items():
+            if z_root in positions:
+                x0, y0 = positions[z_root]
+
+                # A1 and X_gadget tightly above Z_root
+                msc, x = gadget["a1"], gadget["x_gadget"]
+                if msc in subgraph_nodes_set:
+                    positions[msc] = [x0 - 0.25, y0]
+                    positions[x] = [x0 + 0.25, y0]
+
+                    # X_gadget's two neighbors fan out tightly above X_gadget
+                    y, xz = gadget["x_neighbors"]
+                    positions[y] = [x0 + + 0.40, y0 + 0.70]
+                    positions[xz] = [x0 + 0.40, y0 - 0.70]
 
         return positions
 
@@ -1141,6 +1213,9 @@ class View2D:
         curr_edge_ids_set: set,
     ):
         """Paint connecting graph lines alongside invisible thick pick-reactive hitboxes."""
+        # Identify root IDs of any T-gate pattern
+        z_root_ids = set(graph_data.get("t_gates", {}).keys())
+
         for (u, v), edge_type in graph_data.get("edge_types", {}).items():
             if u in positions and v in positions:
                 x_coords = [positions[u][0], positions[v][0]]
@@ -1151,12 +1226,13 @@ class View2D:
                 except KeyError:
                     col = "black"
 
+                # Check if this edge connects to a Z root spider
+                is_z_root_edge = u in z_root_ids or v in z_root_ids
+
                 # Thick invisible lines for easier mouse-click picking
                 backing_lines = ax.plot(
                     x_coords, y_coords, color="none", linewidth=8.0, picker=True, zorder=1
                 )
-
-                # Stringify the tuple so vector rendering backends can escape it cleanly
                 backing_lines[0].set_gid(f"edge_{u}_{v}")
 
                 # Identify active execution pipeline tracing states
@@ -1183,14 +1259,29 @@ class View2D:
                     )
                 edge_alpha = 1.0 if is_edge_completed else 0.3
 
-                ax.plot(
-                    x_coords,
-                    y_coords,
-                    color=col,
-                    alpha=edge_alpha,
-                    linestyle=edge_line_style,
-                    zorder=1,
-                )
+                # Render curved arc for Z root edges, straight line for standard edges
+                if is_z_root_edge:
+                    arc_patch = FancyArrowPatch(
+                        (positions[u][0], positions[u][1]),
+                        (positions[v][0], positions[v][1]),
+                        connectionstyle="arc3,rad=0.25",
+                        color=col,
+                        alpha=edge_alpha,
+                        linestyle=edge_line_style,
+                        linewidth=1.5,
+                        arrowstyle="-",
+                        zorder=1,
+                    )
+                    ax.add_patch(arc_patch)
+                else:
+                    ax.plot(
+                        x_coords,
+                        y_coords,
+                        color=col,
+                        alpha=edge_alpha,
+                        linestyle=edge_line_style,
+                        zorder=1,
+                    )
 
     def _render_overlay_twin_halos(
         self,
