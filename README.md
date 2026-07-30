@@ -1,16 +1,18 @@
 # Topologiq: Algorithmic Lattice Surgery
-**Topologiq** is tool to convert ZX circuits into logical versions of themselves. It is based on the surface code and lattice surgery.
+**Topologiq** is tool to convert quantum circuits into logical versions of themselves based on the surface code.
 
 [![Unitary Foundation](https://img.shields.io/badge/Supported%20By-UNITARY%20FOUNDATION-FFFF00.svg?style=for-the-badge)](https://unitary.foundation)
 
 ## ✨ Overview
 The general algorithmic rationale is as follows:
-- Topologiq traverses the input circuit graph using one of several BFS queue rationales, one edge at a time.
-- On each iteration, it greedily converts the edge into the shortest topologically-correct 3D path it can find.
-  - Realised paths often correspond to the actual shortest path possible.
-  - Where not the case, it can be because a shortest path is deemed an obstacle for future placements.
+- Topologiq traverses the input circuit one edge at a time.
+  - Several graph traversing subroutines available, including several BFS flavours.
+  - Additional graph traversing subroutines are welcome: [open an issue here to contribute additional graph traversing subroutines](https://github.com/tqec/topologiq/issues/new/choose).
+- On each iteration, Topologiq greedily converts the edge into the shortest topologically-correct 3D path it can find.
+  - Realised paths often correspond to the actual shortest path *possible given constraints*.
+  - The value function can be used to influence path choices, an aspect of Topologiq that welcomes improvements: [open an issue here to give the value function a go](https://github.com/tqec/topologiq/issues/new/choose).
 
-An animated visualisation is given below, and the algorithm is described [here](docs/concepts/topologiq_algorithm.md).
+An animated visualisation is given below, and the algorithm is described in more detail [here](docs/concepts/topologiq_algorithm.md).
 
 ![Algorithmic lattice surgery of three CNOTs using Topologiq](./docs/media/cnots.gif)
 
