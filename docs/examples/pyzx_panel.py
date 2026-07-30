@@ -18,7 +18,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 kwargs = {
     "debug": 0,  # Verbosity. Change to `3` for step by step visuals.
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID.
-    "graph_traverse_mode": "bfs",  # Graph traversing strategy
+    "graph_traverse_mode": "bfs-cross",  # Graph traversing strategy
     "gravity": 7,  # Integer weight that pulls paths towards graph centre
     "twins": True,  # Boolean flag to enable "twins", which safeguards completion at the expense of volume
 }
@@ -56,6 +56,7 @@ if __name__ == "__main__":
         "s",
         "msc",
         "t",
+        "ht",
     ]
 
     # Loop over available encoding functions
@@ -85,7 +86,7 @@ if __name__ == "__main__":
             bgraph_manager.animate(filename_prefix=graph_name)
 
         # Verification for standard graphs
-        if graph_name not in ["yi", "s", "msc", "t"]:
+        if graph_name not in ["yi", "s", "msc", "t", "ht"]:
             # Verify input/output logical equality
             aug_zx_out = zx_graph_manager.add_graph_from_blockgraph(
                 bgraph_manager, graph_key="output"
