@@ -253,7 +253,8 @@ def gen_tent_tgt_coords(
 
     def _approve_target(t: StandardCoord):
         min_z_ok = t[2] >= z_bounds["min"] if z_bounds.get("min") else True
-        return t not in taken and t != src_c and min_z_ok
+        max_z_ok = t[2] <= z_bounds["max"] if z_bounds.get("max") else True
+        return t not in taken and t != src_c and min_z_ok and max_z_ok
 
     # Apply overload
     max_manhattan = max_manhattan + overload if max_manhattan == 1 else max_manhattan

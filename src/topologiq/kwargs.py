@@ -60,7 +60,7 @@ GRAVITY = 0
 # - random: Pick randomly from all non-boundary spiders
 # - centrality-random: Pick randomly from a list of central spiders
 # - centrality-majority: Use a majority vote from several centrality measures
-# - central-qubit: First spider in central qubit (per )
+# - central-qubit: Lowest ID in most central qubit (defined as the qubit with most CNOTs)
 # - central-in-first-cycle: Pick the central spider from the first cycle in graph (per nx.cycle_basis).
 FIRST_ID_STRATEGY = "first-spider"
 

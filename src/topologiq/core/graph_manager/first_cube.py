@@ -26,6 +26,8 @@ def get_first_cube_data(
     beams_len_short: int,
     first_coords: StandardCoord = (0, 0, 0),
     override_first_cube: tuple[int | None, str | None] = (None, None),
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
     random_seed: int | None = None,
 ) -> tuple[int, ZXBlock, CubeBeams, CubeBeams]:
     """Define and place the very first cube of the blockgraph.
@@ -41,6 +43,8 @@ def get_first_cube_data(
         beams_len_short: The length of any short beams.
         first_coords (optional): First coords are (0,0,0) unless a specific value is given.
         override_first_cube: Override ID and kind (used to replicate specific cases).
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
         random_seed: random_seed (optional): Typically `None`, but used to pass a seed across the entire algorithm.
 
     Returns:
@@ -60,6 +64,8 @@ def get_first_cube_data(
         qubits=qubits,
         inputs=inputs,
         override_first_cube=override_first_cube,
+        s_gates=s_gates,
+        t_gates=t_gates,
         random_seed=random_seed,
     )
 
@@ -85,6 +91,8 @@ def pick_id_and_kind(
     qubits: dict[int, int],
     inputs: list[int],
     override_first_cube: tuple[int | None, str | None] = (None, None),
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
     random_seed: int | None = None,
 ) -> tuple[int, str, list[int]]:
     """Determine the iID and kind of the first block to place in 3D space.
@@ -98,6 +106,8 @@ def pick_id_and_kind(
         qubits: Spiders organised by qubit.
         inputs: A list of spiders formally declared as graph inputs.
         override_first_cube: Override ID and kind (used to replicate specific cases).
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
         random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
 
     Returns:
@@ -116,7 +126,9 @@ def pick_id_and_kind(
         other_ids = []
 
     if not first_id:
-        first_id, other_ids = pick_first_id(bgraph, first_id_strategy, qubits, inputs)
+        first_id, other_ids = pick_first_id(
+            bgraph, first_id_strategy, qubits, inputs, s_gates=s_gates, t_gates=t_gates
+        )
 
     if not first_kind:
         deterministic = False if first_id_strategy == "centrality-random" else True
@@ -131,6 +143,8 @@ def pick_first_id(
     first_id_strategy: str,
     qubits: dict[int, int],
     inputs: list[int],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
 ) -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
 
@@ -142,6 +156,8 @@ def pick_first_id(
             first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
         qubits: Spiders organised by qubit.
         inputs: A list of spiders formally declared as graph inputs.
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
 
     Returns:
         first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
@@ -154,7 +170,7 @@ def pick_first_id(
         raise ValueError("ERROR: bgraph.nodes() empty. Graph appears empty.")
 
     # Default other_ids to None
-    other_ids = None
+    first_ids = None
 
     # ID of first non-boundary node
     if first_id_strategy == "first-spider":
@@ -212,9 +228,6 @@ def pick_first_id(
         )
         central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
 
-        eigen_centrality = nx.eigenvector_centrality_numpy(bgraph)
-        central_nodes.append(sorted(eigen_centrality, key=eigen_centrality.get, reverse=True)[0])
-
         # Choose most common
         first_id = max(set(central_nodes), key=central_nodes.count)
 
@@ -265,25 +278,47 @@ def pick_first_id(
             first_id: int = random.choice(central_nodes)
 
     elif first_id_strategy == "central-qubit":
-        q_to_q_counts: dict[int, dict[int, list[int]]] = {}
-        for node_id in bgraph.nodes():
-            if qubits[node_id] < 0:
-                continue
-            if qubits[node_id] not in q_to_q_counts:
-                q_to_q_counts[qubits[node_id]] = {}
-            for neigh_id in bgraph.neighbors(node_id):
-                if qubits[neigh_id] < 0 or qubits[node_id] == qubits[neigh_id]:
-                    continue
-                if qubits[neigh_id] not in q_to_q_counts[qubits[node_id]]:
-                    q_to_q_counts[qubits[node_id]][qubits[neigh_id]] = 0
-                q_to_q_counts[qubits[node_id]][qubits[neigh_id]] += 1
+        # Extract T-gate patterns to single list
+        all_ids_in_t_gates = []
+        [all_ids_in_t_gates.extend(i) for pat in t_gates.values() for i in pat]
 
-        q_to_q_means = {k: (sum(v.values()) / len(v)) for k, v in q_to_q_counts.items()}
-        q_to_q_means_sorted = sorted(q_to_q_means.items(), key=lambda item: item[1], reverse=True)
-        first_id = q_to_q_means_sorted[0][0]
-        other_ids = [k for k, _ in q_to_q_means_sorted]
+        # Tracker for edges across qubits
+        q_to_q_edges: dict[int, dict[int, list[int]]] = {}
+
+        # Tracker for first IDs for each qubit
+        infer_inputs_from_id = False
+        if inputs:
+            q_first_ids: dict[int, int] = {qubits[i]: i for i in inputs}
+        else:
+            infer_inputs_from_id = True
+            q_first_ids: dict[int, int] = {}
+
+        # Loop over nodes detecting edges to other qubits
+        for node_id in bgraph.nodes():
+            # Skip if spider is part of S- or T-gate pattern
+            if node_id in s_gates or node_id in all_ids_in_t_gates:
+                continue
+
+            # Add qubit to tracker if qubit has never been visited
+            if qubits[node_id] not in q_to_q_edges:
+                q_to_q_edges[qubits[node_id]] = []
+                if infer_inputs_from_id:
+                    q_first_ids[qubits[node_id]] = node_id
+
+            # Add to qubit-to-qubit tracker if edge goes out of qubit
+            for neigh_id in bgraph.neighbors(node_id):
+                if qubits[node_id] != qubits[neigh_id]:
+                    q_to_q_edges[qubits[node_id]].append(neigh_id)
+
+        # Sort the connection tracker based on number of edges to other qubits
+        q_to_q_edges_sorted = sorted(
+            q_to_q_edges.items(), key=lambda item: len(item[1]), reverse=True
+        )
+        # Get the corresponding inputs for each qubit
+        first_ids = [q_first_ids[q] for q, _ in q_to_q_edges_sorted if q in q_first_ids]
+        first_id = first_ids[0]
 
     else:
         raise ValueError("ERROR @ pick_first_id. Invalid selection strategy.")
 
-    return first_id, other_ids
+    return first_id, first_ids
