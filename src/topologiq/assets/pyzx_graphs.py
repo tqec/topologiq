@@ -212,14 +212,13 @@ def simple_mess(
     return pyzx_graph, fig
 
 
-def steane(
-    draw_graph: bool = False, use_bialgebra=True
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
-    """Return a PyZX graph of a Steane code.
+def split_loops(
+    draw_graph: bool = False,
+) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph with two separate cycles connected via a central bridge.
 
     Args:
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
-        use_bialgebra: Whether to apply the bialgebra rule to graph or not.
 
     Returns:
         pyzx_graph: The PyZX graph corresponding to the requested circuit.
@@ -227,41 +226,60 @@ def steane(
 
     """
 
-    # Foundational circuit
-    pyzx_circuit = zx.Circuit(10)
+    spiders = {0: [14, 15, 16], 1: [1, 3, 5, 7, 9, 11, 13], 2: [2, 4, 6, 8, 10, 12]}
+    edges = {
+        1: [
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 1),
+            (4, 6),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+            (10, 11),
+            (11, 12),
+            (12, 8),
+            (7, 13),
+            (5, 14),
+            (13, 15),
+            (10, 16),
+        ]
+    }
 
-    ancilla_qubits = [0, 1, 2]
-    qubits = [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
-    for i, ancilla_qubit in enumerate(ancilla_qubits):
-        pyzx_circuit.add_gate("HAD", ancilla_qubit)
-        for qubit in qubits[i]:
-            pyzx_circuit.add_gate("CNOT", ancilla_qubit, qubit)
-        pyzx_circuit.add_gate("HAD", ancilla_qubit)
-    pyzx_graph = pyzx_circuit.to_graph()
+    # Foundational graph
+    pyzx_graph = zx.Graph()
 
-    # States & effects
-    num_apply_state = pyzx_graph.num_inputs()
-    pyzx_graph.apply_state("0" * num_apply_state)
-    pyzx_graph.apply_effect("000///////")
-
-    # Reduction
-    zx.full_reduce(pyzx_graph)
-    zx.to_rg(pyzx_graph)
-    zx.phase_free_simp(pyzx_graph)
-
-    # Re-organise rows
-    rows = {0: [43, 44, 45, 47], 4: [11, 13, 15, 25], 8: [10, 20, 30], 12: [46, 48, 49]}
-    qubits = {0: [10, 11, 43, 46], 2: [13, 20, 44, 48], 4: [15, 30, 45, 49], 6: [25, 47]}
-    for r, spider_ids in rows.items():
+    # Add spiders
+    for k, spider_ids in spiders.items():
         for spider_id in spider_ids:
-            pyzx_graph.set_row(spider_id, r)
-    for q, spider_ids in qubits.items():
-        for spider_id in spider_ids:
-            pyzx_graph.set_qubit(spider_id, q)
+            qubit = (
+                1
+                if spider_id in [1, 2, 3, 12]
+                else 3
+                if spider_id in [13, 14, 16]
+                else 2
+                if spider_id != 15
+                else 4
+            )
+            row = (
+                1
+                if spider_id in [5, 14]
+                else 7
+                if spider_id in [13, 15]
+                else 9
+                if spider_id in [12, 16]
+                else spider_id
+            )
+            pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=qubit, row=row)
 
-    if use_bialgebra:
-        apply_bialgebra(pyzx_graph)
-        zx.simplify.id_simp(pyzx_graph)
+    for k, edge_pairs in edges.items():
+        for u, v in edge_pairs:
+            pyzx_graph.add_edge((u, v), edgetype=k)
+
+    pyzx_graph.set_outputs(spiders[0])
 
     # Draw if needed
     fig = None
@@ -339,6 +357,65 @@ def bialg(
 
     zx.simplify.bialg_op_simp.apply(pyzx_graph, [5, 6, 1, 2])
     zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph, fig
+
+
+def steane(
+    draw_graph: bool = False, use_bialgebra=True
+) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+    """Return a PyZX graph of a Steane code.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+        use_bialgebra: Whether to apply the bialgebra rule to graph or not.
+
+    Returns:
+        pyzx_graph: The PyZX graph corresponding to the requested circuit.
+        fig: The Matplotlib figure of the graph.
+
+    """
+
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(10)
+
+    ancilla_qubits = [0, 1, 2]
+    qubits = [[3, 4, 5, 6], [3, 4, 7, 8], [3, 5, 7, 9]]
+    for i, ancilla_qubit in enumerate(ancilla_qubits):
+        pyzx_circuit.add_gate("HAD", ancilla_qubit)
+        for qubit in qubits[i]:
+            pyzx_circuit.add_gate("CNOT", ancilla_qubit, qubit)
+        pyzx_circuit.add_gate("HAD", ancilla_qubit)
+    pyzx_graph = pyzx_circuit.to_graph()
+
+    # States & effects
+    num_apply_state = pyzx_graph.num_inputs()
+    pyzx_graph.apply_state("0" * num_apply_state)
+    pyzx_graph.apply_effect("000///////")
+
+    # Reduction
+    zx.full_reduce(pyzx_graph)
+    zx.to_rg(pyzx_graph)
+    zx.phase_free_simp(pyzx_graph)
+
+    # Re-organise rows
+    rows = {0: [43, 44, 45, 47], 4: [11, 13, 15, 25], 8: [10, 20, 30], 12: [46, 48, 49]}
+    qubits = {0: [10, 11, 43, 46], 2: [13, 20, 44, 48], 4: [15, 30, 45, 49], 6: [25, 47]}
+    for r, spider_ids in rows.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_row(spider_id, r)
+    for q, spider_ids in qubits.items():
+        for spider_id in spider_ids:
+            pyzx_graph.set_qubit(spider_id, q)
+
+    if use_bialgebra:
+        apply_bialgebra(pyzx_graph)
+        zx.simplify.id_simp(pyzx_graph)
+
+    # Draw if needed
+    fig = None
+    if draw_graph:
+        fig = zx.draw(pyzx_graph, labels=True)
 
     return pyzx_graph, fig
 
@@ -776,74 +853,37 @@ def t(
     return pyzx_graph, fig
 
 
-def split_loops(
-    draw_graph: bool = False,
+def ht(
+    draw_graph: bool = False, num_t: int = 5
 ) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
-    """Return a PyZX graph with two separate cycles connected via a central bridge.
+    """Return an PyZX graph of a single Y-cube followed by a colour spider.
 
     Args:
         draw_graph: Whether to pop-up PyZX graph visualisation or not.
+        num_t (optional): The number of T-gates in circuit.
 
     Returns:
         pyzx_graph: The PyZX graph corresponding to the requested circuit.
         fig: The Matplotlib figure of the graph.
 
     """
+    # Foundational circuit
+    pyzx_circuit = zx.Circuit(1)
 
-    spiders = {0: [14, 15, 16], 1: [1, 3, 5, 7, 9, 11, 13], 2: [2, 4, 6, 8, 10, 12]}
-    edges = {
-        1: [
-            (1, 2),
-            (2, 3),
-            (3, 4),
-            (4, 5),
-            (5, 1),
-            (4, 6),
-            (6, 7),
-            (7, 8),
-            (8, 9),
-            (9, 10),
-            (10, 11),
-            (11, 12),
-            (12, 8),
-            (7, 13),
-            (5, 14),
-            (13, 15),
-            (10, 16),
-        ]
-    }
+    # Add as many T-gates as desired
+    for i in range(num_t):
+        pyzx_circuit.add_gates("T", 0)
 
-    # Foundational graph
-    pyzx_graph = zx.Graph()
+    # Convert to graph
+    pyzx_graph = pyzx_circuit.to_graph()
 
-    # Add spiders
-    for k, spider_ids in spiders.items():
-        for spider_id in spider_ids:
-            qubit = (
-                1
-                if spider_id in [1, 2, 3, 12]
-                else 3
-                if spider_id in [13, 14, 16]
-                else 2
-                if spider_id != 15
-                else 4
-            )
-            row = (
-                1
-                if spider_id in [5, 14]
-                else 7
-                if spider_id in [13, 15]
-                else 9
-                if spider_id in [12, 16]
-                else spider_id
-            )
-            pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=qubit, row=row)
+    # Exchange all edges for Hadamards
+    [pyzx_graph.set_edge_type(e, 2) for e in pyzx_graph.edges()]
 
-    for k, edge_pairs in edges.items():
-        for u, v in edge_pairs:
-            pyzx_graph.add_edge((u, v), edgetype=k)
-
-    pyzx_graph.set_outputs(spiders[0])
+    # Gadgetise
+    zx.simplify.gadgetize(pyzx_graph, graphlike=False)
+    zx.id_simp(pyzx_graph)
+    #rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
     fig = None
@@ -851,6 +891,7 @@ def split_loops(
         fig = zx.draw(pyzx_graph, labels=True)
 
     return pyzx_graph, fig
+
 
 
 ##############
@@ -877,4 +918,4 @@ __all__ = [  # noqa: RUF022  (do not sort: circuits organised in increasing orde
 
 
 if __name__ == "__main__":
-    pyzx_graph, _ = steane(draw_graph=True)
+    pyzx_graph, _ = ht(draw_graph=True)
