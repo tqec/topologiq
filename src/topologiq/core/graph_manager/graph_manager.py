@@ -19,10 +19,11 @@ from typing import Any
 import networkx as nx
 import numpy as np
 import pyzx as zx
-from pyzx.pauliweb import compute_pauli_webs
+from numpy.typing import NDArray
+from pyzx.pauliweb import PauliWeb, compute_pauli_webs
 
 from topologiq.core.beams import CubeBeams
-from topologiq.core.blocks import CandidatePath, PositionedZXBlock, ZXBlockRegistry
+from topologiq.core.blocks import CandidatePath, PositionedZXBlock, ZXBlock, ZXBlockRegistry
 from topologiq.core.graph_manager.beams import (
     check_beam_clashes,
     check_beam_clashes_for_twins,
@@ -36,7 +37,7 @@ from topologiq.core.graph_manager.spatial import (
     max_four_edges_random,
     max_four_edges_single_spider_graph,
 )
-from topologiq.core.pathfinder.pathfinder import pathfinder
+from topologiq.core.pathfinder.pathfinder import PathfinderInitState, PathFinderManager
 from topologiq.core.pathfinder.symbolic import check_exits_add_beams
 from topologiq.utils.classes import GraphBounds, StandardCoord
 from topologiq.utils.file import rm_temp_files
@@ -44,7 +45,7 @@ from topologiq.utils.manhattan import get_manhattan
 from topologiq.utils.time import datetime_manager
 from topologiq.utils.zx import ZXEdgeTypes, ZXTypes
 from topologiq.vis.animate import create_animation
-from topologiq.vis.draw import BlockGraphVisualiser, VisualiserState, draw_as_zx
+from topologiq.vis.draw import BlockGraphVisualiser, VisualiserState
 
 #########
 # PATHS #
@@ -58,7 +59,7 @@ MEDIA_DIR = REPO_ROOT / "output/media"
 # OUTER GRAPH MANAGER #
 #######################
 class BlockGraphManager:
-    """Topologiq's primary graph management subroutine."""
+    """Manage the primary BlockGraph and the process of building it."""
 
     def __init__(
         self,
@@ -149,7 +150,7 @@ class BlockGraphManager:
         self.run_success: bool = False
 
         # Initialise empty NX graph
-        self.bgraph = nx.Graph()
+        self.bgraph: nx.Graph = nx.Graph()
 
         # Cubes
         [
@@ -182,12 +183,12 @@ class BlockGraphManager:
         # Proactive re-writes
         # Re-writes needed to convert from spiders using standard PyZX conventions to
         # LS-friendly cubes and patterns are NOT reflected in the ZX trackers
-        self.handle_y_t_cubes()
+        self.handle_s_t_spiders()
 
         # Calculate boundaries of theoretical chip surface
         self.get_bounds()
 
-    def handle_y_t_cubes(self):
+    def handle_s_t_spiders(self):
         """Convert spiders with phases to Y- and T-cube patterns."""
 
         # Trackers for special cubes introduced in this method
@@ -200,189 +201,55 @@ class BlockGraphManager:
         # Look over nodes with phases
         for spider_id, phase in self.phases.items():
             if phase == Fraction(1, 2):
-                # Calculate next ID
-                y_id = max(self.bgraph.nodes()) + 1
-
-                # Remove phase of original node as it will get a pattern instead
-                self.phases[spider_id] = 0
-
-                # Initialisation Y-cube
-                if self.bgraph.degree(spider_id) == 1:
-                    # Log and change ZX block in node attributes
-                    self.y_cubes[spider_id] = "Yi"
-                    self.bgraph.nodes[spider_id]["zx_block"] = ZXBlockRegistry.get_create(
-                        zx_type="Y"
-                    )
-
-                # Mid-circuit S-gate
-                else:
-                    # Log Y-cube as measurement
-                    self.s_gates[spider_id] = [(spider_id, y_id)]
-                    self.y_cubes[y_id] = "Ym"
-
-                    # Add Y-cube to BGRAPH
-                    self.bgraph.add_node(
-                        y_id,
-                        zx_block=ZXBlockRegistry.get_create(zx_type="Y"),
-                        coords=None,
-                        completions={
-                            "degree": None,
-                            "pending": None,
-                        },
-                    )
-
-                    # Add corresponding entry to qubit and row trackers
-                    self.qubits[y_id] = self.qubits[spider_id] - 1
-                    self.rows[y_id] = self.rows[spider_id] - 1
-
-                    # Add corresponding edge
-                    self.bgraph.add_edge(
-                        spider_id,
-                        y_id,
-                        edge_type="SIMPLE",
-                        start_coords=None,
-                        end_coords=None,
-                        kind=None,
-                    )
+                _handle_s_spider(
+                    spider_id,
+                    self.bgraph,
+                    self.phases,
+                    self.y_cubes,
+                    self.s_gates,
+                    self.qubits,
+                    self.rows,
+                )
 
             if phase == Fraction(1, 4):
-                # Determine current max ID in graph
-                max_id = max(self.bgraph.nodes())
+                _handle_t_spider(
+                    spider_id,
+                    self.bgraph,
+                    self.phases,
+                    self.msc_cubes,
+                    self.t_gates,
+                    self.t_zx_tracker,
+                    self.ante,
+                    self.qubits,
+                    self.rows,
+                    self.inputs,
+                )
 
-                # Initialisation T-gate (MSC)
-                if spider_id in self.inputs:
-                    # Remove phase of original node as it will get a pattern instead
-                    self.phases[spider_id] = 0
-
-                    # Add to MSC block to tracker
-                    self.msc_cubes[spider_id] = "Mi"
-
-                    # Update graph node to a T
-                    self.bgraph.nodes[spider_id]["zx_block"] = ZXBlockRegistry.get_create(
-                        zx_type="T"
-                    )
-
-                else:
-                    # IDs for all spiders in sequence
-                    msc_id = max_id + 1
-                    x_bridge_id, y_id, xz_id = (max_id + 3, max_id + 4, max_id + 5)
-
-                    # Add to MSC block to tracker
-                    # Add to MSC block to tracker
-                    self.msc_cubes[spider_id] = "Mm"
-                    self.t_gates[spider_id] = [
-                        (spider_id, msc_id),
-                        (spider_id, x_bridge_id),
-                        (x_bridge_id, y_id),
-                        (x_bridge_id, xz_id),
-                    ]
-                    self.t_zx_tracker[spider_id] = xz_id
-
-                    # Time orders for all spiders in sequence
-                    self.ante[xz_id] = set([spider_id, msc_id, x_bridge_id, y_id])
-
-                    # Reset phase on original spider since it is getting a pattern instead
-                    self.phases[spider_id] = 0
-
-                    # Attach T
-                    self.bgraph.add_node(
-                        msc_id,
-                        zx_block=ZXBlockRegistry.get_create(zx_type="T"),
-                        coords=None,
-                        completions={
-                            "degree": None,
-                            "pending": None,
-                        },
-                    )
-                    self.qubits[msc_id] = self.qubits[spider_id]
-                    self.rows[msc_id] = self.rows[spider_id] - 1
-
-                    self.bgraph.add_edge(
-                        spider_id,
-                        msc_id,
-                        edge_type="SIMPLE",
-                        start_coords=None,
-                        end_coords=None,
-                        kind=None,
-                    )
-
-                    # Attach Y-XZ combo pattern (full)
-                    prev_id = spider_id
-                    types_in_seq = {0: "X", 1: "Y", 2: "XZ"}
-                    for i, s_id in enumerate([x_bridge_id, y_id, xz_id]):
-                        zx_type = types_in_seq[i]
-                        self.bgraph.add_node(
-                            s_id,
-                            zx_block=ZXBlockRegistry.get_create(zx_type=zx_type),
-                            coords=None,
-                            completions={
-                                "degree": None,
-                                "pending": None,
-                            },
-                        )
-                        self.qubits[s_id] = self.qubits[spider_id] - (0 if zx_type != "Y" else -1)
-                        self.rows[s_id] = self.rows[prev_id] + (1 if zx_type != "Y" else 0)
-                        self.bgraph.add_edge(
-                            prev_id if zx_type != "XZ" else x_bridge_id,
-                            s_id,
-                            edge_type="SIMPLE",
-                            start_coords=None,
-                            end_coords=None,
-                            kind=None,
-                        )
-                        prev_id = s_id
-
-        # Draw ZX as NX if applicable
+        # Add time dependencies
         if self.t_gates:
             try:
                 self.build_deps_from_pauli_webs()
             except Exception as e:
                 print(f"Error calculating time constraints for T-gates: {e}.")
 
-            if self._kwargs["debug"] >= 4:
-                self.draw_zx(draw_style="zx")
-
         # Update any trackers that might have changed from transformations
         self.update_base_trackers()
 
     def build_deps_from_pauli_webs(self):
-        """Build a set of cube IDs that must be placed BEFORE their any arbitrary T-gate."""
-
-        # Compute Pauli webs
+        """Build a dictionary of cubes with ANTECESSORs."""
+        # Proceed only if Pauli Webs exist
         order, zwebs, xwebs = compute_pauli_webs(self.input_zx_graph)
-
-        # Proceed only if it was possible to compute Pauli webs
-        # Note. Block adds ID of conditional of applicable T-gate pattern
         if order and zwebs and xwebs:
-            for t_gate_id in order:
-                if t_gate_id in (*xwebs, *zwebs):
-                    # Add any IDs in path of X webs
-                    if t_gate_id in xwebs:
-                        self.ante[self.t_zx_tracker[t_gate_id]].update(
-                            chain.from_iterable(xwebs[t_gate_id].half_edges())
-                        )
-
-                    # Add any IDs in path of Z webs
-                    if t_gate_id in zwebs:
-                        self.ante[self.t_zx_tracker[t_gate_id]].update(
-                            chain.from_iterable(zwebs[t_gate_id].half_edges())
-                        )
-
-            # Use the BEFORE deps just contructed to build inverse AFTER deps
+            # Build ANTE dependencies
+            _prep_ante(self.ante, self.t_zx_tracker, order, zwebs, xwebs)
+            # Build inverse AFTER dependencies
             self.build_rebuild_post_deps()
 
     def build_rebuild_post_deps(self):
-        """Use BEFORE time constraints to build a set of IDs of cubes that must be placed AFTER their respective key."""
-
-        # Proceed only if there are BEFORE deps to work with
+        """Build a dictionary containing any cubes with DESCENDANTs."""
+        # Proceed only if ANTE dependencies exist
         if self.ante:
-            for k, predecessors in self.ante.items():
-                for predecessor in predecessors:
-                    # Add each predecessor T-gate as successor of corresponding ID
-                    if predecessor in self.post:
-                        self.post[predecessor].update([k])
-                    else:
-                        self.post[predecessor] = set([k])
+            _prep_post(self.post, self.ante)
 
     def get_bounds(self):
         """Define the max/min bounds for the chip surface."""
@@ -391,14 +258,6 @@ class BlockGraphManager:
         if "size_of_chip" in self._kwargs and "k" in self._kwargs:
             self.bounds.x = int(self._kwargs["size_of_chip"][0] / (self._kwargs["k"])) - 1
             self.bounds.y = int(self._kwargs["size_of_chip"][1] / (self._kwargs["k"])) - 1
-
-    def get_nodes_verbose(self):
-        """Retrieve all nodes in blockgraph (verbose)."""
-        return [{"id": n, **attrs} for n, attrs in self.bgraph.nodes(data=True)]
-
-    def get_pipes_verbose(self):
-        """Retrieve all nodes in blockgraph (verbose)."""
-        return [{"id": n, **attrs} for n, attrs in self.bgraph.edges(data=True)]
 
     def get_volume(self):
         """Get the space-time volume of the main blockgraph."""
@@ -463,7 +322,6 @@ class BlockGraphManager:
         self.is_hadamard = False
 
         # Pick and ID and kind for first cube
-        # Update corresponding node
         self.first_coords = (0, 0, 0)
         self.first_id, self.other_first_ids, self.first_zx_block, src_beams, src_beams_short = (
             get_first_cube_data(
@@ -480,6 +338,7 @@ class BlockGraphManager:
             )
         )
 
+        # Update corresponding node
         self.bgraph.nodes[self.first_id]["coords"] = self.first_coords
         self.bgraph.nodes[self.first_id]["zx_block"] = self.first_zx_block
         self.beams[self.first_id] = src_beams
@@ -532,18 +391,12 @@ class BlockGraphManager:
             self.bgraph.nodes[spider_id]["completions"]["degree"] = self.bgraph.degree(spider_id)
             self.bgraph.nodes[spider_id]["completions"]["pending"] = self.bgraph.degree(spider_id)
 
-        # Visualise base_graph
-        if self._kwargs["debug"] >= 4:
-            self.draw_zx(draw_style="zx")
-
         # Loop through edge queue
         for raw_u, raw_v in self.edge_queue:
             # Start iteration timer
             self.t1_iter, _ = datetime_manager()
 
-            # Get (u, v) from the ID trace
-            # If a given node has not twins, the last twin is itself
-            # If a given node has twins, last twin is active twin
+            # Get (u, v) from ID trace (if ID has no twins, the last twin is itself)
             u = self.twin_trace[raw_u][-1]
             v = self.twin_trace[raw_v][-1]
 
@@ -554,13 +407,9 @@ class BlockGraphManager:
             ):
                 raise ValueError(f"BFS failed. Malformed source block: {u} --> {v}")
 
-            # Internalise key edge characteristics (ease of access)
+            # Internalise key edge characteristics & clear iteration-specific parameters
             self.curr_src_id, self.curr_tgt_id = (u, v)
-            self.cross_edge = True if self.bgraph.nodes[v]["coords"] else False
-            self.is_hadamard = self.bgraph.edges[(u, v)]["edge_type"] == "HADAMARD"
-            self.curr_src_coords = self.bgraph.nodes[self.curr_src_id]["coords"]
-            self.curr_tgt_coords = self.bgraph.nodes[self.curr_tgt_id]["coords"]
-            self.curr_tgt_zx_type = self.bgraph.nodes[self.curr_tgt_id]["zx_block"].zx_type
+            self.clear_iter(u, v)
 
             # Announce edge
             if self._kwargs["debug"] > 0:
@@ -568,19 +417,14 @@ class BlockGraphManager:
                     f"\n=> Edge: {u} ({self.bgraph.nodes[u]['zx_block'].zx_type}) --> {v} ({self.curr_tgt_zx_type}). {'CROSS' if self.cross_edge else 'STANDARD'}"
                 )
 
-            # Create a copy of taken that does not include source or target coordinates
-            self.pruned_taken = self.taken.copy()
-            self.pruned_taken.discard(self.curr_src_coords)
-            self.pruned_taken.discard(self.curr_tgt_coords)
+            # Edge fulfillment
+            if not self.cross_edge:
+                call_pathfinder_bfs_std(self)
+            else:
+                call_pathfinder_bfs_cross(self)
 
-            # Prune beams so edge fulfillment starts with clean slate
-            self.prune_beams()
-
-            # Edge fulfillment: try finding paths using increasing max search distance
-            self.call_pathfinder()
-
+            # Add path to blockgraph or end process as failure
             if self.winner_path:
-                # Add path to blockgraph
                 self.add_path()
                 if self._kwargs["debug"] >= 3 or self._kwargs["animate"]:
                     self.draw_blockgraph(is_final_vis=False)
@@ -618,230 +462,6 @@ class BlockGraphManager:
         print(
             f"\nSUCCESS! Habemus BlockGraph. Volume: {self.get_volume()}. Duration: {duration_total:.2f}s\n"
         )
-
-    def call_pathfinder(self, twin_mode: bool = False):
-        """Call the pathfinder algorithm for an arbitrary edge.
-
-        Args:
-            step: The maximum distance allowed for the specific search.
-            twin_mode (optional): True if the current edge is part of a twin creation cycle.
-
-        """
-
-        # Clear iteration-specific trackers
-        self.tent_coords: list[StandardCoord] = None
-        self.valid_paths: dict[PositionedZXBlock, list[PositionedZXBlock]] = None
-        self.winner_path: CandidatePath = None
-        self.pathfinder_vis_data: tuple[Any] = None
-        self.faux_edge: bool = self.curr_src_id in self.inputs and self.curr_tgt_id in self.inputs
-
-        # Prepare meta-attributes for iteration
-        step = 1
-        self.z_bounds: dict[str, int | None] = {"min": None, "max": None}
-
-        # Overload tentative coords generation if applicable
-        overload = 0
-        if self._kwargs["graph_traverse_mode"] in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]:
-            if (
-                self.curr_src_id in self.qubits
-                and self.curr_tgt_id in self.qubits
-                and self.qubits[self.curr_src_id] == self.qubits[self.curr_tgt_id]
-            ):
-                if self.qubits[self.first_id] == self.qubits[self.curr_src_id]:
-                    overload = 0
-                    step = self._kwargs["z_stretch"]
-            else:
-                overload = 1
-        elif self._kwargs["z_stretch"]:
-            overload = self._kwargs["z_stretch"]
-
-        if twin_mode:
-            overload = 1
-
-        if self.curr_tgt_zx_type in ["Y", "XZ"]:
-            overload = 2
-
-        if self.curr_tgt_zx_type in ["T"]:
-            overload = 2
-
-        # Set time constraints if applicable
-        if self.curr_tgt_id in self.ante:
-            floor_coords = [
-                self.bgraph.nodes[cube_id]["coords"]
-                for cube_id in self.ante[self.curr_tgt_id]
-                if self.bgraph.nodes[cube_id]["coords"]
-            ]
-            self.z_bounds["min"] = max([c[2] for c in floor_coords]) if floor_coords else None
-            step = max(
-                step,
-                get_manhattan(
-                    self.curr_src_coords,
-                    (self.curr_src_coords[0], self.curr_src_coords[1], self.z_bounds["min"]),
-                ),
-            )
-        if self.curr_tgt_id in self.post:
-            roof_coords = [
-                self.bgraph.nodes[cube_id]["coords"]
-                for cube_id in self.post[self.curr_tgt_id]
-                if self.bgraph.nodes[cube_id]["coords"]
-            ]
-            self.z_bounds["max"] = max([c[2] for c in roof_coords]) if roof_coords else None
-
-        # Loop until path is found
-        if not step or step == 0:
-            step = 1
-        max_step = step + 100
-        while step < max_step:
-            # Get many tentative coordinates or set a specific target coordinate
-            self.tent_coords = (
-                [self.curr_tgt_coords]
-                if self.cross_edge
-                else gen_tent_tgt_coords(
-                    self.curr_src_coords,
-                    step,
-                    self.taken,
-                    overload=overload if step < 3 else 0,
-                    z_bounds=self.z_bounds,
-                )
-            )
-
-            # Try finding paths to each tentative coordinate
-            if self.tent_coords:
-                # Get a number of valid paths (topologically correct, not necessarily optimal)
-                for iter_graph_bounds in [self.bounds, None]:
-                    self.valid_paths, self.pathfinder_vis_data = pathfinder(
-                        self.bgraph,
-                        self.beams,
-                        self.beams_short,
-                        self.curr_src_id,
-                        self.curr_tgt_id,
-                        self.tent_coords,
-                        self.cross_edge,
-                        self.taken,
-                        self.pruned_taken,
-                        self.is_hadamard,
-                        self.z_bounds,
-                        graph_bounds=iter_graph_bounds,
-                        **self._kwargs,
-                    )
-                    if self.valid_paths:
-                        break
-
-            # Kill loop if cross edge fails
-            if self.cross_edge and not self.valid_paths:
-                raise ValueError("Failed to find cross edge.")
-
-            # Handle cross edge
-            elif self.cross_edge and len(self.valid_paths) == 1:
-                self.winner_path = CandidatePath(
-                    **{
-                        "full_path": list(self.valid_paths.values())[0],
-                        "tgt_beams": self.beams[self.curr_tgt_id]
-                        if self.curr_tgt_id in self.beams
-                        else None,
-                        "tgt_beams_short": self.beams_short[self.curr_tgt_id]
-                        if self.curr_tgt_id in self.beams
-                        else None,
-                        "beams_broken_by_path": 0,  # Not calculated (pathfinder handles beams tolerances internally for cross-edges)
-                        "tgt_unobstr_exit_n": self.bgraph.nodes[self.curr_tgt_id]["completions"][
-                            "pending"
-                        ]
-                        - 1,  # Not calculated (pathfinder broken exits internally for cross-edges)
-                    }
-                )
-
-            # Pick between valid paths
-            elif self.valid_paths:
-                for valid_path in self.valid_paths.values():
-                    # Extract key path information
-                    tgt_coords, tgt_zx_block = valid_path[-1]
-                    coords_in_path = [c for c, _ in valid_path][1:]
-
-                    # Re-assign last block in sequence if target is a boundary
-                    if self.curr_tgt_zx_type == "O":
-                        tgt_zx_block = ZXBlockRegistry.get_create(kind="OOO")
-                        valid_path[-1] = (tgt_coords, tgt_zx_block)
-
-                    # Check if exits are unobstructed
-                    tgt_unobstr_exit_n, self.tgt_beams, self.tgt_beams_short = (
-                        check_exits_add_beams(
-                            tgt_zx_block,
-                            tgt_coords,
-                            self.taken,
-                            coords_in_path,
-                            self._kwargs["beams_len_short"],
-                        )
-                    )
-
-                    # Continue if minimum required number of exits available for target
-                    # Note. Open boundaries typically are part of a computation, so leave one exit open
-                    min_tgt_unobstr_exit_n = (
-                        1
-                        if self.faux_edge
-                        else self.bgraph.nodes[self.curr_tgt_id]["completions"]["pending"] - 1
-                    )
-                    if tgt_unobstr_exit_n >= min_tgt_unobstr_exit_n:
-                        # Check if path breaks more beams than tolerable
-                        extra_allowance = 0
-                        if (self.curr_src_id, self.curr_tgt_id) in self.edge_queue:
-                            if not self.edge_queue.index(
-                                (self.curr_src_id, self.curr_tgt_id)
-                            ) + 1 == len(self.edge_queue):
-                                nxt_edge = self.edge_queue[
-                                    self.edge_queue.index((self.curr_src_id, self.curr_tgt_id)) + 1
-                                ]
-                                nxt_id = nxt_edge[1]
-                                nxt_coords = self.bgraph.nodes[self.twin_trace[nxt_id][-1]][
-                                    "coords"
-                                ]
-                                if nxt_coords and (self.curr_tgt_id, nxt_id) in self.bgraph.edges:
-                                    md = get_manhattan(tgt_coords, nxt_coords)
-                                    if md == 1:
-                                        move = tuple(np.array(nxt_coords) - np.array(tgt_coords))
-                                        nxt_zx_block = self.bgraph.nodes[nxt_id]["zx_block"]
-                                        if tgt_zx_block.kind and nxt_zx_block.kind:
-                                            exits_match = tgt_zx_block.cube_open_faces_match(
-                                                move, tgt_zx_block=nxt_zx_block
-                                            )
-                                            faces_match = tgt_zx_block.face_match(
-                                                move, nxt_zx_block
-                                            )
-                                            if exits_match and faces_match:
-                                                extra_allowance = 1
-
-                        beam_clashes, beams_broken_by_path = self.check_beams(
-                            coords_in_path, twin_mode=twin_mode, extra_allowance=extra_allowance
-                        )
-
-                        # Append path to viable paths if path clears all checks
-                        if not beam_clashes or self.faux_edge:
-                            # Consolidate path data
-                            candidate_path = CandidatePath(
-                                **{
-                                    "full_path": valid_path,
-                                    "tgt_beams": self.tgt_beams,
-                                    "tgt_beams_short": self.tgt_beams_short,
-                                    "beams_broken_by_path": beams_broken_by_path,
-                                    "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
-                                }
-                            )
-
-                            # Append to viable paths
-                            self.winner_path = (
-                                candidate_path
-                                if (
-                                    not self.winner_path
-                                    or self.value_function(candidate_path)
-                                    > self.value_function(self.winner_path)
-                                )
-                                else self.winner_path
-                            )
-            # Break if valid paths generated at step
-            if self.winner_path:
-                break
-
-            # Increase distance if no valid paths found at current step
-            step += 1
 
     def add_path(self):
         """Add a winner path to the main blockgraph."""
@@ -936,14 +556,8 @@ class BlockGraphManager:
                 return any([True for beam in self.tgt_beams if beam.z.direction == 1])
         return True
 
-    def check_need_twins(self, strict: bool = True):
-        """Determine if there is a need to create twins for any given target.
-
-        Args:
-            strict (optional): Whether to perform a strict or loose check.
-
-        """
-
+    def check_need_twins(self):
+        """Determine if there is a need to create twins for any given target."""
         self.ids_to_twin = check_beam_clashes_for_twins(
             self.bgraph,
             self.beams,
@@ -1053,25 +667,12 @@ class BlockGraphManager:
                 "pending": self.bgraph.degree(twin_id),
             }
 
-            # Place twin
-            # Internalise key edge characteristics (ease of access)
+            # Place twin > Internalise edge characteristics & clear iteration-specific parameters
             self.curr_src_id, self.curr_tgt_id = (original_id, twin_id)
-            self.cross_edge = False
-            self.is_hadamard = False
-            self.curr_src_coords = self.bgraph.nodes[original_id]["coords"]
-            self.curr_tgt_coords = self.bgraph.nodes[twin_id]["coords"]
-            self.curr_tgt_zx_type = self.bgraph.nodes[twin_id]["zx_block"].zx_type
-
-            # Create a copy of taken that does not include source or target coordinates
-            self.pruned_taken = self.taken.copy()
-            self.pruned_taken.discard(self.curr_src_coords)
-            self.pruned_taken.discard(self.curr_tgt_coords)
-
-            # Prune beams so edge fulfillment starts with clean slate
-            self.prune_beams()
+            self.clear_iter(original_id, twin_id, twin_mode=True)
 
             # Edge fulfillment
-            self.call_pathfinder(twin_mode=True)
+            call_pathfinder_bfs_std(self, twin_mode=True)
 
             # Add path
             if self.winner_path:
@@ -1088,6 +689,7 @@ class BlockGraphManager:
             # Prune beams on exit for good health
             self.prune_beams()
 
+            # Update duration
             _, duration_iter = datetime_manager(t_1=self.t1_iter)
 
             # Update user if applicable
@@ -1122,11 +724,8 @@ class BlockGraphManager:
 
         """
 
-        # Extract or define key parameters
-        ## Weights
+        # Extract fixed weights and key path characteristics
         path_len_w, beams_broken_w = self._kwargs["weights"]
-
-        ## Extract dandidate path key characteristics
         last_coords, last_zx_block = candidate_path.full_path[-1]
         coords_in_path = np.array([c for c, _ in candidate_path.full_path])
 
@@ -1136,89 +735,38 @@ class BlockGraphManager:
         # Penalise number of beams broken by path
         broken_beams_contrib = candidate_path.beams_broken_by_path * beams_broken_w
 
-        # Push on Z-axis and graph bounds
-        out_of_bounds, z_push = (0, 0)
-        if self._kwargs["z_stretch"] or last_zx_block.zx_type in ["Y", "T"] or self.faux_edge:
-            # Define weight
-            stretch_multiplier = self._kwargs["z_stretch"] if self._kwargs["z_stretch"] else 1
-
-            # Push down for Y-cubes and cultivation/distillation
-            if last_zx_block.zx_type in ["Y", "T", "XZ"]:
-                z_push = -1 * last_coords[2]
-            # Favour row difference for all other cubes
-            else:
-                row_diff = 0
-                if self.curr_tgt_id in self.rows and self.curr_src_id in self.rows:
-                    row_diff = self.rows[self.curr_tgt_id] - self.rows[self.curr_src_id]
-                z_push = (
-                    (row_diff * stretch_multiplier * last_coords[2]) if not self.faux_edge else 0
-                )
-
-            # Apply bounds if given
-            if not self.faux_edge and self.bounds.x and self.bounds.y:
-                x_coords = coords_in_path[:, 0]
-                y_coords = coords_in_path[:, 1]
-                x_out = [x < 0 or x > self.bounds.x for x in x_coords]
-                y_out = [y < 0 or y > self.bounds.y for y in y_coords]
-                out_of_bounds = (sum(x_out) + sum(y_out)) * -stretch_multiplier
+        # Push on Z-axis
+        z_push, out_of_bounds = _calculate_z_nudges(
+            self.curr_src_id,
+            self.curr_tgt_id,
+            last_coords,
+            last_zx_block,
+            coords_in_path,
+            self._kwargs["z_stretch"],
+            self._kwargs["gravity"],
+            self.faux_edge,
+            self.rows,
+            self.bounds,
+        )
 
         # Gravity around a specific point in existing blockgraph if applicable
-        pull_to_centre = 0
-        if self._kwargs["gravity"]:
-            # Override push on Z for faux edges
-            if self.faux_edge:
-                z_push = -100 * abs(last_coords[2])
-
-            # Find centre
-            # Aim for centremost point of graph
-            centre_coords = np.sum([np.array(coords) for coords in self.taken], axis=0) / len(
-                self.taken
-            )
-
-            # !!! TO BE IMPLEMENTED
-            # IN THEORY, THE CENTRE POINT CAN CHANGE AS GRAPH EVOLVES
-
-            # Push towards neighbour if next edge is a crosss edge
-            nxt_is_cross = False
-            curr_edge = (self.curr_src_id, self.curr_tgt_id)
-            if curr_edge in self.edge_queue and not self.edge_queue.index(curr_edge) + 1 == len(
-                self.edge_queue
-            ):
-                nxt_id = self.edge_queue[self.edge_queue.index(curr_edge) + 1][1]
-                nxt_coords = self.bgraph.nodes[self.twin_trace[nxt_id][-1]]["coords"]
-                if nxt_coords and (self.curr_tgt_id, nxt_id) in self.bgraph.edges:
-                    centre_coords = nxt_coords
-                    nxt_is_cross = True
-
-            if (
-                nxt_is_cross
-                or self.faux_edge
-                or (
-                    self._kwargs["graph_traverse_mode"] in ["bfs-cycles"]
-                    and self.curr_tgt_zx_type != "O"
-                )
-            ):
-                d_to_centre = np.linalg.norm(np.array(last_coords) - np.array(centre_coords))
-                pull_to_centre = d_to_centre * -10 * self._kwargs["gravity"]
-            elif self.curr_tgt_zx_type not in ["O", "Y", "T", "XZ"]:
-                centre_x, centre_y, _ = centre_coords
-                x, y, _ = last_coords
-                pull_to_centre = -self._kwargs["gravity"] * (abs(x - centre_x) + abs(y - centre_y))
-            elif self.curr_tgt_zx_type in ["Y", "T", "XZ"]:
-                centre_x, centre_y, _ = centre_coords
-                centre_z = self.bgraph.nodes[self.curr_src_id]["coords"][2] - (
-                    1 if self.curr_tgt_zx_type in ["Y", "T", "XZ"] else 0
-                )
-                mean_d_to_centre = np.sum(
-                    [
-                        (abs(x - centre_x) + abs(y - centre_y) + abs(z - centre_z))
-                        for x, y, z in coords_in_path
-                    ]
-                ) / len(coords_in_path)
-                pull_to_centre = -self._kwargs["gravity"] * mean_d_to_centre
+        gravity_pull = _calculate_gravity_nudges(
+            self.bgraph,
+            self.edge_queue,
+            self.curr_src_id,
+            self.curr_tgt_id,
+            self.twin_trace,
+            self.taken,
+            last_coords,
+            coords_in_path,
+            self._kwargs["gravity"],
+            self.faux_edge,
+            self._kwargs["graph_traverse_mode"],
+            self.curr_tgt_zx_type,
+        )
 
         # Return cumulative value
-        path_value = len_contrib + broken_beams_contrib + out_of_bounds + z_push + pull_to_centre
+        path_value = len_contrib + broken_beams_contrib + out_of_bounds + z_push + gravity_pull
         return path_value
 
     def get_stats(self) -> tuple[int, int]:
@@ -1259,23 +807,6 @@ class BlockGraphManager:
             "bgraph_overhead": bgraph_overhead,
             "bgraph_surface_footprint": bgraph_surface_footprint,
         }
-
-    def draw_zx(self, draw_style: str = "zx"):
-        """Draw the NX blockgraph using ZX or NX styling.
-
-        draw_style: The style of drawing:
-            zx: Positions nodes in a PyZX-like manner
-            nx: Positions nodes using NX algorithms (defaults to spectral layout).
-
-
-        """
-        draw_as_zx(
-            self.bgraph,
-            self.qubits,
-            self.rows,
-            draw_style=draw_style,
-            first_spider=self.first_id if draw_style == "nx-bfs" else None,
-        )
 
     def draw_blockgraph(
         self, is_final_vis: bool = True, iter_fail: bool = False, embedded: bool = False
@@ -1319,20 +850,14 @@ class BlockGraphManager:
             "completed_edges": self.completed_base_edges,
         }
 
-        base_graph_draw_styles = {
-            "bfs": "zx",
-            "bfs-cross": "zx",
-            "bfs-cross-boundaries-last": "zx",
-            "bfs-cycles": "nx-fruchterman_reingold",
-            "bfs-rows": "zx",
-            "bfs-cnots": "zx",
-            "bfs-cnot-cycles": "zx",
-            "tfs-cnots": "zx",
-            "tfs": "zx",
-        }
-
+        # Get stats and clarify parameters that sometimes need adjustment
         self.get_stats()
         pop_vis = self._kwargs["debug"] > 1 or is_final_vis
+        draw_style = (
+            "nx-fruchterman_reingold"
+            if self._kwargs["graph_traverse_mode"] == "bfs-cycles"
+            else "zx"
+        )
         vis_state = VisualiserState(
             self.bgraph,
             self.beams,
@@ -1346,7 +871,7 @@ class BlockGraphManager:
             is_final_vis=is_final_vis,
             iter_fail=iter_fail,
             block_style="pipe",
-            base_graph_draw_style=base_graph_draw_styles[self._kwargs["graph_traverse_mode"]],
+            base_graph_draw_style=draw_style,
             stats=self.stats,
             vis_mode=(pop_vis, self._kwargs["animate"]),
         )
@@ -1358,19 +883,15 @@ class BlockGraphManager:
 
         return visualiser
 
-    def write_bgraph(
-        self,
-        output_dir: Path | str = BGRAPH_DIR,
-        circuit_name: str = "qc",
-    ):
+    def write_bgraph(self, circuit_name: str = "qc"):
         """Write BlockGraph to a BGRAPH file.
 
         Args:
-            output_dir (optional): The path to the directory where BGRAPH file should be saved.
             circuit_name (optional): The name of the circuit.
 
         """
         # Create output directory if it doesn't exist.
+        output_dir = BGRAPH_DIR
         if not isinstance(output_dir, Path):
             try:
                 output_dir = Path(str(output_dir))
@@ -1380,57 +901,16 @@ class BlockGraphManager:
                 ) from e
         os.makedirs(output_dir, exist_ok=True)
 
+        # Prepare BGRAPH content
+        bgraph_lines = _prep_bgraph_lines(
+            circuit_name, self.bgraph, self.inputs, self.outputs, self.qubits
+        )
+
         # Write to BGRAPH file
-        path_to_output_file = output_dir / f"{circuit_name}.bgraph"
-
-        with open(path_to_output_file, "w") as f:
-            f.write("BLOCKGRAPH 0.1.0;\n")
-
-            f.write("\nMETADATA: attr_name; value;\n")
-            f.write("source; topologiq;\n")
-            f.write(f"circuit_name; {circuit_name};\n")
-
-            f.write("\nCUBES: index;x;y;z;kind;label;\n")
-
-            for n_id, attrs in self.bgraph.nodes(data=True):
-                # Get coords and kind
-                if attrs["coords"] and attrs["zx_block"]:
-                    x, y, z = attrs["coords"]
-                    kind = attrs["zx_block"].kind
-                else:
-                    x, y, z = (None, None, None)
-                    kind = ""
-
-                # Re-write kind into BGRAPH standard if applicable
-                if kind in ["YYO", "TTO"]:
-                    neighs = list(self.bgraph.neighbors(n_id))
-                    if len(neighs) > 1:
-                        raise ValueError("Error writing BGRAPH. Malformed Y cube.")
-                    _, _, neigh_z = self.bgraph.nodes(data=True)[neighs[0]]["coords"]
-                    if kind == "YYOO":
-                        kind = "Yi" if neigh_z < z else "Ym"
-                    if kind == "TTO":
-                        if neigh_z <= z:
-                            raise ValueError(
-                                "Error writing BGRAPH. Malformed cultivation or distillation cube."
-                            )
-                        neigh_kind = self.bgraph.nodes(data=True)[neighs[0]]["zx_block"].kind
-                        kind = neigh_kind[:2] + "t"
-
-                # Assemble label
-                label = ""
-                if n_id in self.inputs:
-                    label = f"in_{self.qubits[n_id]}" if n_id in self.qubits else "in"
-                if n_id in self.outputs:
-                    label = f"out_{self.qubits[n_id]}" if n_id in self.qubits else "out"
-
-                # Write
-                f.write(f"{n_id};{x!s};{y!s};{z!s};{kind};{label};\n")
-
-            f.write("\nPIPES: src;tgt;kind;\n")
-            f.writelines(
-                [f"{u!s};{v!s};{kind};\n" for u, v, kind in self.bgraph.edges(data="kind")]
-            )
+        if bgraph_lines:
+            path_to_output_file = output_dir / f"{circuit_name}.bgraph"
+            with open(path_to_output_file, "w") as f:
+                f.writelines(bgraph_lines)
 
     def animate(self, filename_prefix: str = "computation"):
         """Call animation sequence."""
@@ -1444,7 +924,670 @@ class BlockGraphManager:
 
         self.cleanup()
 
+    def clear_iter(self, u, v, twin_mode=False):
+        """Clear iteration specific trackers and other variables."""
+
+        # Clear iteration trackers
+        self.faux_edge: bool = self.curr_src_id in self.inputs and self.curr_tgt_id in self.inputs
+        self.z_bounds: dict[str, int | None] = {"min": None, "max": None}
+        self.tent_coords: list[StandardCoord] = None
+        self.valid_paths: dict[PositionedZXBlock, list[PositionedZXBlock]] = None
+        self.winner_path: CandidatePath = None
+
+        # Edge characteristics
+        self.cross_edge = True if (self.bgraph.nodes[v]["coords"] and not twin_mode) else False
+        self.is_hadamard = (
+            False if twin_mode else self.bgraph.edges[(u, v)]["edge_type"] == "HADAMARD"
+        )
+        self.curr_src_coords = self.bgraph.nodes[self.curr_src_id if not twin_mode else u]["coords"]
+        self.curr_tgt_coords = self.bgraph.nodes[self.curr_tgt_id if not twin_mode else v]["coords"]
+        self.curr_tgt_zx_type = self.bgraph.nodes[self.curr_tgt_id if not twin_mode else v][
+            "zx_block"
+        ].zx_type
+
+        # Copy of taken without source and target coordinates
+        self.pruned_taken = self.taken.copy()
+        self.pruned_taken.discard(self.curr_src_coords)
+        self.pruned_taken.discard(self.curr_tgt_coords)
+
+        # Prune beams so edge fulfillment starts with clean slate
+        self.prune_beams()
+
     def cleanup(self):
         """Carry out cleanup operations after build."""
         # Delete temporary files
         rm_temp_files(MEDIA_DIR / "temp")
+
+
+###########
+# CALLERS #
+###########
+def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool = False):
+    """Call the BFS pathfinder for a standard edge.
+
+    Args:
+        bgraph_manager: The BlockGraph Manager currently driving the build.
+        twin_mode (optional): True if the current edge is part of a twin creation cycle.
+
+    """
+
+    # Calculate optimal step and overload
+    step, overload = _calculate_overload(
+        bgraph_manager._kwargs["graph_traverse_mode"],
+        bgraph_manager.first_id,
+        bgraph_manager.curr_src_id,
+        bgraph_manager.curr_tgt_id,
+        bgraph_manager.curr_tgt_zx_type,
+        bgraph_manager.qubits,
+        twin_mode,
+        bgraph_manager._kwargs["z_stretch"],
+    )
+
+    # Set time constraints if applicable
+    if bgraph_manager.curr_tgt_id in bgraph_manager.ante:
+        floor_coords = [
+            bgraph_manager.bgraph.nodes[cube_id]["coords"]
+            for cube_id in bgraph_manager.ante[bgraph_manager.curr_tgt_id]
+            if bgraph_manager.bgraph.nodes[cube_id]["coords"]
+        ]
+        bgraph_manager.z_bounds["min"] = max([c[2] for c in floor_coords]) if floor_coords else None
+        step = max(
+            step,
+            get_manhattan(
+                bgraph_manager.curr_src_coords,
+                (
+                    bgraph_manager.curr_src_coords[0],
+                    bgraph_manager.curr_src_coords[1],
+                    bgraph_manager.z_bounds["min"],
+                ),
+            ),
+        )
+    if bgraph_manager.curr_tgt_id in bgraph_manager.post:
+        roof_coords = [
+            bgraph_manager.bgraph.nodes[cube_id]["coords"]
+            for cube_id in bgraph_manager.post[bgraph_manager.curr_tgt_id]
+            if bgraph_manager.bgraph.nodes[cube_id]["coords"]
+        ]
+        bgraph_manager.z_bounds["max"] = max([c[2] for c in roof_coords]) if roof_coords else None
+
+    # Loop until path is found
+    max_step = step + 100
+    while step < max_step:
+        # Get many tentative coordinates or set a specific target coordinate
+        bgraph_manager.tent_coords = gen_tent_tgt_coords(
+            bgraph_manager.curr_src_coords,
+            step,
+            bgraph_manager.taken,
+            overload=overload if step < 3 else 0,
+            z_bounds=bgraph_manager.z_bounds,
+        )
+
+        # Try finding paths to each tentative coordinate
+        if bgraph_manager.tent_coords:
+            # Get a number of valid paths (topologically correct, not necessarily optimal)
+            for iter_graph_bounds in [bgraph_manager.bounds, None]:
+                pathfinder_init_state = _get_bgraph_snapshot(bgraph_manager, iter_graph_bounds)
+                pathfinder = PathFinderManager(pathfinder_init_state)
+                bgraph_manager.valid_paths = pathfinder.pathfinder_bfs()
+                if bgraph_manager.valid_paths:
+                    break
+
+        # Pick between valid paths
+        if bgraph_manager.valid_paths:
+            for valid_path in bgraph_manager.valid_paths.values():
+                # Extract key path information
+                tgt_coords, tgt_zx_block = valid_path[-1]
+                coords_in_path = [c for c, _ in valid_path][1:]
+
+                # Re-assign last block in sequence if target is a boundary
+                if bgraph_manager.curr_tgt_zx_type == "O":
+                    tgt_zx_block = ZXBlockRegistry.get_create(kind="OOO")
+                    valid_path[-1] = (tgt_coords, tgt_zx_block)
+
+                # Check if exits are unobstructed
+                tgt_unobstr_exit_n, bgraph_manager.tgt_beams, bgraph_manager.tgt_beams_short = (
+                    check_exits_add_beams(
+                        tgt_zx_block,
+                        tgt_coords,
+                        bgraph_manager.taken,
+                        coords_in_path,
+                        bgraph_manager._kwargs["beams_len_short"],
+                    )
+                )
+
+                # Continue if minimum required number of exits available for target
+                # Note. Open boundaries typically are part of a computation, so leave one exit open
+                min_tgt_unobstr_exit_n = (
+                    1
+                    if bgraph_manager.faux_edge
+                    else bgraph_manager.bgraph.nodes[bgraph_manager.curr_tgt_id]["completions"][
+                        "pending"
+                    ]
+                    - (0 if twin_mode else 1)
+                )
+                if tgt_unobstr_exit_n >= min_tgt_unobstr_exit_n:
+                    # Check if path breaks more beams than tolerable
+                    extra_allowance = 0
+                    if (
+                        bgraph_manager.curr_src_id,
+                        bgraph_manager.curr_tgt_id,
+                    ) in bgraph_manager.edge_queue:
+                        if not bgraph_manager.edge_queue.index(
+                            (bgraph_manager.curr_src_id, bgraph_manager.curr_tgt_id)
+                        ) + 1 == len(bgraph_manager.edge_queue):
+                            nxt_edge = bgraph_manager.edge_queue[
+                                bgraph_manager.edge_queue.index(
+                                    (bgraph_manager.curr_src_id, bgraph_manager.curr_tgt_id)
+                                )
+                                + 1
+                            ]
+                            nxt_id = nxt_edge[1]
+                            nxt_coords = bgraph_manager.bgraph.nodes[
+                                bgraph_manager.twin_trace[nxt_id][-1]
+                            ]["coords"]
+                            if (
+                                nxt_coords
+                                and (bgraph_manager.curr_tgt_id, nxt_id)
+                                in bgraph_manager.bgraph.edges
+                            ):
+                                md = get_manhattan(tgt_coords, nxt_coords)
+                                if md == 1:
+                                    move = tuple(np.array(nxt_coords) - np.array(tgt_coords))
+                                    nxt_zx_block = bgraph_manager.bgraph.nodes[nxt_id]["zx_block"]
+                                    if tgt_zx_block.kind and nxt_zx_block.kind:
+                                        exits_match = tgt_zx_block.cube_open_faces_match(
+                                            move, tgt_zx_block=nxt_zx_block
+                                        )
+                                        faces_match = tgt_zx_block.face_match(move, nxt_zx_block)
+                                        if exits_match and faces_match:
+                                            extra_allowance = 1
+
+                    beam_clashes, beams_broken_by_path = bgraph_manager.check_beams(
+                        coords_in_path, twin_mode=twin_mode, extra_allowance=extra_allowance
+                    )
+
+                    # Append path to viable paths if path clears all checks
+                    if not beam_clashes or bgraph_manager.faux_edge:
+                        # Consolidate path data
+                        candidate_path = CandidatePath(
+                            **{
+                                "full_path": valid_path,
+                                "tgt_beams": bgraph_manager.tgt_beams,
+                                "tgt_beams_short": bgraph_manager.tgt_beams_short,
+                                "beams_broken_by_path": beams_broken_by_path,
+                                "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
+                            }
+                        )
+
+                        # Append to viable paths
+                        bgraph_manager.winner_path = (
+                            candidate_path
+                            if (
+                                not bgraph_manager.winner_path
+                                or bgraph_manager.value_function(candidate_path)
+                                > bgraph_manager.value_function(bgraph_manager.winner_path)
+                            )
+                            else bgraph_manager.winner_path
+                        )
+        # Break if valid paths generated at step
+        if bgraph_manager.winner_path:
+            break
+
+        # Increase distance if no valid paths found at current step
+        step += 1
+
+
+def call_pathfinder_bfs_cross(bgraph_manager: BlockGraphManager):
+    """Call the Djikstra pathfinder for a cross edge.
+
+    Args:
+        bgraph_manager: The BlockGraph Manager currently driving the build.
+
+    """
+
+    # Define tentative coordinates as tgt coords
+    bgraph_manager.tent_coords = [bgraph_manager.curr_tgt_coords]
+
+    # Try finding shortest path
+    if bgraph_manager.tent_coords:
+        # Get a number of valid paths (topologically correct, not necessarily optimal)
+        for iter_graph_bounds in [bgraph_manager.bounds, None]:
+            pathfinder_init_state = _get_bgraph_snapshot(bgraph_manager, iter_graph_bounds)
+            pathfinder = PathFinderManager(pathfinder_init_state)
+            bgraph_manager.valid_paths = pathfinder.pathfinder_a_star()
+            if bgraph_manager.valid_paths:
+                break
+
+    # Handle cross edge
+    if len(bgraph_manager.valid_paths) == 1:
+        bgraph_manager.winner_path = CandidatePath(
+            **{
+                "full_path": list(bgraph_manager.valid_paths.values())[0],
+                "tgt_beams": (
+                    bgraph_manager.beams[bgraph_manager.curr_tgt_id]
+                    if bgraph_manager.curr_tgt_id in bgraph_manager.beams
+                    else None
+                ),
+                "tgt_beams_short": (
+                    bgraph_manager.beams_short[bgraph_manager.curr_tgt_id]
+                    if bgraph_manager.curr_tgt_id in bgraph_manager.beams
+                    else None
+                ),
+                "beams_broken_by_path": 0,  # Not calculated (pathfinder handles internally)
+                "tgt_unobstr_exit_n": (
+                    bgraph_manager.bgraph.nodes[bgraph_manager.curr_tgt_id]["completions"][
+                        "pending"
+                    ]
+                    - 1
+                ),  # Not calculated (pathfinder handles internally)
+            }
+        )
+
+
+######################
+# AUX BGRAPH MANAGER #
+######################
+def _prep_bgraph_lines(
+    circuit_name: str,
+    bgraph: nx.Graph,
+    inputs: list[int],
+    outputs: list[int],
+    qubits: dict[int, int],
+) -> list[str]:
+    # Initialise lines array
+    bgraph_lines = []
+
+    # Append metadata
+    bgraph_lines.append("BLOCKGRAPH 0.1.0;\n")
+    bgraph_lines.append("\nMETADATA: attr_name; value;\n")
+    bgraph_lines.append("source; topologiq;\n")
+    bgraph_lines.append(f"circuit_name; {circuit_name};\n")
+
+    # CUBES
+    bgraph_lines.append("\nCUBES: index;x;y;z;kind;label;\n")
+    for n_id, attrs in bgraph.nodes(data=True):
+        # Get coords and kind
+        if attrs["coords"] and attrs["zx_block"]:
+            x, y, z = attrs["coords"]
+            kind = attrs["zx_block"].kind
+        else:
+            x, y, z = (None, None, None)
+            kind = ""
+
+        # Re-write kind into BGRAPH standard if applicable
+        if kind in ["YYO", "TTO"]:
+            neighs = list(bgraph.neighbors(n_id))
+            if len(neighs) > 1:
+                raise ValueError("Error writing BGRAPH. Malformed Y cube.")
+            _, _, neigh_z = bgraph.nodes(data=True)[neighs[0]]["coords"]
+            if kind == "YYO":
+                kind = "Yi" if neigh_z > z else "Ym"
+            if kind == "TTO":
+                if neigh_z <= z:
+                    raise ValueError(
+                        "Error writing BGRAPH. Malformed cultivation or distillation cube."
+                    )
+                neigh_kind = bgraph.nodes(data=True)[neighs[0]]["zx_block"].kind
+                kind = neigh_kind[:2] + "t"
+
+        # Assemble label
+        label = ""
+        if n_id in inputs:
+            label = f"in_{qubits[n_id]}" if n_id in qubits else "in"
+        if n_id in outputs:
+            label = f"out_{qubits[n_id]}" if n_id in qubits else "out"
+
+        # Write
+        bgraph_lines.append(f"{n_id};{x!s};{y!s};{z!s};{kind};{label};\n")
+
+    # PIPES
+    bgraph_lines.append("\nPIPES: src;tgt;kind;\n")
+    for u, v, kind in bgraph.edges(data="kind"):
+        bgraph_lines.append(f"{u!s};{v!s};{kind};\n")
+
+    return bgraph_lines
+
+
+def _prep_ante(
+    ante: dict[int, set[int]],
+    t_zx_tracker: dict[int, int],
+    order: dict[Any, int],
+    xwebs: dict[Any, PauliWeb],
+    zwebs: dict[Any, PauliWeb],
+):
+    for t_gate_id in order:
+        if t_gate_id in (*xwebs, *zwebs):
+            # Add any IDs in path of X webs
+            if t_gate_id in xwebs:
+                ante[t_zx_tracker[t_gate_id]].update(
+                    chain.from_iterable(xwebs[t_gate_id].half_edges())
+                )
+
+            # Add any IDs in path of Z webs
+            if t_gate_id in zwebs:
+                ante[t_zx_tracker[t_gate_id]].update(
+                    chain.from_iterable(zwebs[t_gate_id].half_edges())
+                )
+
+
+def _prep_post(post: dict[int, set[int]], ante: dict[int, set[int]]):
+    for k, predecessors in ante.items():
+        for predecessor in predecessors:
+            # Add each predecessor T-gate as successor of corresponding ID
+            if predecessor in post:
+                post[predecessor].update([k])
+            else:
+                post[predecessor] = set([k])
+
+
+def _handle_s_spider(
+    spider_id: int,
+    bgraph: nx.Graph,
+    phases: dict[int, int | Fraction],
+    y_cubes: dict[int, str],
+    s_gates: dict[int, list[tuple[int, int] | None]],
+    qubits: dict[int, int],
+    rows: dict[int, int],
+):
+    # Calculate next ID
+    y_id = max(bgraph.nodes()) + 1
+
+    # Remove phase of original node as it will get a pattern instead
+    phases[spider_id] = 0
+
+    # Initialisation Y-cube
+    if bgraph.degree(spider_id) == 1:
+        # Log and change ZX block in node attributes
+        y_cubes[spider_id] = "Yi"
+        bgraph.nodes[spider_id]["zx_block"] = ZXBlockRegistry.get_create(zx_type="Y")
+
+    # Mid-circuit S-gate
+    else:
+        # Log Y-cube as measurement
+        s_gates[spider_id] = [(spider_id, y_id)]
+        y_cubes[y_id] = "Ym"
+
+        # Add Y-cube to BGRAPH
+        bgraph.add_node(
+            y_id,
+            zx_block=ZXBlockRegistry.get_create(zx_type="Y"),
+            coords=None,
+            completions={
+                "degree": None,
+                "pending": None,
+            },
+        )
+
+        # Add corresponding entry to qubit and row trackers
+        qubits[y_id] = qubits[spider_id] - 1
+        rows[y_id] = rows[spider_id] - 1
+
+        # Add corresponding edge
+        bgraph.add_edge(
+            spider_id,
+            y_id,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
+            kind=None,
+        )
+
+
+def _handle_t_spider(
+    spider_id: int,
+    bgraph: nx.Graph,
+    phases: dict[int, int | Fraction],
+    msc_cubes: dict[int, str],
+    t_gates: dict[int, list[tuple[int, int] | None]],
+    t_zx_tracker: dict[int, int],
+    ante: dict[int, set[int]],
+    qubits: dict[int, int],
+    rows: dict[int, int],
+    inputs: list[int],
+):
+    # Determine current max ID in graph
+    max_id = max(bgraph.nodes())
+
+    # Initialisation T-gate (MSC)
+    if spider_id in inputs:
+        # Remove phase of original node as it will get a pattern instead
+        phases[spider_id] = 0
+
+        # Add to MSC block to tracker
+        msc_cubes[spider_id] = "Mi"
+
+        # Update graph node to a T
+        bgraph.nodes[spider_id]["zx_block"] = ZXBlockRegistry.get_create(zx_type="T")
+
+    else:
+        # IDs for all spiders in sequence
+        msc_id = max_id + 1
+        x_bridge_id, y_id, xz_id = (max_id + 3, max_id + 4, max_id + 5)
+
+        # Add to MSC block to tracker
+        # Add to MSC block to tracker
+        msc_cubes[spider_id] = "Mm"
+        t_gates[spider_id] = [
+            (spider_id, msc_id),
+            (spider_id, x_bridge_id),
+            (x_bridge_id, y_id),
+            (x_bridge_id, xz_id),
+        ]
+        t_zx_tracker[spider_id] = xz_id
+
+        # Time orders for all spiders in sequence
+        ante[xz_id] = set([spider_id, msc_id, x_bridge_id, y_id])
+
+        # Reset phase on original spider since it is getting a pattern instead
+        phases[spider_id] = 0
+
+        # Attach T
+        bgraph.add_node(
+            msc_id,
+            zx_block=ZXBlockRegistry.get_create(zx_type="T"),
+            coords=None,
+            completions={
+                "degree": None,
+                "pending": None,
+            },
+        )
+        qubits[msc_id] = qubits[spider_id]
+        rows[msc_id] = rows[spider_id] - 1
+
+        bgraph.add_edge(
+            spider_id,
+            msc_id,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
+            kind=None,
+        )
+
+        # Attach Y-XZ combo pattern (full)
+        prev_id = spider_id
+        types_in_seq = {0: "X", 1: "Y", 2: "XZ"}
+        for i, s_id in enumerate([x_bridge_id, y_id, xz_id]):
+            zx_type = types_in_seq[i]
+            bgraph.add_node(
+                s_id,
+                zx_block=ZXBlockRegistry.get_create(zx_type=zx_type),
+                coords=None,
+                completions={
+                    "degree": None,
+                    "pending": None,
+                },
+            )
+            qubits[s_id] = qubits[spider_id] - (0 if zx_type != "Y" else -1)
+            rows[s_id] = rows[prev_id] + (1 if zx_type != "Y" else 0)
+            bgraph.add_edge(
+                prev_id if zx_type != "XZ" else x_bridge_id,
+                s_id,
+                edge_type="SIMPLE",
+                start_coords=None,
+                end_coords=None,
+                kind=None,
+            )
+            prev_id = s_id
+
+
+def _calculate_z_nudges(
+    curr_src_id: int,
+    curr_tgt_id: int,
+    last_coords: StandardCoord,
+    last_zx_block: ZXBlock,
+    coords_in_path: NDArray[Any],
+    z_stretch: int,
+    gravity: int,
+    faux_edge: bool,
+    rows: dict[int, int],
+    bounds: GraphBounds,
+):
+    # Default values
+    z_push, out_of_bounds = (0, 0)
+
+    # Calculate nudge only if applicable
+    if z_stretch or last_zx_block.zx_type in ["Y", "T"] or faux_edge:
+        # Define weight
+        stretch_multiplier = z_stretch if z_stretch else 1
+
+        # Push down for Y-cubes and cultivation/distillation
+        if last_zx_block.zx_type in ["Y", "T", "XZ"]:
+            z_push = -1 * last_coords[2]
+        # Favour row difference for all other cubes
+        else:
+            row_diff = 0
+            if curr_tgt_id in rows and curr_src_id in rows:
+                row_diff = rows[curr_tgt_id] - rows[curr_src_id]
+            z_push = (row_diff * stretch_multiplier * last_coords[2]) if not faux_edge else 0
+
+        # Apply bounds if given
+        if not faux_edge and bounds.x and bounds.y:
+            x_coords = coords_in_path[:, 0]
+            y_coords = coords_in_path[:, 1]
+            x_out = [x < 0 or x > bounds.x for x in x_coords]
+            y_out = [y < 0 or y > bounds.y for y in y_coords]
+            out_of_bounds = (sum(x_out) + sum(y_out)) * -stretch_multiplier
+
+    # Adjust z-push for faux edges
+    if gravity and faux_edge:
+        z_push = -100 * abs(last_coords[2])
+
+    return z_push, out_of_bounds
+
+
+def _calculate_gravity_nudges(
+    bgraph: nx.Graph,
+    edge_queue: list[tuple[int, int]],
+    curr_src_id: int,
+    curr_tgt_id: int,
+    twin_trace: dict[int, list[int]],
+    taken: set[StandardCoord],
+    last_coords: StandardCoord,
+    coords_in_path: NDArray[Any],
+    gravity: int,
+    faux_edge: bool,
+    graph_traverse_mode: str,
+    curr_tgt_zx_type: str,
+):
+    # Default values
+    gravity_pull = 0
+
+    # Calculate nudge only if applicable
+    if gravity:
+        # Find centre
+        # Aim for centremost point of graph
+        centre_coords = np.sum([np.array(coords) for coords in taken], axis=0) / len(taken)
+
+        # Push towards neighbour if next edge is a crosss edge
+        nxt_is_cross = False
+        curr_edge = (curr_src_id, curr_tgt_id)
+        if curr_edge in edge_queue and not edge_queue.index(curr_edge) + 1 == len(edge_queue):
+            nxt_id = edge_queue[edge_queue.index(curr_edge) + 1][1]
+            nxt_coords = bgraph.nodes[twin_trace[nxt_id][-1]]["coords"]
+            if nxt_coords and (curr_tgt_id, nxt_id) in bgraph.edges:
+                centre_coords = nxt_coords
+                nxt_is_cross = True
+
+        if (
+            nxt_is_cross
+            or faux_edge
+            or (graph_traverse_mode == "bfs-cycles" and curr_tgt_zx_type != "O")
+        ):
+            d_to_centre = np.linalg.norm(np.array(last_coords) - np.array(centre_coords))
+            gravity_pull = d_to_centre * -10 * gravity
+        elif curr_tgt_zx_type not in ["O", "Y", "T", "XZ"]:
+            centre_x, centre_y, _ = centre_coords
+            x, y, _ = last_coords
+            gravity_pull = -gravity * (abs(x - centre_x) + abs(y - centre_y))
+        elif curr_tgt_zx_type in ["Y", "T", "XZ"]:
+            centre_x, centre_y, _ = centre_coords
+            centre_z = bgraph.nodes[curr_src_id]["coords"][2] - (
+                1 if curr_tgt_zx_type in ["Y", "T", "XZ"] else 0
+            )
+            mean_d_to_centre = np.sum(
+                [
+                    (abs(x - centre_x) + abs(y - centre_y) + abs(z - centre_z))
+                    for x, y, z in coords_in_path
+                ]
+            ) / len(coords_in_path)
+            gravity_pull = -gravity * mean_d_to_centre
+
+    return gravity_pull
+
+
+#########################
+# AUX PATHFINDER CALLER #
+#########################
+def _calculate_overload(
+    graph_traverse_mode: str,
+    first_id: int,
+    curr_src_id: int,
+    curr_tgt_id: int,
+    curr_tgt_zx_type: str,
+    qubits: dict[int, int],
+    twin_mode: bool,
+    z_stretch: int | None,
+) -> int:
+    step = 1
+    overload = 0
+    if graph_traverse_mode in ["bfs-cnots", "bfs-cnot-cycles", "tfs-cnots"]:
+        if (
+            curr_src_id in qubits
+            and curr_tgt_id in qubits
+            and qubits[curr_src_id] == qubits[curr_tgt_id]
+        ):
+            if qubits[first_id] == qubits[curr_src_id]:
+                overload = 0
+                step = z_stretch
+        else:
+            overload = 1
+    elif z_stretch:
+        overload = z_stretch
+
+    if twin_mode:
+        overload = 1
+
+    if curr_tgt_zx_type in ["Y", "XZ", "T"]:
+        overload = 2
+
+    return step, overload
+
+
+def _get_bgraph_snapshot(
+    bgraph_manager: BlockGraphManager, iter_graph_bounds: GraphBounds | None
+) -> PathfinderInitState:
+    return PathfinderInitState(
+        bgraph_manager.bgraph,
+        bgraph_manager.beams,
+        bgraph_manager.beams_short,
+        bgraph_manager.curr_src_id,
+        bgraph_manager.curr_tgt_id,
+        bgraph_manager.tent_coords,
+        bgraph_manager.cross_edge,
+        bgraph_manager.taken,
+        bgraph_manager.pruned_taken,
+        bgraph_manager.is_hadamard,
+        bgraph_manager.z_bounds,
+        iter_graph_bounds,
+        bgraph_manager._kwargs,
+    )

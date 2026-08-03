@@ -20,61 +20,37 @@ Notes:
 
 """
 
+import heapq
 from collections import deque
+from dataclasses import dataclass
+from itertools import count
+from typing import Any
 
 import networkx as nx
 import numpy as np
 
 from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import PositionedZXBlock, ZXBlock, ZXBlockRegistry
-from topologiq.core.pathfinder.aux import gen_exit_conditions, init_bfs
+from topologiq.core.pathfinder.beams import check_beams_clashes_magic_state
 from topologiq.core.pathfinder.spatial import (
     check_clashes_parametrised_taken,
     check_skip_move,
     gen_bounding_box,
-    get_coords_for_current_move,
+    get_coords_current_move,
 )
 from topologiq.utils.classes import GraphBounds, StandardBlock, StandardCoord
-from topologiq.utils.manhattan import get_manhattan
+from topologiq.utils.manhattan import get_manhattan, get_max_manhattan
 
 
-############################
-# MAIN PATHFINDER WORKFLOW #
-############################
-def pathfinder(
-    bgraph: nx.Graph,
-    beams: CubeBeams,
-    beams_short: CubeBeams,
-    curr_src_id: int,
-    curr_tgt_id: int,
-    tent_coords: list[StandardCoord],
-    cross_edge: bool,
-    taken: set[StandardCoord],
-    pruned_taken: set[StandardCoord],
-    is_hadamard: bool,
-    z_bounds: dict[str, int | None] = {},
-    graph_bounds: GraphBounds | None = None,
-    **kwargs,
-) -> tuple[
-    dict[PositionedZXBlock, list[PositionedZXBlock]] | None,
-    tuple[
-        list[str] | None,
-        int,
-        int,
-        dict[PositionedZXBlock, list[PositionedZXBlock]] | None,
-    ]
-    | None,
-]:
-    """Call core pathfinder after generating list of possible kinds for the given operation.
+#####################
+# PATHFINDER STATE #
+####################
+@dataclass(frozen=True)
+class PathfinderInitState:
+    """Snapshot of a BlockGraphManager to use as the initial state of an arbitrary pathfinder iteration.
 
-    Please note is an edge fulfiller. The incoming BlockGraphManager is used to guide pathfinding,
-    but the pathfinder does not change this object. Instead, the pathfinder returns the NX graph
-    corresponding to self.blockgraph, which should be used in the calling class to update
-    the class as needed for any subsequent iteration.
-
-    Args:
-        bgraph_manager: The BlockGraphManager currently managing the build.
-        bgraph: The BlockGraph currently being built.
+    Atttributes:
+        bgraph: The primary NetworkX graph containing the blockgraph being built.
         beams: The beams for all the cubes in blockgraph that need beams.
         beams_short: The short beams for all the cubes in blockgraph that need beams.
         curr_src_id: The ID of the current source cube.
@@ -86,463 +62,570 @@ def pathfinder(
         is_hadamard: True if the current edge is a Hadamard in the input ZX graph.
         z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
         graph_bounds (optional): A tuple of max_x and max_y coordinates to maintain build within bounds.
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
+        _kwargs: See `./kwargs.py` for a comprehensive breakdown.
             NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
             NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
 
-    Returns:
-        bgraph: An updated blockgraph including the new path to be added to the calling BlockGraphManager.
-        pathfinder_vis_data: A list containing data for visualisation of a given pathfinder run.
-
     """
 
-    # Extract key info into easily accessible variables
-    src_zx_block: ZXBlock = bgraph.nodes[curr_src_id]["zx_block"]
-    tgt_zx_block: ZXBlock = bgraph.nodes[curr_tgt_id]["zx_block"]
-    src_coords: StandardCoord = bgraph.nodes[curr_src_id]["coords"]
+    bgraph: nx.Graph
+    beams: dict[int, CubeBeams]
+    beams_short: dict[int, CubeBeams]
+    curr_src_id: int
+    curr_tgt_id: int
+    tent_coords: list[StandardCoord]
+    cross_edge: bool
+    taken: set[StandardCoord]
+    pruned_taken: set[StandardCoord]
+    is_hadamard: bool
+    z_bounds: dict[str, int | None]
+    graph_bounds: GraphBounds | None
+    _kwargs: dict[str, Any]
 
-    # Parametrise taken
-    parametrised_taken: dict[int, list[tuple[int, int]]] = {}
-    for x, y, z in pruned_taken:
-        if z in parametrised_taken:
-            parametrised_taken[z].add((x, y))
-        else:
-            parametrised_taken[z] = set([(x, y)])
 
-    # Generate kinds that could in theory be assigned to the target cube
-    tent_tgt_kinds = tgt_zx_block.kind if cross_edge else tgt_zx_block.get_kind_family
+############################
+# MAIN PATHFINDER WORKFLOW #
+############################
+class PathFinderManager:
+    """Manage the process of find paths between blocks in the BlockGraph."""
 
-    # Create bounding box to limit space search
-    bounding_box, max_span = gen_bounding_box(
-        taken, cross_edge=cross_edge, graph_bounds=graph_bounds
-    )
+    def __init__(self, pathfinder_init_state: PathfinderInitState):
+        """Initialise with empty blockgraph."""
 
-    # Initialise BFS
-    queue, visited, visit_attempts, path, valid_paths, all_search_paths = init_bfs(
-        (src_coords, src_zx_block)
-    )
+        # Internalise state for facilitated access
+        self.s: PathfinderInitState = pathfinder_init_state
 
-    path_clashes = {}
-    src_tgt_adjusts = {}
-    out_pendings = {}
+    def pathfinder_bfs(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
+        """Find paths using a Djikstra algorithm.
 
-    # Define exit conditions in case something goes wrong
-    tgts_to_fill, max_manhattan, src_tgt_manhattan = gen_exit_conditions(
-        src_coords,
-        tent_coords,
-        pruned_taken,
-        max_span,
-        cross_edge,
-        kwargs["min_succ_rate"],
-        special_target_kind=tgt_zx_block.zx_type in ["T"],
-    )
-    tgts_to_fill = min(100, tgts_to_fill)
+        Returns:
+            valid_paths: All valid paths found.
 
-    # Manage queue
-    hdm = is_hadamard
-    break_for_success = False
-    while queue:
-        # Flag to exit prematurely due to success
-        if break_for_success:
-            break
+        """
+        # Extract key info into easily accessible variables
+        self.src_zx_block: ZXBlock = self.s.bgraph.nodes[self.s.curr_src_id]["zx_block"]
+        self.src_coords: StandardCoord = self.s.bgraph.nodes[self.s.curr_src_id]["coords"]
+        self.tgt_zx_block: ZXBlock = self.s.bgraph.nodes[self.s.curr_tgt_id]["zx_block"]
 
-        # Unpack current block (source for iteration)
-        curr_block_positioned: PositionedZXBlock = queue.popleft()
-        curr_coords: StandardCoord = curr_block_positioned[0]
-        curr_zx_block: ZXBlock = curr_block_positioned[1]
+        # Parametrise taken (creates: self.parametrised_taken)
+        self._parametrise_taken_init()
 
-        # Check skip/break tolerances
-        curr_manhattan = get_manhattan(src_coords, curr_coords)
-        if curr_manhattan > src_tgt_manhattan * 3:
-            continue
-        if curr_manhattan > max_manhattan:
-            continue
+        # Generate kinds that could in theory be assigned to the target cube
+        self.tent_tgt_kinds = (
+            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_kind_family
+        )
 
-        # Check for success
-        if curr_coords in tent_coords:
-            if cross_edge or curr_zx_block.zx_type in ["Y", "T", "O"]:
-                continue
+        # Create bounding box to limit search space (creates: self.bounding_box, self.max_span)
+        self._gen_bounding_box()
 
-        # Avoid multiple special gates on same path
-        if tgt_zx_block.zx_type in ["Y", "T"]:
-            if any(
-                [
-                    zx_b.zx_type == tgt_zx_block.zx_type
-                    for _, zx_b in path[curr_block_positioned][1:]
-                ]
-            ):
-                continue
+        # Initialise BFS (creates: self.queue, self.visited, self.path, & trackers various)
+        self._init_bfs()
 
-        # Check path for beam clashes before attempting move
-        if _check_beams_clashes(
-            bgraph,
-            curr_block_positioned,
-            cross_edge,
-            path,
-            beams,
-            beams_short,
-            curr_src_id,
-            curr_tgt_id,
-            path_clashes,
-            out_pendings,
-            src_tgt_adjusts,
-            strict=not cross_edge,
-        ):
-            continue
+        # Last recourse exit conditions (creates: self.tgts_to_fill, self.max_manhattan, self.src_tgt_manhattan)
+        self._gen_exit_conditions()
 
-        # Try moving in all directions
-        for move in curr_zx_block.get_move_vectors:
-            # Calculate next position and update paths accordingly
-            nxt_coords, curr_path_coords = get_coords_for_current_move(
-                curr_block_positioned, move, path
-            )
-
-            # Check if move can be skipped (for speed)
-            if check_skip_move(
-                nxt_coords,
-                curr_path_coords,
-                parametrised_taken,
-                bounding_box=bounding_box,
-            ):
-                continue
-
-            # Create a list of kinds that are valid for the next block
-            possible_nxt_zx_blocks = curr_zx_block.nxt_kinds(
-                move,
-                is_hadamard=hdm,
-                tgt_zx_type=tgt_zx_block.zx_type,
-            )
-
-            # Loop over all possible next types
-            for possible_nxt_zx_block in possible_nxt_zx_blocks:
-                # Check if next kind needs to be rotated due to Hadamard
-                nxt_block: StandardBlock = (
-                    nxt_coords,
-                    possible_nxt_zx_block,
-                )
-
-                if possible_nxt_zx_block.zx_type == "T":
-                    nxt_x, nxt_y, nxt_z = nxt_coords
-                    skip_possible_nxt_zx_block = False
-                    for i in [1, 2]:
-                        if check_clashes_parametrised_taken(
-                            (nxt_x, nxt_y, nxt_z - i), parametrised_taken
-                        ):
-                            skip_possible_nxt_zx_block = True
-                        if (nxt_x, nxt_y, nxt_z - i) in taken or (
-                            nxt_x,
-                            nxt_y,
-                            nxt_z - i,
-                        ) in curr_path_coords:
-                            skip_possible_nxt_zx_block = True
-                    if skip_possible_nxt_zx_block:
-                        continue
-
-                # Log to visited and update path lengths if all conditions met
-                queue, visited, path, visit_attempts, all_search_paths = _to_visit_or_not_to_visit(
-                    curr_block_positioned,
-                    nxt_block,
-                    queue,
-                    visited,
-                    move,
-                    path,
-                    visit_attempts,
-                    all_search_paths,
-                )
-
-                # Check for success
-                if nxt_coords in tent_coords:
-                    if _check_for_success(
-                        (nxt_coords, possible_nxt_zx_block),
-                        tgt_zx_block.zx_type,
-                        tent_tgt_kinds,
-                        path,
-                        valid_paths,
-                        tgts_to_fill,
-                        pruned_taken,
-                        z_bounds=z_bounds,
-                        bgraph=bgraph,
-                        beams_short=beams_short,
-                        curr_src_id=curr_src_id,
-                        curr_tgt_id=curr_tgt_id,
-                    ):
-                        break_for_success = True
-                        break
-
+        # Manage queue
+        hdm, break_for_success = (self.s.is_hadamard, False)
+        while self.queue:
+            # Flag to exit prematurely due to success
             if break_for_success:
                 break
 
-        # Hadamards are introduce on very first move so once loop clears first
-        # set of possible moves, there can be no more Hadamards in a specific edge.
-        hdm = False
+            # Unpack current block (source for iteration)
+            self.curr_block_positioned: PositionedZXBlock = self.queue.popleft()
+            self.curr_coords: StandardCoord = self.curr_block_positioned[0]
+            self.curr_zx_block: ZXBlock = self.curr_block_positioned[1]
+            self.curr_path = self.path[self.curr_block_positioned]
 
-    # Exit by default
-    return valid_paths, (tent_tgt_kinds, visit_attempts, len(visited), all_search_paths)
+            # Check distance tolerances
+            if self._check_distance_breach():
+                continue
 
+            # Avoid overshooting path and appending multiple special gates to same path
+            if self._check_special_cases():
+                continue
 
-########
-# AUX #
-#######
-def _check_beams_clashes(
-    bgraph: nx.Graph,
-    curr_block_positioned,
-    cross_edge,
-    path,
-    beams,
-    beams_short,
-    curr_src_id: int,
-    curr_tgt_id: int,
-    path_clashes,
-    out_pendings,
-    src_tgt_adjusts,
-    strict=False,
-) -> bool:
-    """Check if there are beam clashes."""
+            # Check path for beam clashes before attempting move
+            if self._check_beams_clashes():
+                continue
 
-    if not cross_edge:
-        return False
-
-    beams_to_check = beams if strict else beams_short
-    if len(path[curr_block_positioned]) > 1:
-        path_clashes[curr_block_positioned] = path_clashes[path[curr_block_positioned][-2]].copy()
-
-        # Check each cube against all other cubes
-        for out_id, out_beams in beams_to_check.items():
-            # Track outer beams in a way that remembers which beam is which
-
-            broken_beams = [out_beam.contains(curr_block_positioned[0]) for out_beam in out_beams]
-
-            path_clashes[curr_block_positioned][out_id] = path_clashes[
-                path[curr_block_positioned][-2]
-            ][out_id] + np.array(broken_beams)
-
-            # Determine if out clashes are within tolerance
-            if out_id not in src_tgt_adjusts:
-                src_tgt_adjusts[out_id] = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
-            if out_id not in out_pendings:
-                out_pendings[out_id] = (
-                    min(1, bgraph.nodes[out_id]["completions"]["pending"])
-                    if src_tgt_adjusts[out_id] == 0
-                    else bgraph.nodes[out_id]["completions"]["pending"]
+            # Try moving in all directions
+            for move in self.curr_zx_block.get_move_vectors:
+                # Calculate next position and update paths accordingly
+                nxt_coords, curr_path_coords = get_coords_current_move(
+                    self.curr_block_positioned, move, self.path
                 )
-            if (
-                len(out_beams)
-                + src_tgt_adjusts[out_id]
-                - path_clashes[curr_block_positioned][out_id].sum()
-                < out_pendings[out_id]
-            ):
-                return True
 
-    else:
-        path_clashes[curr_block_positioned] = {}
-        for out_id, out_beams in beams_to_check.items():
-            path_clashes[curr_block_positioned][out_id] = np.array([False for _ in out_beams])
+                # Check if move can be skipped altogether
+                if self._check_skip_move(nxt_coords, curr_path_coords):
+                    continue
 
-    return False
+                # Create a list of kinds that are valid for the next block
+                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(
+                    move, is_hadamard=hdm, tgt_zx_type=self.tgt_zx_block.zx_type
+                )
 
+                # Loop over all possible next types
+                for possible_nxt_zx_block in possible_nxt_zx_blocks:
+                    # Check if next kind needs to be rotated due to Hadamard
+                    nxt_block: StandardBlock = (nxt_coords, possible_nxt_zx_block)
 
-def _check_beams_clashes_magic_state(
-    bgraph: nx.Graph,
-    all_magic_coords: list[StandardCoord],
-    beams_short,
-    curr_src_id: int,
-    curr_tgt_id: int,
-) -> bool:
-    """Check if there are beam clashes."""
+                    # Check clashes for extended coords of MSC blocks
+                    if self._check_special_t_clash(nxt_block, curr_path_coords):
+                        continue
 
-    # Check each cube against all other cubes
-    for out_id, out_beams in beams_short.items():
-        # Check if any magic coordinate is contained in current beam
-        broken_beams = np.array([
-            any([out_beam.contains(check_coord) for check_coord in all_magic_coords])
-            for out_beam in out_beams
-        ])
+                    # Log to visited and update path lengths if all conditions met
+                    self._to_visit_or_not_to_visit(nxt_block, move)
 
-        # Determine if clashes are within tolerance
-        src_tgt_adjusts = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
-        pendings = (
-            min(1, bgraph.nodes[out_id]["completions"]["pending"])
-            if src_tgt_adjusts == 0
-            else bgraph.nodes[out_id]["completions"]["pending"]
+                    # Check for success
+                    if nxt_coords in self.s.tent_coords:
+                        if self._check_for_success(nxt_block):
+                            break_for_success = True
+                            break
+
+                if break_for_success:
+                    break
+
+            # Hadamards must be placed in very first move only.
+            hdm = False
+
+        return self.valid_paths
+
+    def _parametrise_taken_init(self):
+        """Parametrise taken for easier retrieval and check."""
+        self.parametrised_taken = {}
+        for x, y, z in self.s.pruned_taken:
+            if z in self.parametrised_taken:
+                self.parametrised_taken[z].add((x, y))
+            else:
+                self.parametrised_taken[z] = set([(x, y)])
+
+    def _gen_bounding_box(self):
+        """Determine min/max coordinates for any second pass search."""
+        self.bounding_box, self.max_span = gen_bounding_box(
+            self.s.taken, self.s.graph_bounds, self.s.cross_edge
         )
 
-        if len(out_beams) + src_tgt_adjusts - broken_beams.sum() < pendings:
+    def _init_bfs(self):
+        """Initialise BFS variables."""
+        self.src_block_positioned = (self.src_coords, self.src_zx_block)
+        self.queue = deque([self.src_block_positioned])
+        self.visited = {(self.src_block_positioned, (0, 0, 0)): 0}
+        self.visit_attempts = 0
+        self.path = {self.src_block_positioned: [self.src_block_positioned]}
+        self.valid_paths, self.all_search_paths = ({}, {})
+        self.path_clashes, self.src_tgt_adjusts, self.out_pendings = ({}, {}, {})
+
+    def _gen_exit_conditions(self):
+        """Calculate conditions that need to be met to exit the pathfinder."""
+
+        # Cross-edges
+        if self.s.cross_edge:
+            self.tgts_to_fill = 1
+            self.src_tgt_manhattan = get_max_manhattan(self.src_coords, self.s.tent_coords)
+            if self.s.cross_edge:
+                self.max_manhattan = max(
+                    get_max_manhattan(self.src_coords, self.s.taken) * 2,
+                    self.max_span,
+                )
+            else:
+                self.max_manhattan = self.src_tgt_manhattan + 6
+        # Standard edges
+        else:
+            self.tgts_to_fill = int(len(self.s.tent_coords) * self.s._kwargs["min_succ_rate"] / 100)
+            self.max_manhattan = get_max_manhattan(self.src_coords, self.s.tent_coords) * 2
+            self.src_tgt_manhattan = self.max_manhattan
+
+        # Final calculations
+        self.src_tgt_manhattan = get_max_manhattan(self.src_coords, self.s.tent_coords)
+        self.tgts_to_fill = min(10, self.tgts_to_fill)
+
+    def _check_distance_breach(self) -> bool:
+        """Check if search has not gone past a maximum tolerated distance."""
+        curr_manhattan = get_manhattan(self.src_coords, self.curr_coords)
+        if curr_manhattan > self.src_tgt_manhattan * 3:
             return True
-
-    return False
-
-
-def _to_visit_or_not_to_visit(
-    curr_block_positioned: PositionedZXBlock,
-    nxt_block: PositionedZXBlock,
-    queue: deque,
-    visited: dict[tuple[PositionedZXBlock, StandardCoord], int],
-    move: tuple[int, int, int],
-    path: dict[PositionedZXBlock, list[PositionedZXBlock]],
-    visit_attempts: int,
-    all_search_paths: dict[PositionedZXBlock, list[PositionedZXBlock]],
-) -> tuple[
-    deque,
-    dict[tuple[PositionedZXBlock, StandardCoord], int],
-    dict[PositionedZXBlock, list[PositionedZXBlock]],
-    dict[PositionedZXBlock, int],
-    int,
-    dict[PositionedZXBlock, list[PositionedZXBlock]],
-]:
-    """Visit site if conditions are met.
-
-    Args:
-        curr_block_positioned: The positioned ZX block (coordinates, zx_block).
-        nxt_block: The positioned ZX block for the next block.
-        queue: The pathfinder's BFS primary queue.
-        visited: All visited sites by the pathfinder BFS.
-        move: The spatial displacement (aka. move) currently under consideration.
-        path: The full path object for the entire BFS.
-        visit_attempts:  Total number of visitation attempts made throughout the pathfinder BFS.
-        all_search_paths: All paths searched throughout the pathfinder BFS including those not leading to a visit.
-
-    Returns:
-        queue: The pathfinder's BFS primary queue.
-        visited: All visited sites by the pathfinder BFS.
-        path: The full path object for the entire BFS.
-        visit_attempt: Total number of visitation attempts made throughout the pathfinder BFS.
-        all_search_paths: All paths searched throughout the pathfinder BFS including those not leading to a visit.
-
-    """
-
-    # Update counters and add path to all_search_paths
-    visit_attempts += 1
-    all_search_paths[nxt_block] = [*path[curr_block_positioned], nxt_block]
-
-    # Check next coords not in visited or path no longer than equiv. path
-    if ((nxt_block, move)) not in visited or len(all_search_paths[nxt_block]) < visited[
-        (nxt_block, move)
-    ]:
-        # Log to visited
-        visited[(nxt_block, move)] = len(all_search_paths[nxt_block])
-
-        # Append to queue
-        queue.append(nxt_block)
-
-        # Add path
-        path[nxt_block] = all_search_paths[nxt_block]
-
-    return queue, visited, path, visit_attempts, all_search_paths
-
-
-def _check_for_success(
-    nxt_block_positioned: PositionedZXBlock,
-    tgt_block_zx_type: str,
-    tent_tgt_kinds: list[str],
-    path: dict[PositionedZXBlock, list[PositionedZXBlock]],
-    valid_paths: dict[PositionedZXBlock, list[PositionedZXBlock]],
-    tgts_to_fill: int,
-    pruned_taken: set[StandardCoord],
-    z_bounds: dict[str, int | None] = {},
-    bgraph: nx.Graph | None = None,
-    beams_short: CubeBeams | None = None,
-    curr_src_id: int | None = None,
-    curr_tgt_id: int | None = None,
-) -> tuple[dict[PositionedZXBlock, list[PositionedZXBlock]], bool]:
-    """Check if iteration achieved success.
-
-    Args:
-        nxt_block_positioned: The positioned ZX block (coordinates, zx_block).
-        tgt_block_zx_type: The ZX type of the target block.
-        tent_tgt_kinds: A list of kinds matching the zx-type of target block.
-        path: The full path object for the entire BFS.
-        valid_paths: All paths found in round covering some or all tent_coords.
-        tgts_to_fill: Min number of targets that need to be fulfilled for pathfinder to be successful.
-        pruned_taken: A pruned version of taken not containing source and target coordinates.
-        z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
-        bgraph (optional): The BlockGraph currently being built.
-        beams_short (optional): The short beams for all the cubes in blockgraph that need beams.
-        curr_src_id (optional): The ID of the current source cube.
-        curr_tgt_id (optional): The ID of the current target cube.
-
-    Return:
-        [bool]: True if success was achieved in this iteration, else False.
-
-    """
-
-    # Extract last block in path
-    nxt_coords, _ = nxt_block_positioned
-
-    # Separate checks into categories for readability
-    fail_time_constraints = False
-    fail_time_constraints_2 = False
-    fail_special_cube_constraints = False
-
-    # Check time constraints
-    if z_bounds.get("min"):
-        fail_time_constraints = z_bounds["min"] >= nxt_coords[2]
-
-    if not fail_time_constraints and z_bounds.get("max"):
-        fail_time_constraints_2 = z_bounds["max"] <= nxt_coords[2]
-
-    if fail_time_constraints or fail_time_constraints_2:
+        if curr_manhattan > self.max_manhattan:
+            return True
         return False
 
-    # Check special cube conditions
-    if tgt_block_zx_type in ["Y", "T", "XZ", "O"]:
-        fail_special_cube_constraints = nxt_coords in list([c for c, _ in valid_paths.keys()])
-        if tent_tgt_kinds == ["TTO"]:
-            curr_path_coords = [coords for coords, _ in path[nxt_block_positioned]]
-            all_magic_coords = [
-                (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i) for i in range(1, 4)
-            ]
-            fail_special_cube_constraints = any(
-                [
-                    (check_coords in pruned_taken or check_coords in curr_path_coords)
-                    for check_coords in all_magic_coords
+    def _check_special_cases(self) -> bool:
+        """Check if there is already a special gate in the current path."""
+        if self.curr_coords in self.s.tent_coords:
+            if self.s.cross_edge or self.curr_zx_block.zx_type in ["Y", "T", "O"]:
+                return True
+        if self.tgt_zx_block.zx_type in ["Y", "T"]:
+            if any([zx_b.zx_type == self.tgt_zx_block.zx_type for _, zx_b in self.curr_path[1:]]):
+                return True
+        return False
+
+    def _check_beams_clashes(self) -> bool:
+        """Check if there are beam clashes."""
+
+        # Do not check if it is a cross edge
+        if not self.s.cross_edge:
+            return False
+
+        if len(self.path[self.curr_block_positioned]) > 1:
+            self.path_clashes[self.curr_block_positioned] = self.path_clashes[
+                self.path[self.curr_block_positioned][-2]
+            ].copy()
+
+            # Check each cube against all other cubes
+            for out_id, out_beams in self.s.beams.items():
+                # Track outer beams in a way that remembers which beam is which
+                broken_beams = [
+                    out_beam.contains(self.curr_block_positioned[0]) for out_beam in out_beams
                 ]
-            )
-            if (
-                not fail_special_cube_constraints
-                and bgraph
-                and beams_short
-                and curr_src_id
-                and curr_tgt_id
-            ):
-                fail_special_cube_constraints = _check_beams_clashes_magic_state(
-                    bgraph, all_magic_coords, beams_short, curr_src_id, curr_tgt_id
+
+                self.path_clashes[self.curr_block_positioned][out_id] = self.path_clashes[
+                    self.path[self.curr_block_positioned][-2]
+                ][out_id] + np.array(broken_beams)
+
+                # Determine if out clashes are within tolerance
+                if out_id not in self.src_tgt_adjusts:
+                    self.src_tgt_adjusts[out_id] = (
+                        1 if out_id in (self.s.curr_src_id, self.s.curr_tgt_id) else 0
+                    )
+                if out_id not in self.out_pendings:
+                    self.out_pendings[out_id] = (
+                        min(1, self.s.bgraph.nodes[out_id]["completions"]["pending"])
+                        if self.src_tgt_adjusts[out_id] == 0
+                        else self.s.bgraph.nodes[out_id]["completions"]["pending"]
+                    )
+                if (
+                    len(out_beams)
+                    + self.src_tgt_adjusts[out_id]
+                    - self.path_clashes[self.curr_block_positioned][out_id].sum()
+                    < self.out_pendings[out_id]
+                ):
+                    return True
+
+        else:
+            self.path_clashes[self.curr_block_positioned] = {}
+            for out_id, out_beams in self.s.beams.items():
+                self.path_clashes[self.curr_block_positioned][out_id] = np.array(
+                    [False for _ in out_beams]
                 )
 
-    if fail_special_cube_constraints:
         return False
 
-    if tgt_block_zx_type == "T":
-        goes_down = path[nxt_block_positioned][-2][0][2] > nxt_coords[2]
-        if not goes_down:
-            fail_special_cube_constraints = True
+    def _check_skip_move(
+        self, nxt_coords: StandardCoord, curr_path_coords: list[StandardCoord]
+    ) -> bool:
+        """Check if a particular move can be skipped altogether."""
+        return check_skip_move(
+            nxt_coords, curr_path_coords, self.parametrised_taken, bounding_box=self.bounding_box
+        )
 
-    if tgt_block_zx_type == "XZ":
-        goes_up = path[nxt_block_positioned][-2][0][2] < nxt_coords[2]
-        if not goes_up:
-            fail_special_cube_constraints = True
-
-    if fail_special_cube_constraints:
+    def _check_special_t_clash(
+        self,
+        nxt_block: PositionedZXBlock,
+        curr_path_coords: list[StandardCoord],
+    ) -> bool:
+        nxt_coords, possible_nxt_zx_block = nxt_block
+        if possible_nxt_zx_block.zx_type == "T":
+            nxt_x, nxt_y, nxt_z = nxt_coords
+            for i in [1, 2]:
+                if check_clashes_parametrised_taken(
+                    (nxt_x, nxt_y, nxt_z - i), self.parametrised_taken
+                ):
+                    return True
+                if (nxt_x, nxt_y, nxt_z - i) in self.s.taken or (
+                    nxt_x,
+                    nxt_y,
+                    nxt_z - i,
+                ) in curr_path_coords:
+                    return True
         return False
 
-    # For all cases, return true only if standard checks clear
-    if tgt_block_zx_type == "O" or nxt_block_positioned[1].kind in tent_tgt_kinds:
-        if tgt_block_zx_type in ["XZ"]:
-            nxt_kind = nxt_block_positioned[1].kind[:2] + "*"
-            xz_block = ZXBlockRegistry.get_create(kind=nxt_kind)
-            path[(nxt_coords, xz_block)] = [
-                *path[nxt_block_positioned][:-1],
-                (nxt_coords, xz_block),
-            ]
-            valid_paths[(nxt_coords, xz_block)] = path[(nxt_coords, xz_block)]
-        else:
-            if nxt_block_positioned not in valid_paths or len(path[nxt_block_positioned]) < len(
-                valid_paths[nxt_block_positioned]
-            ):
-                valid_paths[nxt_block_positioned] = path[nxt_block_positioned]
+    def _to_visit_or_not_to_visit(self, nxt_block: PositionedZXBlock, move: tuple[int, int, int]):
+        """Visit site if conditions are met.
 
-        if tgt_block_zx_type not in ["Y", "T", "O", "XZ"]:
-            tgts_filled = len([p[0] for p in valid_paths.keys()])
-            if tgts_filled >= tgts_to_fill:
-                return True
+        Args:
+            nxt_block: The positioned ZX block for the next block.
+            move: The spatial displacement (aka. move) currently under consideration.
 
-    return False
+        """
+
+        # Update counters and add path to all_search_paths
+        self.visit_attempts += 1
+        self.all_search_paths[nxt_block] = [*self.path[self.curr_block_positioned], nxt_block]
+
+        # Check next coords not in visited or path no longer than equiv. path
+        if (nxt_block, move) not in self.visited:
+            # Log to visited
+            self.visited[(nxt_block, move)] = len(self.all_search_paths[nxt_block])
+
+            # Append to queue
+            self.queue.append(nxt_block)
+
+            # Add path
+            self.path[nxt_block] = self.all_search_paths[nxt_block]
+
+    def _check_for_success(self, nxt_block_positioned: PositionedZXBlock) -> bool:
+        """Check if iteration achieved success.
+
+        Args:
+            nxt_block_positioned: The positioned ZX block (coordinates, zx_block).
+
+        Return:
+            [bool]: True if success was achieved in this iteration, else False.
+
+        """
+
+        # Extract last block in path
+        nxt_coords, _ = nxt_block_positioned
+
+        # Separate checks into categories for readability
+        fail_time_constraints = False
+        fail_time_constraints_2 = False
+        fail_special_cube_constraints = False
+
+        # Check time constraints
+        if self.s.z_bounds.get("min"):
+            fail_time_constraints = self.s.z_bounds["min"] >= nxt_coords[2]
+
+        if not fail_time_constraints and self.s.z_bounds.get("max"):
+            fail_time_constraints_2 = self.s.z_bounds["max"] <= nxt_coords[2]
+
+        if fail_time_constraints or fail_time_constraints_2:
+            return False
+
+        # Check special cube conditions
+        if self.tgt_zx_block.zx_type in ["Y", "T", "XZ", "O"]:
+            fail_special_cube_constraints = nxt_coords in list(
+                [c for c, _ in self.valid_paths.keys()]
+            )
+            if self.tent_tgt_kinds == ["TTO"]:
+                curr_path_coords = [coords for coords, _ in self.path[nxt_block_positioned]]
+                all_magic_coords = [
+                    (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i) for i in range(1, 4)
+                ]
+                fail_special_cube_constraints = any(
+                    [
+                        (check_coords in self.s.pruned_taken or check_coords in curr_path_coords)
+                        for check_coords in all_magic_coords
+                    ]
+                )
+                if (
+                    not fail_special_cube_constraints
+                    and self.s.bgraph
+                    and self.s.beams_short
+                    and self.s.curr_src_id
+                    and self.s.curr_tgt_id
+                ):
+                    fail_special_cube_constraints = check_beams_clashes_magic_state(
+                        self.s.bgraph,
+                        all_magic_coords,
+                        self.s.beams_short,
+                        self.s.curr_src_id,
+                        self.s.curr_tgt_id,
+                    )
+
+        if fail_special_cube_constraints:
+            return False
+
+        if self.tgt_zx_block.zx_type == "T":
+            goes_down = self.path[nxt_block_positioned][-2][0][2] > nxt_coords[2]
+            if not goes_down:
+                fail_special_cube_constraints = True
+
+        if self.tgt_zx_block.zx_type == "XZ":
+            goes_up = self.path[nxt_block_positioned][-2][0][2] < nxt_coords[2]
+            if not goes_up:
+                fail_special_cube_constraints = True
+
+        if fail_special_cube_constraints:
+            return False
+
+        # For all cases, return true only if standard checks clear
+        if self.tgt_zx_block.zx_type == "O" or nxt_block_positioned[1].kind in self.tent_tgt_kinds:
+            if self.tgt_zx_block.zx_type in ["XZ"]:
+                nxt_kind = nxt_block_positioned[1].kind[:2] + "*"
+                xz_block = ZXBlockRegistry.get_create(kind=nxt_kind)
+                self.path[(nxt_coords, xz_block)] = [
+                    *self.path[nxt_block_positioned][:-1],
+                    (nxt_coords, xz_block),
+                ]
+                self.valid_paths[(nxt_coords, xz_block)] = self.path[(nxt_coords, xz_block)]
+            else:
+                if nxt_block_positioned not in self.valid_paths or len(
+                    self.path[nxt_block_positioned]
+                ) < len(self.valid_paths[nxt_block_positioned]):
+                    self.valid_paths[nxt_block_positioned] = self.path[nxt_block_positioned]
+
+            if self.tgt_zx_block.zx_type not in ["O"]:
+                tgts_filled = len([p[0] for p in self.valid_paths.keys()])
+                if tgts_filled >= self.tgts_to_fill:
+                    return True
+
+        return False
+
+    def pathfinder_a_star(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
+        """Find paths using an A* algorithm optimized for single-target cross-edges.
+
+        Returns:
+            valid_paths: All valid paths found.
+
+        AI disclaimer:
+            category: Coding partner (see CONTRIBUTING.md for details).
+            model: Gemini, 3.5 Flash.
+
+        """
+        # Extract key info into easily accessible variables
+        self.src_zx_block: ZXBlock = self.s.bgraph.nodes[self.s.curr_src_id]["zx_block"]
+        self.src_coords: StandardCoord = self.s.bgraph.nodes[self.s.curr_src_id]["coords"]
+        self.tgt_zx_block: ZXBlock = self.s.bgraph.nodes[self.s.curr_tgt_id]["zx_block"]
+        self.tgt_coords: StandardCoord = self.s.tent_coords[0]
+
+        # Parametrise taken
+        self._parametrise_taken_init()
+
+        # Generate kinds that could in theory be assigned to the target cube
+        self.tent_tgt_kinds = (
+            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_kind_family
+        )
+
+        # Create bounding box to limit search space
+        self._gen_bounding_box()
+
+        # Initialise A* specific priority queue and tracking structures
+        self._init_a_star()
+
+        # Last recourse exit conditions
+        self._gen_exit_conditions()
+
+        # Manage Priority Queue
+        hdm, break_for_success = (self.s.is_hadamard, False)
+        while self.heap:
+            if break_for_success:
+                break
+
+            # Unpack block with lowest f_score (f = g + h)
+            _, curr_g, _, self.curr_block_positioned = heapq.heappop(self.heap)
+            self.curr_coords: StandardCoord = self.curr_block_positioned[0]
+            self.curr_zx_block: ZXBlock = self.curr_block_positioned[1]
+            self.curr_path = self.path[self.curr_block_positioned]
+
+            # Check distance tolerances
+            if self._check_distance_breach():
+                continue
+
+            # Avoid overshooting path and appending multiple special gates to same path
+            if self._check_special_cases():
+                continue
+
+            # Check path for beam clashes before attempting move
+            if self._check_beams_clashes():
+                continue
+
+            # Try moving in all directions
+            for move in self.curr_zx_block.get_move_vectors:
+                # Calculate next position and update paths accordingly
+                nxt_coords, curr_path_coords = get_coords_current_move(
+                    self.curr_block_positioned, move, self.path
+                )
+
+                # Check if move can be skipped altogether
+                if self._check_skip_move(nxt_coords, curr_path_coords):
+                    continue
+
+                # Create a list of kinds that are valid for the next block
+                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(
+                    move, is_hadamard=hdm, tgt_zx_type=self.tgt_zx_block.zx_type
+                )
+
+                # Loop over all possible next types
+                for possible_nxt_zx_block in possible_nxt_zx_blocks:
+                    nxt_block: StandardBlock = (nxt_coords, possible_nxt_zx_block)
+
+                    # Check clashes for extended coords of MSC blocks
+                    if self._check_special_t_clash(nxt_block, curr_path_coords):
+                        continue
+
+                    # Evaluate score and add to priority queue if valid
+                    self._to_visit_or_not_to_visit_a_star(nxt_block, move, curr_g)
+
+                    # Check for success
+                    if nxt_coords in self.s.tent_coords:
+                        if self._check_for_success(nxt_block):
+                            break_for_success = True
+                            break
+
+                if break_for_success:
+                    break
+
+            # Hadamards must be placed in very first move only
+            hdm = False
+
+        return self.valid_paths
+
+    def _init_a_star(self):
+        """Initialise A* specific data structures.
+
+        AI disclaimer:
+            category: Coding partner (see CONTRIBUTING.md for details).
+            model: Gemini, 3.5 Flash.
+
+        """
+        self.src_block_positioned = (self.src_coords, self.src_zx_block)
+
+        # Tie-breaker counter for equal priority items in heap
+        self.heap_counter = count()
+
+        # Calculate initial heuristic cost h(n) to target
+        initial_h = get_manhattan(self.src_coords, self.tgt_coords)
+        initial_g = 0
+        initial_f = initial_g + initial_h
+
+        # Heap entries: (f_score, g_score, tie_breaker_id, block)
+        self.heap = []
+        heapq.heappush(
+            self.heap,
+            (initial_f, initial_g, next(self.heap_counter), self.src_block_positioned),
+        )
+
+        # Track lowest g_score (actual path length) for each state
+        self.g_scores = {(self.src_block_positioned, (0, 0, 0)): 0}
+
+        self.visit_attempts = 0
+        self.path = {self.src_block_positioned: [self.src_block_positioned]}
+        self.valid_paths, self.all_search_paths = ({}, {})
+        self.path_clashes, self.src_tgt_adjusts, self.out_pendings = ({}, {}, {})
+
+    def _to_visit_or_not_to_visit_a_star(
+        self,
+        nxt_block: PositionedZXBlock,
+        move: tuple[int, int, int],
+        curr_g: int,
+    ):
+        """Evaluate next block state and push to heap if lower g_score found.
+
+        AI disclaimer:
+            category: Coding partner (see CONTRIBUTING.md for details).
+            model: Gemini, 3.5 Flash.
+
+        """
+        self.visit_attempts += 1
+        nxt_coords = nxt_block[0]
+        nxt_g = curr_g + 1
+        state_key = (nxt_block, move)
+
+        # Check if we found a shorter route to this state
+        if state_key not in self.g_scores or nxt_g < self.g_scores[state_key]:
+            self.g_scores[state_key] = nxt_g
+
+            # Update path metadata
+            self.all_search_paths[nxt_block] = [*self.path[self.curr_block_positioned], nxt_block]
+            self.path[nxt_block] = self.all_search_paths[nxt_block]
+
+            # Calculate f = g + h
+            h_score = get_manhattan(nxt_coords, self.tgt_coords)
+            f_score = nxt_g + h_score
+
+            # Push to priority queue
+            heapq.heappush(
+                self.heap,
+                (f_score, nxt_g, next(self.heap_counter), nxt_block),
+            )

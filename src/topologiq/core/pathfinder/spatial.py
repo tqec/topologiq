@@ -12,7 +12,7 @@ from topologiq.utils.classes import GraphBounds, StandardBlock, StandardCoord
 #######################
 # PATHS & COORDINATES #
 #######################
-def get_coords_for_current_move(
+def get_coords_current_move(
     curr_block_positioned: PositionedZXBlock,
     move: tuple[int, int, int],
     path: dict[StandardBlock, list[StandardBlock]],
@@ -50,8 +50,8 @@ def get_coords_for_current_move(
 ###############
 def gen_bounding_box(
     taken: list[StandardCoord],
-    cross_edge: bool = False,
-    graph_bounds: GraphBounds | None = None,
+    graph_bounds: GraphBounds | None,
+    cross_edge: bool,
 ) -> tuple[dict[str, dict[str, int]], int]:
     """Determine min/max coordinates for any second pass search.
 
@@ -152,6 +152,7 @@ def check_skip_move(
             return True
 
     return False
+
 
 def check_clashes_parametrised_taken(
     nxt_coords: StandardCoord,

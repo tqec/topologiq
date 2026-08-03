@@ -5,39 +5,12 @@ Usage:
 
 """
 
-from collections import deque
-
-from topologiq.core.blocks import PositionedZXBlock
-from topologiq.utils.classes import StandardBlock, StandardCoord
 from topologiq.utils.manhattan import get_max_manhattan
 
 
 ########
 # INIT #
 ########
-def init_bfs(
-    src_block_positioned: PositionedZXBlock,
-) -> tuple[
-    deque,
-    dict[tuple[StandardBlock, StandardCoord], int],
-    int,
-    dict[StandardBlock, int],
-    dict[StandardBlock, list[StandardBlock]],
-    dict[StandardBlock, list[StandardBlock]],
-    dict[StandardBlock, list[StandardBlock]],
-]:
-    """Initialise BFS variables."""
-
-    queue = deque([src_block_positioned])
-    visited = {(src_block_positioned, (0, 0, 0)): 0}
-    visit_attempts = 0
-    path = {src_block_positioned: [src_block_positioned]}
-    valid_paths = {}
-    all_search_paths = {}
-
-    return queue, visited, visit_attempts, path, valid_paths, all_search_paths
-
-
 def gen_exit_conditions(
     src_coords,
     tent_coords,
@@ -78,6 +51,7 @@ def gen_exit_conditions(
         src_tgt_manhattan = max_manhattan
 
     src_tgt_manhattan = get_max_manhattan(src_coords, tent_coords)
+    tgts_to_fill = min(100, tgts_to_fill)
 
     return tgts_to_fill, max_manhattan, src_tgt_manhattan
 

@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # Retrieve circuit
     had_phase = True
-    qubit_n, depth = (4, 20)
+    qubit_n, depth = (4, 50)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph, _ = random_graph(
         qubit_n,

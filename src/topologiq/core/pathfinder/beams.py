@@ -17,9 +17,9 @@ from topologiq.core.beams import CubeBeams
 from topologiq.utils.classes import StandardCoord
 
 
-#######################
-# UNIFIED BEAM CHECKS #
-#######################
+###############
+# BEAM CHECKS #
+###############
 def check_beams(
     bgraph: nx.Graph,
     beams: CubeBeams,
@@ -74,3 +74,36 @@ def check_beams(
             return False
 
     return True
+
+
+def check_beams_clashes_magic_state(
+    bgraph: nx.Graph,
+    all_magic_coords: list[StandardCoord],
+    beams_short,
+    curr_src_id: int,
+    curr_tgt_id: int,
+) -> bool:
+    """Check if there are beam clashes."""
+
+    # Check each cube against all other cubes
+    for out_id, out_beams in beams_short.items():
+        # Check if any magic coordinate is contained in current beam
+        broken_beams = np.array(
+            [
+                any([out_beam.contains(check_coord) for check_coord in all_magic_coords])
+                for out_beam in out_beams
+            ]
+        )
+
+        # Determine if clashes are within tolerance
+        src_tgt_adjusts = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
+        pendings = (
+            min(1, bgraph.nodes[out_id]["completions"]["pending"])
+            if src_tgt_adjusts == 0
+            else bgraph.nodes[out_id]["completions"]["pending"]
+        )
+
+        if len(out_beams) + src_tgt_adjusts - broken_beams.sum() < pendings:
+            return True
+
+    return False
