@@ -19,12 +19,12 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # By extension, you only need to give KWARGs that deviate from default parameters.
 # All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
 kwargs = {
-    "first_id_strategy": "central-qubit",
+    "first_id_strategy": "first-spider",
     "seed": 1330,
     "debug": 1,
     "size_of_chip": (12, 12),
     "k": 3,
-    "graph_traverse_mode": "tfs-cnots",
+    "graph_traverse_mode": "bfs-layers",
     "gravity": 7,
     "z_stretch": 2,
 }

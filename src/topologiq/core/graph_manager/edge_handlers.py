@@ -22,6 +22,7 @@ def queue_precalc(
     rows: dict[int, int],
     qubits: dict[int, int],
     inputs: list[int],
+    outputs: list[int],
     graph_traverse_strategy: str,
     other_first_ids: list[int] = [],
     s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
@@ -35,6 +36,7 @@ def queue_precalc(
         rows: Spiders organised by row.
         qubits: Spiders organised by qubit.
         inputs: The inputs of the base graph.
+        outputs: The outputs of the base graph.
         graph_traverse_strategy: The graph traversing strategy.
         other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy).
         s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
@@ -66,6 +68,18 @@ def queue_precalc(
     if graph_traverse_strategy == "bfs-rows":
         edge_queue = _queue_bfs_rows(
             bgraph, first_id, rows, inputs, other_first_ids=other_first_ids, t_gates=t_gates
+        )
+
+    # Layered BFS (by T-gate sections)
+    if graph_traverse_strategy == "bfs-layers":
+        edge_queue = _queue_bfs_layers(
+            bgraph,
+            first_id,
+            qubits,
+            rows,
+            inputs,
+            s_gates=s_gates,
+            t_gates=t_gates,
         )
 
     # Layered BFS (by T-gates)
@@ -310,7 +324,135 @@ def _queue_bfs_rows(
                     [visited.update([u, v]) for u, v in t_gates[v]]
             edge_queue = alt_edge_queue
 
-    print("EDGE QUEUE", edge_queue)
+    return edge_queue
+
+
+def _queue_bfs_layers(
+    bgraph: nx.Graph,
+    first_id: int,
+    qubits: dict[int, int],
+    rows: dict[int, int],
+    inputs: list[int],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> list[tuple[int, int]]:
+    """Build queue using a row by row graph traverse strategy.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        qubits: Spiders with their respective qubit.
+        rows: Spiders with their respective row.
+        inputs: The inputs of the base graph.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy).
+        s_gates (optional): A dictionary containing the edges of each S-gate pattern in base graph.
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Init empty edge queue and visited with first id
+    edge_queue = []
+    visited = set([first_id])
+    visited_edges = set()
+
+    inverted_qubits = {}
+    for k, v in qubits.items():
+        if v not in inverted_qubits:
+            inverted_qubits[v] = [k]
+        else:
+            inverted_qubits[v].append(k)
+    qubits_by_len = sorted(
+        [(k, sorted(v)) for k, v in inverted_qubits.items()], key=lambda x: len(x), reverse=True
+    )
+
+    # Start by visiting all inputs
+    if len(inputs) > 1:
+        for in_id in inputs:
+            if in_id not in visited:
+                # Get path to current input
+                path_to_in_id = nx.shortest_path(bgraph, source=first_id, target=in_id)
+                u_v_to_t = [
+                    (path_to_in_id[i - 1], s_id) for i, s_id in enumerate(path_to_in_id) if i != 0
+                ]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+        # Traverse longest qubit
+        u_v_to_t = [
+            (qubits_by_len[0][1][i - 1], s_id) for i, s_id in enumerate(qubits_by_len[0][1]) if i != 0
+        ]
+        for u, v in u_v_to_t:
+            if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                edge_queue.append((u, v))
+                visited_edges.add((u, v))
+                visited.add(v)
+
+        # Priority T-gates
+        if t_gates:
+            for t_pattern in t_gates.values():
+                # If first edge in a T-pattern is in visited, all T-pattern is in visited
+                if t_pattern[0] not in visited_edges:
+                    # Get path to first spider in T-pattern
+                    _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                    u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                    # Add any edges in path not already in edge_queue
+                    for u, v in u_v_to_t:
+                        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                            edge_queue.append((u, v))
+                            visited_edges.add((u, v))
+                            visited.add(v)
+
+                    # Add the T-pattern
+                    edge_queue.extend(t_pattern)
+                    visited_edges.update(t_pattern)
+
+        # Priority S-gates
+        if s_gates:
+            for s_pattern in s_gates.values():
+                # If first edge in a S-pattern is in visited, all S-pattern is in visited
+                if s_pattern[0] not in visited_edges:
+                    # Get path to first spider in T-pattern
+                    _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
+                    u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                    # Add any edges in path not already in edge_queue
+                    for u, v in u_v_to_t:
+                        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                            edge_queue.append((u, v))
+                            visited_edges.add((u, v))
+                            visited.add(v)
+
+                    # Add the S-pattern
+                    edge_queue.extend(s_pattern)
+                    visited_edges.update(s_pattern)
+
+        # CNOTs
+        cross_edges = []
+        for spider_id in qubits_by_len[0][1]:
+            neighs = bgraph.neighbors(spider_id)
+            for neigh_id in neighs:
+                if (
+                rows[neigh_id] == rows[spider_id]
+                and (spider_id, neigh_id) not in edge_queue
+                and (neigh_id, spider_id) not in edge_queue
+                ):
+                    cross_edges.append((spider_id, neigh_id))
+                    visited.add(neigh_id)
+                    visited_edges.add((spider_id, neigh_id))
+        edge_queue.extend(list(cross_edges))
+
+    # Complete remainder using a NX BFS strategy with cross edge priority
+    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue)
+
     return edge_queue
 
 

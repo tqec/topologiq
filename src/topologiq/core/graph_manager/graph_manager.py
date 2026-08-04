@@ -238,11 +238,15 @@ class BlockGraphManager:
     def build_deps_from_pauli_webs(self):
         """Build a dictionary of cubes with ANTECESSORs."""
         # Proceed only if Pauli Webs exist
+        print("=> Computing Paulis webs using PyZX. Give it a minute!")
         order, zwebs, xwebs = compute_pauli_webs(self.input_zx_graph)
+        print("Pauli webs computed.\n")
+
         if order and zwebs and xwebs:
             # Build ANTE dependencies
             _prep_ante(self.ante, self.t_zx_tracker, order, zwebs, xwebs)
             # Build inverse AFTER dependencies
+
             self.build_rebuild_post_deps()
 
     def build_rebuild_post_deps(self):
@@ -361,6 +365,7 @@ class BlockGraphManager:
             self.rows,
             self.qubits,
             self.inputs,
+            self.outputs,
             self._kwargs["graph_traverse_mode"],
             other_first_ids=self.other_first_ids,
             t_gates=self.t_gates,
@@ -400,12 +405,19 @@ class BlockGraphManager:
             u = self.twin_trace[raw_u][-1]
             v = self.twin_trace[raw_v][-1]
 
+            # Skip if edge has already been resolved
+            if (raw_u, raw_v) in self.completed_base_edges or (
+                raw_v,
+                raw_u,
+            ) in self.completed_base_edges:
+                continue
+
             # Ensure current source was placed in a prior iteration.
             if (
                 self.bgraph.nodes[u]["zx_block"].kind is None
                 or self.bgraph.nodes[u]["coords"] is None
             ):
-                raise ValueError(f"BFS failed. Malformed source block: {u} --> {v}")
+                raise ValueError(f"Failed to launch: {u} --> {v}. Source not yet placed.")
 
             # Internalise key edge characteristics & clear iteration-specific parameters
             self.curr_src_id, self.curr_tgt_id = (u, v)
@@ -612,6 +624,10 @@ class BlockGraphManager:
                 },
             )
 
+            # Add twin to row & qubit tracker
+            self.rows[twin_id] = self.rows[original_id]
+            self.qubits[twin_id] = self.qubits[original_id]
+
             # Add twin to list of BEFORE/AFTER time dependencies if applicable
             temp_time_deps: dict[int, set[int]] = {}
             for k, v in self.ante.items():
@@ -747,6 +763,8 @@ class BlockGraphManager:
             self.faux_edge,
             self.rows,
             self.bounds,
+            inputs=self.inputs,
+            outputs=self.outputs,
         )
 
         # Gravity around a specific point in existing blockgraph if applicable
@@ -1020,7 +1038,22 @@ def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool =
             bgraph_manager.taken,
             overload=overload if step < 3 else 0,
             z_bounds=bgraph_manager.z_bounds,
+            twin_mode=twin_mode,
+            graph_bounds=bgraph_manager.bounds,
         )
+
+        # THIS SHOULDN'T BE NEEDED BUT I'M GOING TO LEAVE IT
+        # HERE FOR A BIT JUST IN CASE
+        if twin_mode and not bgraph_manager.tent_coords:
+            bgraph_manager.tent_coords = gen_tent_tgt_coords(
+                bgraph_manager.curr_src_coords,
+                step,
+                bgraph_manager.taken,
+                overload=overload if step < 3 else 0,
+                z_bounds=bgraph_manager.z_bounds,
+                twin_mode=False,
+                graph_bounds=bgraph_manager.bounds,
+            )
 
         # Try finding paths to each tentative coordinate
         if bgraph_manager.tent_coords:
@@ -1028,7 +1061,10 @@ def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool =
             for iter_graph_bounds in [bgraph_manager.bounds, None]:
                 pathfinder_init_state = _get_bgraph_snapshot(bgraph_manager, iter_graph_bounds)
                 pathfinder = PathFinderManager(pathfinder_init_state)
-                bgraph_manager.valid_paths = pathfinder.pathfinder_bfs()
+                if step > 4:
+                    bgraph_manager.valid_paths = pathfinder.pathfinder_a_star_multi_target()
+                else:
+                    bgraph_manager.valid_paths = pathfinder.pathfinder_bfs()
                 if bgraph_manager.valid_paths:
                     break
 
@@ -1063,7 +1099,7 @@ def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool =
                     else bgraph_manager.bgraph.nodes[bgraph_manager.curr_tgt_id]["completions"][
                         "pending"
                     ]
-                    - (0 if twin_mode else 1)
+                    - 1
                 )
                 if tgt_unobstr_exit_n >= min_tgt_unobstr_exit_n:
                     # Check if path breaks more beams than tolerable
@@ -1157,6 +1193,8 @@ def call_pathfinder_bfs_cross(bgraph_manager: BlockGraphManager):
             bgraph_manager.valid_paths = pathfinder.pathfinder_a_star()
             if bgraph_manager.valid_paths:
                 break
+        if not bgraph_manager.valid_paths:
+            bgraph_manager.valid_paths = pathfinder.pathfinder_bfs()
 
     # Handle cross edge
     if len(bgraph_manager.valid_paths) == 1:
@@ -1441,6 +1479,8 @@ def _calculate_z_nudges(
     faux_edge: bool,
     rows: dict[int, int],
     bounds: GraphBounds,
+    inputs: list[int] = [],
+    outputs: list[int] = [],
 ):
     # Default values
     z_push, out_of_bounds = (0, 0)
@@ -1471,6 +1511,12 @@ def _calculate_z_nudges(
     # Adjust z-push for faux edges
     if gravity and faux_edge:
         z_push = -100 * abs(last_coords[2])
+
+    # Push down for inputs and up for outputs
+    if curr_tgt_id in inputs:
+        z_push = last_coords[2] * 100 * -1
+    elif curr_tgt_id in inputs:
+        z_push = last_coords[2] * 100
 
     return z_push, out_of_bounds
 
@@ -1558,7 +1604,7 @@ def _calculate_overload(
         ):
             if qubits[first_id] == qubits[curr_src_id]:
                 overload = 0
-                step = z_stretch
+                step = max(z_stretch, 1)
         else:
             overload = 1
     elif z_stretch:

@@ -14,7 +14,7 @@ import numpy as np
 
 from topologiq.core.blocks import ZXBlockRegistry
 from topologiq.core.pathfinder.symbolic import rotate_pipe
-from topologiq.utils.classes import StandardCoord
+from topologiq.utils.classes import GraphBounds, StandardCoord
 
 
 ##################
@@ -221,6 +221,8 @@ def gen_tent_tgt_coords(
     taken: set[StandardCoord] = [],
     overload: int = 0,
     z_bounds: dict[str, int | None] = {},
+    twin_mode: bool = False,
+    graph_bounds: GraphBounds | None = None,
 ) -> list[StandardCoord]:
     """Generate a number of potential placement positions for target node.
 
@@ -231,6 +233,8 @@ def gen_tent_tgt_coords(
         overload (optional): True if there is a need to increase the max manhattan distance.
             Needed for special cubes requiring patterns that cannot always be complete with one single-axis move.
         z_bounds: Min. and max. Z-coordinate possible for a given move, if either exists.
+        twin_mode: Whether the iteration corresponds to a twin placement.
+        graph_bounds: (x, y) limits for the placement.
 
     Returns:
         all_coords_at_distance: A list of tentative target coordinates that make good candidates for placing the target block.
@@ -254,7 +258,13 @@ def gen_tent_tgt_coords(
     def _approve_target(t: StandardCoord):
         min_z_ok = t[2] >= z_bounds["min"] if z_bounds.get("min") else True
         max_z_ok = t[2] <= z_bounds["max"] if z_bounds.get("max") else True
-        return t not in taken and t != src_c and min_z_ok and max_z_ok
+        bounds_ok = True
+        if twin_mode and graph_bounds:
+            if z_bounds.get("min"):
+                bounds_ok = t[2] > src_c[2]
+            if z_bounds.get("max"):
+                bounds_ok = t[2] < src_c[2]
+        return t not in taken and t != src_c and min_z_ok and max_z_ok and bounds_ok
 
     # Apply overload
     max_manhattan = max_manhattan + overload if max_manhattan == 1 else max_manhattan

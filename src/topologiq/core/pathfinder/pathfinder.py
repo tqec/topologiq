@@ -22,7 +22,7 @@ Notes:
 
 import heapq
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import count
 from typing import Any
 
@@ -87,7 +87,14 @@ class PathfinderInitState:
 # MAIN PATHFINDER WORKFLOW #
 ############################
 class PathFinderManager:
-    """Manage the process of find paths between blocks in the BlockGraph."""
+    """Manage the process of find paths between blocks in the BlockGraph.
+
+    Note. The A* implementation was coded using AI based on the BFS implementation.
+    Feel free to improve A* using or not using AI, but please keep any work done
+    to the BFS and BFS helper classes exclusively non-AI. Also, please do NOT merge
+    BFS and A* helper methods for... secret reasons.
+
+    """
 
     def __init__(self, pathfinder_init_state: PathfinderInitState):
         """Initialise with empty blockgraph."""
@@ -96,7 +103,7 @@ class PathFinderManager:
         self.s: PathfinderInitState = pathfinder_init_state
 
     def pathfinder_bfs(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
-        """Find paths using a Djikstra algorithm.
+        """Find paths using a BFS algorithm.
 
         Returns:
             valid_paths: All valid paths found.
@@ -463,14 +470,14 @@ class PathFinderManager:
         return False
 
     def pathfinder_a_star(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
-        """Find paths using an A* algorithm optimized for single-target cross-edges.
+        """Find paths using an A* algorithm optimised for single-target cross-edges.
 
         Returns:
             valid_paths: All valid paths found.
 
         AI disclaimer:
             category: Coding partner (see CONTRIBUTING.md for details).
-            model: Gemini, 3.5 Flash.
+            model: Gemini 2.5 Flash.
 
         """
         # Extract key info into easily accessible variables
@@ -490,13 +497,13 @@ class PathFinderManager:
         # Create bounding box to limit search space
         self._gen_bounding_box()
 
-        # Initialise A* specific priority queue and tracking structures
+        # Initialise A* priority queue and tracking structures
         self._init_a_star()
 
         # Last recourse exit conditions
         self._gen_exit_conditions()
 
-        # Manage Priority Queue
+        # Manage pPriority queue
         hdm, break_for_success = (self.s.is_hadamard, False)
         while self.heap:
             if break_for_success:
@@ -506,10 +513,12 @@ class PathFinderManager:
             _, curr_g, _, self.curr_block_positioned = heapq.heappop(self.heap)
             self.curr_coords: StandardCoord = self.curr_block_positioned[0]
             self.curr_zx_block: ZXBlock = self.curr_block_positioned[1]
+
+            # Retrieve path for popped node
             self.curr_path = self.path[self.curr_block_positioned]
 
-            # Check distance tolerances
-            if self._check_distance_breach():
+            # A* distance breach check (f-score / detour budget)
+            if self._check_distance_breach_a_star(curr_g):
                 continue
 
             # Avoid overshooting path and appending multiple special gates to same path
@@ -561,37 +570,66 @@ class PathFinderManager:
 
         return self.valid_paths
 
+    def _check_distance_breach_a_star(self, curr_g: int) -> bool:
+        """Check if search has exceeded allowed distance tolerances."""
+
+        # Naive distance checks for cross edges to maximise routing freedom
+        if self.s.cross_edge:
+            curr_manhattan = get_manhattan(self.src_coords, self.curr_coords)
+            if curr_manhattan > self.src_tgt_manhattan * 3:
+                return True
+            if curr_manhattan > self.max_manhattan:
+                return True
+            return False
+
+        # Fast detour budget (estimated total cost: f = g + h) for standard edges
+        else:
+            curr_h = get_manhattan(self.curr_coords, self.tgt_coords)
+            curr_f = curr_g + curr_h
+
+            detour_budget = self.s._kwargs.get("a_star_detour_budget", 8)
+            if curr_f > self.src_tgt_manhattan + detour_budget:
+                return True
+
+            if get_manhattan(self.src_coords, self.curr_coords) > self.max_manhattan:
+                return True
+
+            return False
+
     def _init_a_star(self):
-        """Initialise A* specific data structures.
-
-        AI disclaimer:
-            category: Coding partner (see CONTRIBUTING.md for details).
-            model: Gemini, 3.5 Flash.
-
-        """
+        """Initialise A* data structures and adaptive heuristic weights."""
         self.src_block_positioned = (self.src_coords, self.src_zx_block)
-
-        # Tie-breaker counter for equal priority items in heap
         self.heap_counter = count()
 
-        # Calculate initial heuristic cost h(n) to target
         initial_h = get_manhattan(self.src_coords, self.tgt_coords)
-        initial_g = 0
-        initial_f = initial_g + initial_h
 
-        # Heap entries: (f_score, g_score, tie_breaker_id, block)
+        # Adaptive weighting: For long distances (>= 15), weight heuristic higher
+        # to drive beam directly to target without exploring huge 3D search space
+        if initial_h >= 15:
+            default_weight = 1.5
+        else:
+            default_weight = 1.1
+
+        self.h_weight = self.s._kwargs.get("a_star_weight", default_weight)
+        initial_g = 0
+        initial_f = initial_g + (self.h_weight * initial_h)
+
         self.heap = []
         heapq.heappush(
             self.heap,
             (initial_f, initial_g, next(self.heap_counter), self.src_block_positioned),
         )
 
-        # Track lowest g_score (actual path length) for each state
         self.g_scores = {(self.src_block_positioned, (0, 0, 0)): 0}
-
         self.visit_attempts = 0
+
+        if self.s.cross_edge:
+            self.max_visits = self.s._kwargs.get("a_star_max_visits_cross", 50000)
+        else:
+            self.max_visits = self.s._kwargs.get("a_star_max_visits_standard", 3000)
+
         self.path = {self.src_block_positioned: [self.src_block_positioned]}
-        self.valid_paths, self.all_search_paths = ({}, {})
+        self.valid_paths = {}
         self.path_clashes, self.src_tgt_adjusts, self.out_pendings = ({}, {}, {})
 
     def _to_visit_or_not_to_visit_a_star(
@@ -600,32 +638,84 @@ class PathFinderManager:
         move: tuple[int, int, int],
         curr_g: int,
     ):
-        """Evaluate next block state and push to heap if lower g_score found.
-
-        AI disclaimer:
-            category: Coding partner (see CONTRIBUTING.md for details).
-            model: Gemini, 3.5 Flash.
-
-        """
+        """Evaluate next block state and push to heap if lower g_score found."""
         self.visit_attempts += 1
+
+        if self.visit_attempts > self.max_visits:
+            self.heap.clear()
+            return
+
         nxt_coords = nxt_block[0]
         nxt_g = curr_g + 1
         state_key = (nxt_block, move)
 
-        # Check if we found a shorter route to this state
         if state_key not in self.g_scores or nxt_g < self.g_scores[state_key]:
             self.g_scores[state_key] = nxt_g
 
-            # Update path metadata
-            self.all_search_paths[nxt_block] = [*self.path[self.curr_block_positioned], nxt_block]
-            self.path[nxt_block] = self.all_search_paths[nxt_block]
+            # Store as list so _check_for_success works seamlessly
+            self.path[nxt_block] = [*self.path[self.curr_block_positioned], nxt_block]
 
-            # Calculate f = g + h
+            # Weighted f-score f(n) = g(n) + w * h(n)
+            # w = 1.5 forces A* to move straight to target when distance > 15
             h_score = get_manhattan(nxt_coords, self.tgt_coords)
-            f_score = nxt_g + h_score
+            f_score = nxt_g + (self.h_weight * h_score)
 
-            # Push to priority queue
             heapq.heappush(
                 self.heap,
                 (f_score, nxt_g, next(self.heap_counter), nxt_block),
             )
+
+    def pathfinder_a_star_multi_target(
+        self,
+    ) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
+        """Find paths using single-target A* iterated over multiple candidate target coordinates.
+
+        AI disclaimer:
+            category: Coding partner (see CONTRIBUTING.md for details).
+            model: Gemini 2.5 Flash.
+
+        Returns:
+            accumulated_paths: All valid paths found for targets meeting success rate criteria.
+
+        """
+        original_state = self.s
+        src_coords: StandardCoord = original_state.bgraph.nodes[original_state.curr_src_id][
+            "coords"
+        ]
+
+        # Calculate global success requirement based on the full original state
+        if original_state.cross_edge:
+            global_tgts_to_fill = 1
+        else:
+            global_tgts_to_fill = int(
+                len(original_state.tent_coords) * original_state._kwargs["min_succ_rate"] / 100
+            )
+            global_tgts_to_fill = min(10, max(1, global_tgts_to_fill))
+
+        # Sort targets by initial Manhattan distance (try closest candidates first)
+        sorted_tent_coords = sorted(
+            original_state.tent_coords,
+            key=lambda tgt: get_manhattan(src_coords, tgt),
+        )
+
+        accumulated_paths: dict[PositionedZXBlock, list[PositionedZXBlock]] = {}
+
+        try:
+            for candidate_tgt in sorted_tent_coords:
+                # Temporarily set single candidate target
+                self.s = replace(original_state, tent_coords=[candidate_tgt])
+
+                # Run single-target A*
+                valid_paths = self.pathfinder_a_star()
+
+                if valid_paths:
+                    accumulated_paths.update(valid_paths)
+
+                    # Stop once the required target quota is satisfied
+                    if len(accumulated_paths) >= global_tgts_to_fill:
+                        break
+        finally:
+            # Restore original frozen state
+            self.s = original_state
+
+        return accumulated_paths if accumulated_paths else None
