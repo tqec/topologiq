@@ -23,6 +23,7 @@ from topologiq.kwargs import (
     LOG_STATS,
     MAX_ATTEMPTS,
     MIN_SUCC_RATE,
+    POST_PROCESS,
     SEED,
     STOP_ON_FIRST_SUCCESS,
     STRIP_PORTS,
@@ -82,6 +83,7 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
             "z_stretch": Z_STRETCH,
             "gravity": GRAVITY,
             "twins": TWINS,
+            "post_process": POST_PROCESS
         }
 
     if "weights" not in kwargs:
@@ -124,6 +126,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
         kwargs["gravity"] = GRAVITY
     if "twins" not in kwargs:
         kwargs["twins"] = TWINS
+    if "post_process" not in kwargs:
+        kwargs["post_process"] = POST_PROCESS
 
     # Create unique run ID if stats logging is on
     if kwargs["log_stats"]:

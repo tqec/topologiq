@@ -111,3 +111,6 @@ ANIMATE = None
 
 # Whether to check and add twins
 TWINS = True
+
+# Whether to trigger any post-processing
+POST_PROCESS = False

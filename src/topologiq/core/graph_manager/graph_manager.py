@@ -9,6 +9,7 @@ Usage:
 
 """
 
+import itertools
 import os
 import random
 from fractions import Fraction
@@ -195,8 +196,10 @@ class BlockGraphManager:
         self.y_cubes: dict[int, str] = {}
         self.s_gates: dict[int, list[tuple[int, int] | None]] = {}
         self.msc_cubes: dict[int, str] = {}
+        self.msc_stretch: dict[int, int] = {}
         self.t_gates: dict[int, list[tuple[int, int] | None]] = {}
         self.t_zx_tracker: dict[int, int] = {}
+        self.msc_factory: dict[int, StandardCoord] = {}
 
         # Look over nodes with phases
         for spider_id, phase in self.phases.items():
@@ -228,6 +231,7 @@ class BlockGraphManager:
         # Add time dependencies
         if self.t_gates:
             try:
+                self.msc_stretch = {k: 3 for k in self.msc_cubes}
                 self.build_deps_from_pauli_webs()
             except Exception as e:
                 print(f"Error calculating time constraints for T-gates: {e}.")
@@ -474,6 +478,7 @@ class BlockGraphManager:
         print(
             f"\nSUCCESS! Habemus BlockGraph. Volume: {self.get_volume()}. Duration: {duration_total:.2f}s\n"
         )
+        self._kwargs["animate"] = "MP4"
 
     def add_path(self):
         """Add a winner path to the main blockgraph."""
@@ -595,23 +600,23 @@ class BlockGraphManager:
         if self._kwargs["debug"] > 0:
             print(f"\n=> Twins needed for IDs: {self.ids_to_twin}")
 
-        for original_id in self.ids_to_twin:
+        for orig_id in self.ids_to_twin:
             # Define new ID
             twin_id = max(self.bgraph.nodes) + 1
-            if original_id in self.twin_trace_inverse:
-                self.twin_trace_inverse[twin_id] = self.twin_trace_inverse[original_id]
+            if orig_id in self.twin_trace_inverse:
+                self.twin_trace_inverse[twin_id] = self.twin_trace_inverse[orig_id]
             else:
-                self.twin_trace_inverse[twin_id] = original_id
-            if original_id in self.twin_trace:
-                self.twin_trace[original_id].append(twin_id)
+                self.twin_trace_inverse[twin_id] = orig_id
+            if orig_id in self.twin_trace:
+                self.twin_trace[orig_id].append(twin_id)
             else:
-                first_original_id = [
-                    k for k, twin_ids in self.twin_trace.items() if original_id in twin_ids
+                first_orig_id = [
+                    k for k, twin_ids in self.twin_trace.items() if orig_id in twin_ids
                 ][0]
-                self.twin_trace[first_original_id].append(twin_id)
+                self.twin_trace[first_orig_id].append(twin_id)
 
             # Get original node info
-            parent_zx_block = self.bgraph.nodes[original_id]["zx_block"]
+            parent_zx_block = self.bgraph.nodes[orig_id]["zx_block"]
 
             # Add the bare twin
             self.bgraph.add_node(
@@ -625,13 +630,13 @@ class BlockGraphManager:
             )
 
             # Add twin to row & qubit tracker
-            self.rows[twin_id] = self.rows[original_id]
-            self.qubits[twin_id] = self.qubits[original_id]
+            self.rows[twin_id] = self.rows[orig_id]
+            self.qubits[twin_id] = self.qubits[orig_id]
 
             # Add twin to list of BEFORE/AFTER time dependencies if applicable
             temp_time_deps: dict[int, set[int]] = {}
             for k, v in self.ante.items():
-                if original_id in v:
+                if orig_id in v:
                     if k not in temp_time_deps:
                         temp_time_deps[k] = [twin_id]
                     else:
@@ -644,15 +649,15 @@ class BlockGraphManager:
             self.build_rebuild_post_deps()
 
             # Get neighbours pending for original and transfer to twin
-            original_pending_neighs = [
+            orig_pending_neighs = [
                 n
-                for n in self.bgraph.neighbors(original_id)
-                if self.bgraph.get_edge_data(n, original_id)["kind"] is None
+                for n in self.bgraph.neighbors(orig_id)
+                if self.bgraph.get_edge_data(n, orig_id)["kind"] is None
             ]
 
             # Connect original and twin
             self.bgraph.add_edge(
-                original_id,
+                orig_id,
                 twin_id,
                 edge_type="SIMPLE",
                 start_coords=None,
@@ -661,8 +666,8 @@ class BlockGraphManager:
             )
 
             # Remove pending neighbours from original node and transfer to new twin
-            for pending_id in original_pending_neighs:
-                edge_type = self.bgraph.get_edge_data(original_id, pending_id)["edge_type"]
+            for pending_id in orig_pending_neighs:
+                edge_type = self.bgraph.get_edge_data(orig_id, pending_id)["edge_type"]
                 self.bgraph.add_edge(
                     pending_id,
                     twin_id,
@@ -671,11 +676,11 @@ class BlockGraphManager:
                     end_coords=None,
                     kind=None,
                 )
-                self.bgraph.remove_edge(original_id, pending_id)
+                self.bgraph.remove_edge(orig_id, pending_id)
 
             # Update pending information for original and twin
-            self.bgraph.nodes[original_id]["completions"] = {
-                "degree": self.bgraph.degree(original_id),
+            self.bgraph.nodes[orig_id]["completions"] = {
+                "degree": self.bgraph.degree(orig_id),
                 "pending": 1,
             }
             self.bgraph.nodes[twin_id]["completions"] = {
@@ -684,8 +689,8 @@ class BlockGraphManager:
             }
 
             # Place twin > Internalise edge characteristics & clear iteration-specific parameters
-            self.curr_src_id, self.curr_tgt_id = (original_id, twin_id)
-            self.clear_iter(original_id, twin_id, twin_mode=True)
+            self.curr_src_id, self.curr_tgt_id = (orig_id, twin_id)
+            self.clear_iter(orig_id, twin_id, twin_mode=True)
 
             # Edge fulfillment
             call_pathfinder_bfs_std(self, twin_mode=True)
@@ -890,6 +895,7 @@ class BlockGraphManager:
             iter_fail=iter_fail,
             block_style="pipe",
             base_graph_draw_style=draw_style,
+            msc_stretch=self.msc_stretch,
             stats=self.stats,
             vis_mode=(pop_vis, self._kwargs["animate"]),
         )
@@ -921,7 +927,12 @@ class BlockGraphManager:
 
         # Prepare BGRAPH content
         bgraph_lines = _prep_bgraph_lines(
-            circuit_name, self.bgraph, self.inputs, self.outputs, self.qubits
+            circuit_name,
+            self.bgraph,
+            self.inputs,
+            self.outputs,
+            self.qubits,
+            msc_stretch=self.msc_stretch,
         )
 
         # Write to BGRAPH file
@@ -942,7 +953,7 @@ class BlockGraphManager:
 
         self.cleanup()
 
-    def clear_iter(self, u, v, twin_mode=False):
+    def clear_iter(self, u, v, twin_mode=False, slice_mode=False):
         """Clear iteration specific trackers and other variables."""
 
         # Clear iteration trackers
@@ -955,7 +966,9 @@ class BlockGraphManager:
         # Edge characteristics
         self.cross_edge = True if (self.bgraph.nodes[v]["coords"] and not twin_mode) else False
         self.is_hadamard = (
-            False if twin_mode else self.bgraph.edges[(u, v)]["edge_type"] == "HADAMARD"
+            False
+            if (twin_mode or slice_mode)
+            else self.bgraph.edges[(u, v)]["edge_type"] == "HADAMARD"
         )
         self.curr_src_coords = self.bgraph.nodes[self.curr_src_id if not twin_mode else u]["coords"]
         self.curr_tgt_coords = self.bgraph.nodes[self.curr_tgt_id if not twin_mode else v]["coords"]
@@ -975,6 +988,309 @@ class BlockGraphManager:
         """Carry out cleanup operations after build."""
         # Delete temporary files
         rm_temp_files(MEDIA_DIR / "temp")
+
+    def stretch_msc_cubes(self, max_stretch=10):
+        """Expand MSC cubes up to maximum Z-factor available.
+
+        Args:
+            max_stretch: The maximum possible stretch for a MSC cube.
+
+        """
+
+        # Get lowest point of blockgraph
+        lowest_in_bgraph = min([z for _, _, z in self.taken])
+
+        # Check if space below MSC cubes is taken
+        for cube_id in self.msc_cubes:
+            # Get MSC coords
+            x, y, z = self.bgraph.nodes[cube_id]["coords"]
+
+            # Reset max stretch
+            new_stretch = 3
+            for i in range(self.msc_stretch[cube_id] + 1, max_stretch):
+                if (x, y, z - i) in self.taken or z - i < lowest_in_bgraph:
+                    break
+                new_stretch = i
+            self.msc_stretch[cube_id] = new_stretch
+            self.taken.update([(x, y, z - i) for i in range(new_stretch)])
+
+    def distributed_msc_factory(self):
+        """Expand MSC cubes up to maximum Z-factor available.
+
+        Args:
+            max_stretch: The maximum possible stretch for a MSC cube.
+
+        """
+
+        def _sums(n, k):
+            for combo in itertools.combinations(range(n + k - 1), k - 1):
+                s = [combo[0]]
+                s.extend([(combo[i] - combo[i - 1] - 1) for i in range(1, k - 1)])
+                s.append(n + k - 2 - combo[k - 2])
+                yield s
+
+        def _manhattan_sphere(point, step):
+            k = len(point)
+            for differences in _sums(step, k):
+                signed_differences = [[-d, d] if d != 0 else [d] for d in differences]
+                for p in itertools.product(*signed_differences):
+                    yield [x + d for x, d in zip(point, p)]
+
+        # Get lowest point of blockgraph
+        all_x = [x for x, _, _ in self.taken]
+        all_y = [y for _, y, _ in self.taken]
+        all_z = [z for _, _, z in self.taken]
+
+        x_min, x_max = min(all_x), max(all_x)
+        y_min, y_max = min(all_y), max(all_y)
+        z_min = min(all_z)
+        x_span = x_max - x_min
+        y_span = y_max - y_min
+        max_span = max(x_span, y_span)
+
+        # Check if space below MSC cubes is taken
+        for cube_id in self.msc_cubes:
+            # Flag addition for cube
+            msc_added = False
+
+            # Get MSC coords
+            x, y, z = self.bgraph.nodes[cube_id]["coords"]
+
+            # Try in increasing distance from existing MSC cube
+            for d in range(max_span):
+                # Break if an MSC has been added
+                if msc_added:
+                    break
+
+                # Generate a Manhattan sphere of potential coords for placement
+                sphere_coords = [
+                    (int(c[0]), int(c[1]), int(c[2])) for c in list(_manhattan_sphere((x, y, z), d))
+                ]
+
+                # Eliminate coords outside of limits of existing blockgraph
+                tent_base_coords = [
+                    c
+                    for c in sphere_coords
+                    if (
+                        c not in self.taken
+                        and x_min <= c[0] <= x_max
+                        and y_min <= c[1] <= y_max
+                        and c[2] < z
+                    )
+                ]
+
+                # Check remaining tentative coords for space availability
+                if tent_base_coords:
+                    for x, y, z in tent_base_coords:
+                        # Break if an MSC has been added
+                        if msc_added:
+                            break
+
+                        # Connection is impossible if space immediately above is taken
+                        if (x, y, z + 1) in self.taken:
+                            continue
+
+                        # Placement is impossible if there is not enough space for MSC cube
+                        for i in range(3):
+                            if ((x, y, z - i) in self.taken) or (z - i < z_min):
+                                break
+
+                            # Place if enough space is found
+                            if i == 2:
+                                new_id = max(self.bgraph.nodes) + 1
+                                self.bgraph.add_node(
+                                    new_id,
+                                    zx_block=ZXBlockRegistry.get_create(kind="TTO"),
+                                    coords=(x, y, z),
+                                    completions={
+                                        "degree": 0,
+                                        "pending": 0,
+                                    },
+                                )
+                                self.msc_stretch[new_id] = 3
+                                self.msc_factory[new_id] = (x, y, z)
+                                msc_added = True
+
+    def msc_exchange(self, connect_id: int, remove_id: int):
+        """Exchange an MSC for another.
+
+        Args:
+            connect_id: ID for factory MSC to plug into the computation.
+            remove_id: ID for scheduled MSC to remove from the computation.
+
+        NB!
+            This operation **can** and *will sometimes* fail, especially in
+            very dense/crowded blockgraphs. The safeties needed to guarantee
+            success do not seem warranted because they would put rather than
+            release pressure on the main build. Additionally, this particular
+            operation is not a last recourse. The last recourse alternative
+            that cannot fail is to stretch the computation to give time for
+            remove_id to succeed.
+
+        """
+
+        # Get coords of MSC that is leaving the party and remove from taken
+        remove_coords = self.bgraph.nodes[remove_id]["coords"]
+        self.taken.discard(remove_coords)
+
+        # Find neighbour of the MSC that is leaving
+        neigh_id = list(self.bgraph.neighbors(remove_id))[0]
+
+        # Connect factory MSC cube to neigh of MSC to remove
+        # Create empty edge
+        u, v = connect_id, neigh_id
+        self.bgraph.add_edge(
+            u,
+            v,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
+            kind=None,
+        )
+
+        # Set attributes needed for pathfinder to run
+        self.curr_src_id, self.curr_tgt_id = (u, v)
+        self.clear_iter(u, v)
+
+        # Call pathfinder
+        call_pathfinder_bfs_cross(self)
+
+        # Prune beams (beams --> `None`)
+        self.prune_beams()
+
+        # Add path to blockgraph
+        if self.winner_path:
+            # Remove old MSC since connection was possible
+            self.bgraph.remove_node(remove_id)
+            del self.msc_cubes[remove_id]
+            del self.msc_stretch[remove_id]
+
+            # Add new path
+            self.add_path()
+
+            # Prune beams again (`None` beams removed entirely)
+            self.prune_beams()
+
+        else:
+            # Reset to initial status since connection was not possible
+            self.taken.add(remove_coords)
+            self.bgraph.remove_edge(u, v)
+
+            # Prune beams again (`None` beams removed entirely)
+            self.prune_beams()
+
+    def slice_stretch(self, slice_at_z: int, shift_z: int = 5):
+        """Pause the computation at an arbitrary Z-index (post-processing)."""
+
+        # Announce slicing
+        print(f"=> START. Slice & Stretch BlockGraph at Z={slice_at_z}.")
+
+        # Start timer
+        self.t1_iter, _ = datetime_manager()
+
+        # Loop over cubes detecting which to shift
+        broken_edges = []
+        for cube_id, attrs in self.bgraph.nodes(data=True):
+            # Get cubes original position
+            orig_x, orig_y, orig_z = attrs["coords"]
+
+            # Shift all cubes at or above slice
+            if orig_z >= slice_at_z:
+                attrs["coords"] = (orig_x, orig_y, orig_z + shift_z)
+
+            # Handle predecessors
+            if orig_z == slice_at_z:
+                # ID predecessors
+                predecessors = [
+                    n
+                    for n in self.bgraph.neighbors(cube_id)
+                    if self.bgraph.nodes[n]["coords"][2] < slice_at_z
+                ]
+
+                if predecessors:
+                    prev_id = predecessors[0]
+                    prev_zx_type = self.bgraph.nodes[prev_id]["zx_block"].zx_type
+                    if prev_zx_type == "T":
+                        p_x, p_y, p_z = self.bgraph.nodes[prev_id]["coords"]
+                        self.bgraph.nodes[prev_id]["coords"] = (p_x, p_y, p_z + shift_z)
+                        self.msc_stretch[prev_id] = self.msc_stretch[prev_id] + shift_z
+
+                    broken_edges.append((prev_id, cube_id))
+                    self.bgraph.edges[prev_id, cube_id]["start_coords"] = None
+                    self.bgraph.edges[prev_id, cube_id]["end_coords"] = None
+                    self.bgraph.edges[prev_id, cube_id]["kind"] = None
+
+        # Rebuild taken
+        coords_dict = nx.get_node_attributes(self.bgraph, "coords")
+        self.taken = set([coord for coord in coords_dict.values()])
+        for k, v in self.msc_stretch.items():
+            x, y, z = self.bgraph.nodes[k]["coords"]
+            for i in range(v):
+                self.taken.add((x, y, z - i))
+        self.pruned_taken = self.taken.copy()
+
+        # Reposition all edges in graph above slice
+        for u, v, attrs in self.bgraph.edges(data=True):
+            if attrs["start_coords"] and attrs["end_coords"]:
+                start_x, start_y, start_z = attrs["start_coords"]
+                end_x, end_y, end_z = attrs["end_coords"]
+                if start_z >= slice_at_z:
+                    self.bgraph.edges[u, v]["start_coords"] = (start_x, start_y, start_z + shift_z)
+                    self.bgraph.edges[u, v]["end_coords"] = (end_x, end_y, end_z + shift_z)
+
+        # Draw split blockgraph if applicable
+        if self._kwargs["debug"] > 1:
+            self.draw_blockgraph()
+
+        # Reconnect broken edges
+        for u, v in broken_edges:
+            # Internalise key edge characteristics & clear iteration-specific parameters
+            self.curr_src_id, self.curr_tgt_id = (u, v)
+            self.clear_iter(u, v)
+
+            # Exchange conditional for standard cube if target is conditional
+            tgt_block = self.bgraph.nodes[v]["zx_block"]
+            if "*" in tgt_block.kind:
+                src_block = self.bgraph.nodes[u]["zx_block"]
+                temp_block = ZXBlockRegistry.get_create(kind=src_block.kind)
+                self.bgraph.nodes[v]["zx_block"] = temp_block
+
+            # Call pathfinder
+            call_pathfinder_bfs_cross(self, stretch=True)
+
+            # Prune beams (existing beams go to `None`)
+            self.prune_beams()
+
+            # Add path to blockgraph
+            if self.winner_path:
+                self.add_path()
+                # Exchange conditional back if target is conditional
+                if "*" in tgt_block.kind:
+                    self.bgraph.nodes[v]["zx_block"] = tgt_block
+            else:
+                if self._kwargs["debug"] > 2 or self._kwargs["animate"]:
+                    self.draw_blockgraph(is_final_vis=False, iter_fail=True)
+                raise ValueError(f"ERROR. Unable to reconnect: {u} --> {v}")
+
+            # Prune beams again (IDs with `None` beams are removed)
+            # Removal is needed for visualisations to work
+            self.prune_beams()
+
+            if self._kwargs["debug"] > 0:
+                print(
+                    f" - Reconnected: {u} --> {v}.",
+                    f"Vol +: {len(self.winner_path.full_path) - 2}.",
+                )
+                if self._kwargs["debug"] > 2:
+                    self.draw_blockgraph()
+
+        # Update duration
+        _, duration_iter = datetime_manager(t_1=self.t1_iter)
+
+        print(
+            f"SUCCESS! Slice & Stretched BlockGraph at Z={slice_at_z}.",
+            f"Duration: {duration_iter:.2f}s",
+        )
 
 
 ###########
@@ -1173,11 +1489,12 @@ def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool =
         step += 1
 
 
-def call_pathfinder_bfs_cross(bgraph_manager: BlockGraphManager):
+def call_pathfinder_bfs_cross(bgraph_manager: BlockGraphManager, stretch: bool = False):
     """Call the Djikstra pathfinder for a cross edge.
 
     Args:
         bgraph_manager: The BlockGraph Manager currently driving the build.
+        stretch: Run is part of a stretch operation.
 
     """
 
@@ -1187,14 +1504,15 @@ def call_pathfinder_bfs_cross(bgraph_manager: BlockGraphManager):
     # Try finding shortest path
     if bgraph_manager.tent_coords:
         # Get a number of valid paths (topologically correct, not necessarily optimal)
+
         for iter_graph_bounds in [bgraph_manager.bounds, None]:
             pathfinder_init_state = _get_bgraph_snapshot(bgraph_manager, iter_graph_bounds)
             pathfinder = PathFinderManager(pathfinder_init_state)
-            bgraph_manager.valid_paths = pathfinder.pathfinder_a_star()
+            bgraph_manager.valid_paths = pathfinder.pathfinder_a_star(stretch=stretch)
             if bgraph_manager.valid_paths:
                 break
         if not bgraph_manager.valid_paths:
-            bgraph_manager.valid_paths = pathfinder.pathfinder_bfs()
+            bgraph_manager.valid_paths = pathfinder.pathfinder_bfs(stretch=stretch)
 
     # Handle cross edge
     if len(bgraph_manager.valid_paths) == 1:
@@ -1231,6 +1549,7 @@ def _prep_bgraph_lines(
     inputs: list[int],
     outputs: list[int],
     qubits: dict[int, int],
+    msc_stretch: dict[int, int] = {},
 ) -> list[str]:
     # Initialise lines array
     bgraph_lines = []
@@ -1267,6 +1586,7 @@ def _prep_bgraph_lines(
                     )
                 neigh_kind = bgraph.nodes(data=True)[neighs[0]]["zx_block"].kind
                 kind = neigh_kind[:2] + "t"
+                z = z - msc_stretch[n_id]
 
         # Assemble label
         label = ""
@@ -1404,7 +1724,7 @@ def _handle_t_spider(
 
         # Add to MSC block to tracker
         # Add to MSC block to tracker
-        msc_cubes[spider_id] = "Mm"
+        msc_cubes[msc_id] = "Mm"
         t_gates[spider_id] = [
             (spider_id, msc_id),
             (spider_id, x_bridge_id),

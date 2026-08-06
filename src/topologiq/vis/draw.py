@@ -87,6 +87,7 @@ class VisualiserState:
     iter_fail: bool = False
     block_style: str = "pipe"
     base_graph_draw_style: str = "zx"
+    msc_stretch: dict[int, int] = field(default_factory=dict)
     stats: dict[str, Any] = field(default_factory=dict)
     vis_mode: tuple[bool, bool] = (True, False)
 
@@ -743,6 +744,7 @@ class View3D:
                         self.ctx.cube_size,
                         zx_block,
                         in_curr_edge=cube_id in self.ctx.state.curr_edge_ids,
+                        msc_stretch=self.ctx.state.msc_stretch,
                     )
 
     def _render_all_pipes(self):
@@ -1199,7 +1201,7 @@ class View2D:
 
                     # X_gadget's two neighbors fan out tightly above X_gadget
                     y, xz = gadget["x_neighbors"]
-                    positions[y] = [x0 + + 0.40, y0 + 0.70]
+                    positions[y] = [x0 + +0.40, y0 + 0.70]
                     positions[xz] = [x0 + 0.40, y0 - 0.70]
 
         return positions
@@ -1474,6 +1476,7 @@ def render_block(
     edge_col: str = "#000000",
     border_width: float = 0.3,
     in_curr_edge: bool = False,
+    msc_stretch: dict[int, int] = {},
 ) -> Poly3DCollection:
     """Render a regular (non-Hadamard) block.
 
@@ -1492,6 +1495,7 @@ def render_block(
         edge_col: The color for the edges of blocks.
         border_width: The width for borders of block.
         in_curr_edge: True if block is part of edge placed when rendering the parent visualisation.
+        msc_stretch: A dictionary containing the stretch factors for all MSC blocks in BlockGraph.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
@@ -1505,10 +1509,12 @@ def render_block(
     vertices = get_vertices(
         x,
         y,
-        z if zx_block.zx_type != "T" else z - 1.33,
+        z
+        if zx_block.zx_type != "T"
+        else z - msc_stretch[node_id]/2 + 0.33/2,
         size_x,
         size_y,
-        size_z if zx_block.zx_type != "T" else 3,
+        size_z if zx_block.zx_type != "T" else msc_stretch[node_id],
         zx_block.zx_type,
     )
     faces = get_faces(vertices)

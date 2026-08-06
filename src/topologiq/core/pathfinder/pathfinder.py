@@ -102,11 +102,14 @@ class PathFinderManager:
         # Internalise state for facilitated access
         self.s: PathfinderInitState = pathfinder_init_state
 
-    def pathfinder_bfs(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
+    def pathfinder_bfs(
+        self, stretch: bool = False
+    ) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
         """Find paths using a BFS algorithm.
 
         Returns:
             valid_paths: All valid paths found.
+            stretch: Run is part of a stretch operation.
 
         """
         # Extract key info into easily accessible variables
@@ -158,14 +161,18 @@ class PathFinderManager:
 
             # Try moving in all directions
             for move in self.curr_zx_block.get_move_vectors:
+                if stretch and move != (0, 0, 1):
+                    continue
+
                 # Calculate next position and update paths accordingly
                 nxt_coords, curr_path_coords = get_coords_current_move(
                     self.curr_block_positioned, move, self.path
                 )
 
                 # Check if move can be skipped altogether
-                if self._check_skip_move(nxt_coords, curr_path_coords):
-                    continue
+                if not stretch:
+                    if self._check_skip_move(nxt_coords, curr_path_coords):
+                        continue
 
                 # Create a list of kinds that are valid for the next block
                 possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(
@@ -469,11 +476,14 @@ class PathFinderManager:
 
         return False
 
-    def pathfinder_a_star(self) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
+    def pathfinder_a_star(
+        self, stretch: bool = False
+    ) -> dict[PositionedZXBlock, list[PositionedZXBlock]] | None:
         """Find paths using an A* algorithm optimised for single-target cross-edges.
 
         Returns:
             valid_paths: All valid paths found.
+            stretch: Run is part of a stretch operation.
 
         AI disclaimer:
             category: Coding partner (see CONTRIBUTING.md for details).
@@ -531,14 +541,17 @@ class PathFinderManager:
 
             # Try moving in all directions
             for move in self.curr_zx_block.get_move_vectors:
+                if stretch and move != (0, 0, 1):
+                    continue
                 # Calculate next position and update paths accordingly
                 nxt_coords, curr_path_coords = get_coords_current_move(
                     self.curr_block_positioned, move, self.path
                 )
 
                 # Check if move can be skipped altogether
-                if self._check_skip_move(nxt_coords, curr_path_coords):
-                    continue
+                if not stretch:
+                    if self._check_skip_move(nxt_coords, curr_path_coords):
+                        continue
 
                 # Create a list of kinds that are valid for the next block
                 possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(

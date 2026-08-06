@@ -125,6 +125,7 @@ def _queue_bfs_cross(
     edge_queue: list[tuple[int, int]] | None = None,
     standard_edges: list[tuple[int, int]] | None = None,
     cross_edges: list[tuple[int, int]] | None = None,
+    visited: set[int] = set(),
 ) -> list[tuple[int, int]]:
     """Build queue using a BFS with priority cross-edges strategy.
 
@@ -134,6 +135,7 @@ def _queue_bfs_cross(
         edge_queue (optional): A pre-existing edge-queue with some edges already completed.
         standard_edges (optional): Pre-built NX BFS (avoids duplication if running in a different hander).
         cross_edges (optional): Pre-built list of cross edges (avoids duplication if running in a different hander).
+        visited (optional): Pre-built list of visited nodes (avoids duplication if running in a different hander).
 
     Returns:
         edge_queue: A list of (u, v) tuples to use as queue.
@@ -152,7 +154,7 @@ def _queue_bfs_cross(
     else:
         cross_edges = []
 
-    visited = []
+    visited = visited if visited else set()
     for u, v in standard_edges:
         if (u, v) not in edge_queue and (v, u) not in edge_queue:
             [
@@ -166,7 +168,7 @@ def _queue_bfs_cross(
                 )
             ]
             edge_queue.append((u, v))
-            visited.extend([u, v])
+            visited.update([u, v])
 
     return edge_queue
 
@@ -387,7 +389,9 @@ def _queue_bfs_layers(
 
         # Traverse longest qubit
         u_v_to_t = [
-            (qubits_by_len[0][1][i - 1], s_id) for i, s_id in enumerate(qubits_by_len[0][1]) if i != 0
+            (qubits_by_len[0][1][i - 1], s_id)
+            for i, s_id in enumerate(qubits_by_len[0][1])
+            if i != 0
         ]
         for u, v in u_v_to_t:
             if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
@@ -402,7 +406,9 @@ def _queue_bfs_layers(
                 if t_pattern[0] not in visited_edges:
                     # Get path to first spider in T-pattern
                     _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
-                    u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+                    u_v_to_t = [
+                        (path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0
+                    ]
 
                     # Add any edges in path not already in edge_queue
                     for u, v in u_v_to_t:
@@ -422,7 +428,9 @@ def _queue_bfs_layers(
                 if s_pattern[0] not in visited_edges:
                     # Get path to first spider in T-pattern
                     _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
-                    u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+                    u_v_to_t = [
+                        (path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0
+                    ]
 
                     # Add any edges in path not already in edge_queue
                     for u, v in u_v_to_t:
@@ -441,9 +449,9 @@ def _queue_bfs_layers(
             neighs = bgraph.neighbors(spider_id)
             for neigh_id in neighs:
                 if (
-                rows[neigh_id] == rows[spider_id]
-                and (spider_id, neigh_id) not in edge_queue
-                and (neigh_id, spider_id) not in edge_queue
+                    rows[neigh_id] == rows[spider_id]
+                    and (spider_id, neigh_id) not in edge_queue
+                    and (neigh_id, spider_id) not in edge_queue
                 ):
                     cross_edges.append((spider_id, neigh_id))
                     visited.add(neigh_id)
@@ -451,7 +459,7 @@ def _queue_bfs_layers(
         edge_queue.extend(list(cross_edges))
 
     # Complete remainder using a NX BFS strategy with cross edge priority
-    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue)
+    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue, visited=visited)
 
     return edge_queue
 
