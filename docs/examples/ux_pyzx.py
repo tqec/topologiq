@@ -1,8 +1,10 @@
 """Example of a script prepared for usage with Topologiq's UX.
 
 IMPORTANT! Check OTHER scripts for examples of how to use Topologiq programmatically.
-This script is exclusively for usage in the UX. It aims to be as plain as possible to mimic
-simply using a circuit available in an existing codebase.
+This script is exclusively for usage in the UX. At any given point in time, it
+may not be in a runnable shape because the UX allows direct editing of the file
+via an IDE, so the file sometimes changes for no other reason than showing it can be
+rewritten arbitrarily from the UX.
 
 """
 
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     had_phase = True
     qubit_n, depth = (4, 10)
     graph_name = f"random_pyzx_{qubit_n}_{depth}"
-    pyzx_graph, _ = random_graph(
+    pyzx_graph = random_graph(
         qubit_n,
         depth,
         p_t=0.6,
@@ -60,7 +62,7 @@ if __name__ == "__main__":
         **pyzx_kwargs,
     )
 
-    # pyzx_graph, _ = xyi(draw_graph=False)
+    # pyzx_graph = xyi(draw_graph=False)
     # graph_name = "pyzx_xyi"
 
     # QASM -> ZX manager

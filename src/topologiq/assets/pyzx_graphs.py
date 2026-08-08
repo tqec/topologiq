@@ -7,8 +7,6 @@ Usage:
 
 import random
 
-import matplotlib
-import matplotlib.figure
 import pyzx as zx
 from pyzx.graph.base import BaseGraph
 from pyzx.graph.graph_s import GraphS
@@ -20,7 +18,7 @@ from topologiq.utils.zx import apply_bialgebra, rm_unnecessary_phases
 ######################
 # ENCODING FUNCTIONS #
 ######################
-def xyi(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def xyi(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Produce a PyZX graph with a single X and a single Z spider.
 
     Args:
@@ -37,14 +35,13 @@ def xyi(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure
     pyzx_graph = pyzx_circuit.to_graph()
     rm_unnecessary_phases(pyzx_graph)
 
-    fig = None
     if draw_graph:
-        fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def memory(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def memory(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Produce a PyZX graph with a single X and a single Z spider.
 
     Args:
@@ -63,14 +60,13 @@ def memory(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.fig
     pyzx_graph = pyzx_circuit.to_graph()
     rm_unnecessary_phases(pyzx_graph)
 
-    fig = None
     if draw_graph:
-        fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def cnot_cz(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def cnot_cz(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Produce a PyZX graph with a single X and a single Z spider.
 
     Args:
@@ -91,16 +87,15 @@ def cnot_cz(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.fi
     pyzx_graph.set_outputs(tuple([2]))
     rm_unnecessary_phases(pyzx_graph)
 
-    fig = None
     if draw_graph:
-        fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def one_hadamard(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph with a single Hadamard.
 
     Args:
@@ -125,14 +120,13 @@ def one_hadamard(
     rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def cnot(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Produce a PyZX graph corresponding to a CNOT.
 
     Args:
@@ -148,14 +142,13 @@ def cnot(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figur
     pyzx_circuit.add_gate("CNOT", 1, 0)
     pyzx_graph = pyzx_circuit.to_graph()
 
-    fig = None
     if draw_graph:
-        fig = zx.draw_matplotlib(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def cnots(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def cnots(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Produce a PyZX graph corresponding to three CNOTs.
 
     Args:
@@ -174,16 +167,15 @@ def cnots(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figu
 
     pyzx_graph = pyzx_circuit.to_graph()
 
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def simple_mess(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Produce a PyZX graph corresponding to a small CNOT-based circuit.
 
     Args:
@@ -205,16 +197,15 @@ def simple_mess(
 
     pyzx_graph = pyzx_circuit.to_graph()
 
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def split_loops(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return a PyZX graph with two separate cycles connected via a central bridge.
 
     Args:
@@ -282,16 +273,15 @@ def split_loops(
     pyzx_graph.set_outputs(spiders[0])
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def bialg(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return a PyZX graph of a Steane code.
 
     Args:
@@ -342,28 +332,29 @@ def bialg(
             pyzx_graph.set_qubit(spider_id, q)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    zx.draw(pyzx_graph, labels=True)
-    # zx.simplify.bialg_op_simp.apply(pyzx_graph, [5, 6, 1, 2])
-    zx.draw(pyzx_graph, labels=True)
-
+    # Adjust spiders in pattern to meet transformation requirements
     pyzx_graph.add_vertex(ty=2, index=13, qubit=2, row=0)
     pyzx_graph.remove_edges([(12, 6), (3, 6)])
     pyzx_graph.add_edges([(12, 13), (6, 13), (13, 3)])
-    zx.draw(pyzx_graph, labels=True)
 
+    # Draw again if needed
+    if draw_graph:
+        zx.draw(pyzx_graph, labels=True)
+
+    # Simplify
     zx.simplify.bialg_op_simp.apply(pyzx_graph, [5, 6, 1, 2])
-    zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    # Draw again if needed
+    if draw_graph:
+        zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph
 
 
-def steane(
-    draw_graph: bool = False, use_bialgebra=True
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+def steane(draw_graph: bool = False, use_bialgebra=True) -> BaseGraph | GraphS:
     """Return a PyZX graph of a Steane code.
 
     Args:
@@ -413,16 +404,15 @@ def steane(
         zx.simplify.id_simp(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def steane_obfuscated(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return a PyZX graph of a Steane code with one more spider than its fully reduced version.
 
     Args:
@@ -477,16 +467,15 @@ def steane_obfuscated(
     pyzx_graph.set_outputs(spiders[0])
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def hadamard_line(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph of a line of Hadamards.
 
     Args:
@@ -509,16 +498,15 @@ def hadamard_line(
         pyzx_graph.set_type(i, 2)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def hadamard_bend(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph of a 2-qubit Hadamard sequence.
 
     Args:
@@ -546,16 +534,15 @@ def hadamard_bend(
         pyzx_graph.set_edge_type((u, v), EdgeType.HADAMARD)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def hadamard_mess(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return a PyZX graph of a Steane code with Hadamards added for complexity.
 
     Args:
@@ -594,16 +581,15 @@ def hadamard_mess(
         pyzx_graph.set_edge_type((u, v), EdgeType.HADAMARD)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def ghz(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph of a GHZ.
 
     Args:
@@ -635,11 +621,10 @@ def ghz(
     zx.phase_free_simp(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def random_graph(
@@ -649,7 +634,7 @@ def random_graph(
     graph_type: str = "cnot",
     draw_graph: bool = False,
     **kwargs,
-) -> tuple[BaseGraph | GraphS | None, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Produce a random PyZX graph.
 
     Args:
@@ -722,17 +707,15 @@ def random_graph(
 
             # Return if all IDs are present
             if draw_graph:
-                fig = zx.draw_matplotlib(pyzx_graph, labels=True)
-            else:
-                fig = None
+                zx.draw(pyzx_graph, labels=True)
 
             # Return graph and figure
-            return pyzx_graph, fig
+            return pyzx_graph
 
     return None, None
 
 
-def yi(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def yi(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Return an PyZX graph of a single Y-cube followed by a colour spider.
 
     Args:
@@ -754,16 +737,15 @@ def yi(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.
     pyzx_graph.set_outputs(tuple([2]))
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def s(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph of a line of gates with an S in the middle.
 
     Args:
@@ -783,14 +765,13 @@ def s(
     rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def msc(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def msc(draw_graph: bool = False) -> BaseGraph | GraphS:
     """Return an PyZX graph of a single T-spider followed by a colour spider.
 
     Args:
@@ -813,16 +794,15 @@ def msc(draw_graph: bool = False) -> tuple[BaseGraph | GraphS, matplotlib.figure
     pyzx_graph.set_outputs(tuple([2]))
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
 def t(
     draw_graph: bool = False,
-) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+) -> BaseGraph | GraphS:
     """Return an PyZX graph of a single Y-cube followed by a colour spider.
 
     Args:
@@ -846,16 +826,13 @@ def t(
     rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
+    return pyzx_graph
 
 
-def ht(
-    draw_graph: bool = False, num_t: int = 5
-) -> tuple[BaseGraph | GraphS, matplotlib.figure.Figure | None]:
+def ht(draw_graph: bool = False, num_t: int = 5) -> BaseGraph | GraphS:
     """Return an PyZX graph of a single Y-cube followed by a colour spider.
 
     Args:
@@ -883,15 +860,13 @@ def ht(
     # Gadgetise
     zx.simplify.gadgetize(pyzx_graph, graphlike=False)
     zx.id_simp(pyzx_graph)
-    #rm_unnecessary_phases(pyzx_graph)
+    # rm_unnecessary_phases(pyzx_graph)
 
     # Draw if needed
-    fig = None
     if draw_graph:
-        fig = zx.draw(pyzx_graph, labels=True)
+        zx.draw(pyzx_graph, labels=True)
 
-    return pyzx_graph, fig
-
+    return pyzx_graph
 
 
 ##############

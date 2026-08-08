@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
         # Get PyZX graph
         encoding_fx = getattr(pyzx_graphs, graph_name)
-        pyzx_graph, _ = encoding_fx(draw_graph=False)
+        pyzx_graph = encoding_fx(draw_graph=False)
 
         # QASM -> ZX manager
         zx_graph_manager = ZXGraphManager()
