@@ -28,6 +28,7 @@ from topologiq.kwargs import (
     STOP_ON_FIRST_SUCCESS,
     STRIP_PORTS,
     TWINS,
+    TWISTED_Y,
     VALUE_FUNCTION_HYPERPARAMS,
     Z_STRETCH,
 )
@@ -83,7 +84,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
             "z_stretch": Z_STRETCH,
             "gravity": GRAVITY,
             "twins": TWINS,
-            "post_process": POST_PROCESS
+            "post_process": POST_PROCESS,
+            "twisted_y": TWISTED_Y,
         }
 
     if "weights" not in kwargs:
@@ -128,6 +130,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
         kwargs["twins"] = TWINS
     if "post_process" not in kwargs:
         kwargs["post_process"] = POST_PROCESS
+    if "twisted_y" not in kwargs:
+        kwargs["twisted_y"] = TWISTED_Y
 
     # Create unique run ID if stats logging is on
     if kwargs["log_stats"]:

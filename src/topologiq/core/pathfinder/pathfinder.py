@@ -122,7 +122,7 @@ class PathFinderManager:
 
         # Generate kinds that could in theory be assigned to the target cube
         self.tent_tgt_kinds = (
-            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_kind_family
+            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_fulfillment_kinds
         )
 
         # Create bounding box to limit search space (creates: self.bounding_box, self.max_span)
@@ -175,9 +175,7 @@ class PathFinderManager:
                         continue
 
                 # Create a list of kinds that are valid for the next block
-                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(
-                    move, is_hadamard=hdm, tgt_zx_type=self.tgt_zx_block.zx_type
-                )
+                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(move, is_hadamard=hdm)
 
                 # Loop over all possible next types
                 for possible_nxt_zx_block in possible_nxt_zx_blocks:
@@ -393,7 +391,6 @@ class PathFinderManager:
 
         # Separate checks into categories for readability
         fail_time_constraints = False
-        fail_time_constraints_2 = False
         fail_special_cube_constraints = False
 
         # Check time constraints
@@ -401,9 +398,9 @@ class PathFinderManager:
             fail_time_constraints = self.s.z_bounds["min"] >= nxt_coords[2]
 
         if not fail_time_constraints and self.s.z_bounds.get("max"):
-            fail_time_constraints_2 = self.s.z_bounds["max"] <= nxt_coords[2]
+            fail_time_constraints = self.s.z_bounds["max"] <= nxt_coords[2]
 
-        if fail_time_constraints or fail_time_constraints_2:
+        if fail_time_constraints:
             return False
 
         # Check special cube conditions
@@ -411,7 +408,7 @@ class PathFinderManager:
             fail_special_cube_constraints = nxt_coords in list(
                 [c for c, _ in self.valid_paths.keys()]
             )
-            if self.tent_tgt_kinds == ["TTO"]:
+            if self.tgt_zx_block.zx_type == "T":
                 curr_path_coords = [coords for coords, _ in self.path[nxt_block_positioned]]
                 all_magic_coords = [
                     (nxt_coords[0], nxt_coords[1], nxt_coords[2] - i) for i in range(1, 4)
@@ -440,14 +437,22 @@ class PathFinderManager:
         if fail_special_cube_constraints:
             return False
 
+        if self.tgt_zx_block.zx_type == "Y":
+            if self.s._kwargs["twisted_y"]:
+                move_geometry_check = self.path[nxt_block_positioned][-2][0][2] == nxt_coords[2]
+            else:
+                move_geometry_check = self.path[nxt_block_positioned][-2][0][2] != nxt_coords[2]
+            if not move_geometry_check:
+                fail_special_cube_constraints = True
+
         if self.tgt_zx_block.zx_type == "T":
-            goes_down = self.path[nxt_block_positioned][-2][0][2] > nxt_coords[2]
-            if not goes_down:
+            move_geometry_check = self.path[nxt_block_positioned][-2][0][2] > nxt_coords[2]
+            if not move_geometry_check:
                 fail_special_cube_constraints = True
 
         if self.tgt_zx_block.zx_type == "XZ":
-            goes_up = self.path[nxt_block_positioned][-2][0][2] < nxt_coords[2]
-            if not goes_up:
+            move_geometry_check = self.path[nxt_block_positioned][-2][0][2] < nxt_coords[2]
+            if not move_geometry_check:
                 fail_special_cube_constraints = True
 
         if fail_special_cube_constraints:
@@ -455,8 +460,11 @@ class PathFinderManager:
 
         # For all cases, return true only if standard checks clear
         if self.tgt_zx_block.zx_type == "O" or nxt_block_positioned[1].kind in self.tent_tgt_kinds:
-            if self.tgt_zx_block.zx_type in ["XZ"]:
-                nxt_kind = nxt_block_positioned[1].kind[:2] + "*"
+            if self.tgt_zx_block.zx_type in ["XZ", "T", "Y"]:
+                if self.tgt_zx_block.zx_type == "XZ":
+                    nxt_kind = nxt_block_positioned[1].kind[:2] + "*"
+                else:
+                    nxt_kind = (self.tgt_zx_block.zx_type * 2) + "O"
                 xz_block = ZXBlockRegistry.get_create(kind=nxt_kind)
                 self.path[(nxt_coords, xz_block)] = [
                     *self.path[nxt_block_positioned][:-1],
@@ -501,7 +509,7 @@ class PathFinderManager:
 
         # Generate kinds that could in theory be assigned to the target cube
         self.tent_tgt_kinds = (
-            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_kind_family
+            self.tgt_zx_block.kind if self.s.cross_edge else self.tgt_zx_block.get_fulfillment_kinds
         )
 
         # Create bounding box to limit search space
@@ -554,9 +562,7 @@ class PathFinderManager:
                         continue
 
                 # Create a list of kinds that are valid for the next block
-                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(
-                    move, is_hadamard=hdm, tgt_zx_type=self.tgt_zx_block.zx_type
-                )
+                possible_nxt_zx_blocks = self.curr_zx_block.nxt_kinds(move, is_hadamard=hdm)
 
                 # Loop over all possible next types
                 for possible_nxt_zx_block in possible_nxt_zx_blocks:

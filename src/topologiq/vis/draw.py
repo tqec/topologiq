@@ -736,6 +736,15 @@ class View3D:
             cube_coords = self.ctx.state.bgraph.nodes[cube_id]["coords"]
             if cube_coords:
                 zx_block = self.ctx.state.bgraph.nodes[cube_id]["zx_block"]
+                override_cols = None
+                if zx_block.zx_type == "Y":
+                    neigh_id = list(self.ctx.state.bgraph.neighbors(cube_id))[0]
+                    neigh_coords = self.ctx.state.bgraph.nodes[neigh_id]["coords"]
+                    twisted = neigh_coords[2] == cube_coords[2]
+                    if twisted:
+                        override_cols = self.ctx.state.bgraph.nodes[neigh_id][
+                            "zx_block"
+                        ].get_face_colors
                 if zx_block:
                     render_block(
                         self.ax,
@@ -745,6 +754,7 @@ class View3D:
                         zx_block,
                         in_curr_edge=cube_id in self.ctx.state.curr_edge_ids,
                         msc_stretch=self.ctx.state.msc_stretch,
+                        override_cols=override_cols,
                     )
 
     def _render_all_pipes(self):
@@ -1426,7 +1436,7 @@ class View2D:
             x, y = positions[n_id]
             label_alpha = 1.0 if n_id in completed_cubes_set else 0.5
 
-            # Print identity value over the center node mask
+            # Display identity value over the center node mask
             ax.text(
                 x,
                 y,
@@ -1477,6 +1487,7 @@ def render_block(
     border_width: float = 0.3,
     in_curr_edge: bool = False,
     msc_stretch: dict[int, int] = {},
+    override_cols: tuple | None = None,
 ) -> Poly3DCollection:
     """Render a regular (non-Hadamard) block.
 
@@ -1496,6 +1507,7 @@ def render_block(
         border_width: The width for borders of block.
         in_curr_edge: True if block is part of edge placed when rendering the parent visualisation.
         msc_stretch: A dictionary containing the stretch factors for all MSC blocks in BlockGraph.
+        override_cols: Colours to use as override for the block.
 
     AI disclaimer:
         category: Coding partner (see CONTRIBUTING.md for details).
@@ -1509,9 +1521,7 @@ def render_block(
     vertices = get_vertices(
         x,
         y,
-        z
-        if zx_block.zx_type != "T"
-        else z - msc_stretch[node_id]/2 + 0.33/2,
+        z if zx_block.zx_type != "T" else z - msc_stretch[node_id] / 2 + 0.33 / 2,
         size_x,
         size_y,
         size_z if zx_block.zx_type != "T" else msc_stretch[node_id],
@@ -1521,12 +1531,17 @@ def render_block(
 
     # Color as applicable
     cols = zx_block.get_face_colors
+    edge_col = "#ffffff" if in_curr_edge else edge_col
+    border_width = 0.7 if in_curr_edge else border_width if zx_block.zx_type != "T" else 3
+
     if cols[0] == ZXColors.Y:
-        cols = tuple([cols[0]] * 6)
+        if override_cols:
+            cols = override_cols
+            edge_col = ZXColors.Y
+            border_width = 3
+
     face_cols = [cols[2]] * 2 + [cols[1]] * 2 + [cols[0]] * 2
     edge_style = "--" if in_curr_edge else "-"
-    border_width = 0.7 if in_curr_edge else border_width if zx_block.zx_type != "T" else 3
-    edge_col = "#ffffff" if in_curr_edge else edge_col
 
     # Join into Poly collection
     poly_collection = Poly3DCollection(
@@ -1625,7 +1640,6 @@ def render_pipe(
         size = [0.33, 0.33, 0.33]
         size[orientation] = float(adjusted_length)
         face_cols = ["gray"] * 6
-
         col = node_hex_map.get(kind.replace("*", "").lower(), ["gray"] * 3)
         face_cols = [col[2]] * 2 + [col[1]] * 2 + [col[0]] * 2
 

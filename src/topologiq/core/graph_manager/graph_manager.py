@@ -229,9 +229,10 @@ class BlockGraphManager:
                 )
 
         # Add time dependencies
+        if self.msc_cubes:
+            self.msc_stretch = {k: 3 for k in self.msc_cubes}
         if self.t_gates:
             try:
-                self.msc_stretch = {k: 3 for k in self.msc_cubes}
                 self.build_deps_from_pauli_webs()
             except Exception as e:
                 print(f"Error calculating time constraints for T-gates: {e}.")

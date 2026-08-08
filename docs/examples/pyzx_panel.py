@@ -16,7 +16,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 # Note 4. Not all "first_id_strategy" and "graph_traverse_mode" are compatible with all graphs.
 # Contributinos geared to create fallbacks for when specialised strategies fail are welcome.
 kwargs = {
-    "debug": 0,  # Verbosity. Change to `3` for step by step visuals.
+    "debug": 1,  # Verbosity. Change to `3` for step by step visuals.
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID.
     "graph_traverse_mode": "bfs-cross",  # Graph traversing strategy
     "gravity": 7,  # Integer weight that pulls paths towards graph centre

@@ -131,8 +131,19 @@ def pick_id_and_kind(
         )
 
     if not first_kind:
+        # Set process as deterministic or not depending on KWARGs
         deterministic = False if first_id_strategy == "centrality-random" else True
-        tentative_kinds = bgraph.nodes[first_id].get("zx_block").get_kind_family
+
+        # Pull the ZX block of first ID
+        first_zx_block = bgraph.nodes[first_id].get("zx_block")
+        first_zx_type = first_zx_block.zx_type
+
+        # Assign tentative kinds manually if special block
+        if first_zx_type in ["Y", "T", "XZ"]:
+            proper_kind = (first_zx_block.zx_type * 2) + "O"
+            tentative_kinds = [proper_kind]
+        else:
+            tentative_kinds = bgraph.nodes[first_id].get("zx_block").get_fulfillment_kinds
         first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
 
     return first_id, first_kind, other_ids

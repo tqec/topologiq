@@ -94,23 +94,17 @@ class ZXBlock:
                 )
 
     @cached_property
-    def get_kind_family(self) -> list[str]:
+    def get_fulfillment_kinds(self) -> list[str]:
         """Get the family of kinds compatible with block's zx_type."""
 
         fams: dict[str, list[str]] = {
             "X": ["ZXZ", "ZZX", "XZZ"],
-            "Y": ["YYO"],
             "Z": ["XZX", "XXZ", "ZXX"],
-            "XZ": ["XZX", "XXZ", "ZXX", "ZXZ", "ZZX", "XZZ"],
-            "T": ["TTO"],
             "O": ["OOO"],
-            "BOUNDARY": ["OOO"],
-            "SIMPLE": ["ZXO", "XZO", "OXZ", "OZX", "XOZ", "ZOX"],
-            "HADAMARD": ["ZXOH", "XZOH", "OXZH", "OZXH", "XOZH", "ZOXH"],
         }
 
         if self.zx_type not in fams:
-            print(f"Warning: type '{self.zx_type}' not found.")
+            return ["XZX", "XXZ", "ZXX", "ZXZ", "ZZX", "XZZ"]
 
         return fams[self.zx_type]
 
@@ -132,6 +126,8 @@ class ZXBlock:
     @cached_property
     def get_face_colors(self) -> tuple[str, tuple[str, str, str]]:
         """Retrieve the ZXBlock's colours."""
+        if self.zx_type in ["Y", "T"]:
+            return tuple([ZXColors.lookup(self.zx_type)]) * 6
         return tuple([ZXColors.lookup(c) for c in self.kind[:3]]) * 2
 
     @cached_property
@@ -172,14 +168,11 @@ class ZXBlock:
         return valid_move_vectors
 
     @lru_cache
-    def nxt_kinds(
-        self, move: StandardCoord, is_hadamard: bool = False, tgt_zx_type: str = ""
-    ) -> list[str]:
+    def nxt_kinds(self, move: StandardCoord, is_hadamard: bool = False) -> list[str]:
         """Reduce the number of possible kinds for next block.
 
         Args:
             move: The (x, y, z) displacement between current and target position.
-            tgt_zx_type: The ZX type of the final target for the current edge.
             is_hadamard: True if edge being after this ZX cube is a Hadamard.
 
         Returns:
@@ -193,11 +186,7 @@ class ZXBlock:
             for kind in ["XXZ", "ZZX", "XZZ", "ZXX", "ZXZ", "XZX"]
         ]
 
-        # Add Y to sequence if target is Y-cube
-        if tgt_zx_type in ["Y", "T"]:
-            kind = tgt_zx_type * 2 + "O"
-            all_zx_blocks.append(ZXBlockRegistry.get_create(kind=kind))
-
+        # Rotate next kind if current is Hadamard
         if is_hadamard:
             rotated_kind = rotate_block_kind(self.kind, move)
             alt_self = ZXBlockRegistry.get_create(kind=rotated_kind)
@@ -211,14 +200,14 @@ class ZXBlock:
             if self.cube_open_faces_match(move, tgt_zx_block=zx_block, alt_self=alt_self)
         ]
 
-        if self.zx_type in ["O", "Y", "T"]:
+        if self.zx_type in ["Y", "T", "O"]:
             return ok_tgts
-        else:
-            return [
-                ok_tgt_zx_block
-                for ok_tgt_zx_block in ok_tgts
-                if self.face_match(move, ok_tgt_zx_block, alt_self=alt_self)
-            ]
+
+        return [
+            ok_tgt_zx_block
+            for ok_tgt_zx_block in ok_tgts
+            if self.face_match(move, ok_tgt_zx_block, alt_self=alt_self)
+        ]
 
     # Formerly known as `cube_match`.
     def cube_open_faces_match(

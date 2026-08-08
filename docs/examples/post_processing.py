@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # Note. Assumes the existence of a control system that
     # would flag a factory success near a MSC that hasn't succeeded
     if kwargs["post_process"]:
-        bgraph_manager.msc_exchange(connect_id=261, remove_id=86)
+        bgraph_manager.msc_exchange(connect_id=262, remove_id=86)
         bgraph_manager.draw_blockgraph()
 
     # Example of how to stretch the computation to wait for an MSC
