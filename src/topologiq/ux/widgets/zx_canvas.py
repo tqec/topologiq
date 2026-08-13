@@ -15,11 +15,94 @@ import asyncio
 
 import pyzx as zx
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 from zxlive.app import get_embedded_app
+from zxlive.dialogs import FileFormat
+from zxlive.settings import display_setting
 
 from topologiq.input.zx_manager import AugmentedZXGraph
 from topologiq.ux.utils import styles
+
+
+def _resolve_dialog_parent(parent: QWidget) -> QWidget:
+    """Return a visible top-level widget to parent ZXLive's file dialogs on.
+
+    ZXLive parents its save/export dialogs to its embedded ``MainWindow``, which
+    we ghost off-screen at ``(-1000, -1000, 1, 1)``. Qt centres modal dialogs
+    over their parent, so those dialogs pop up off-screen and re-centre on the
+    ghost on every invocation (the "can't keep position" effect). Re-parent to a
+    visible window so the dialog lands on the active screen instead.
+    """
+    active = QApplication.activeWindow()
+    if active is not None and active.isVisible() and active.isWindow():
+        return active
+    # Fallback: the first visible top-level window (our app shell)
+    for widget in QApplication.topLevelWidgets():
+        if widget.isVisible() and widget.isWindow():
+            return widget
+    return parent
+
+
+_zxlive_dialogs_patched = False
+
+
+def _patch_zxlive_dialogs() -> None:
+    """Wrap ZXLive's save/export dialog helper to fix parenting and format defaults.
+
+    Idempotent — safe to call repeatedly.
+    """
+    global _zxlive_dialogs_patched
+    if _zxlive_dialogs_patched:
+        return
+
+    import zxlive.dialogs as zx_dialogs
+
+    def get_file_path_and_format(parent: QWidget, filter: str, default_input: str = ""):
+        # Move the "All" entry to the end so a concrete format becomes the default
+        # selection. Otherwise the user lands on "All" and typing a name without a
+        # recognised extension triggers "Unable to determine file format".
+        all_filter = FileFormat.All.filter
+        parts = filter.split(";;")
+        concrete = [p for p in parts if p != all_filter]
+        all_entry = [p for p in parts if p == all_filter]
+        effective_filter = ";;".join(concrete + all_entry) if all_entry else filter
+
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            parent=_resolve_dialog_parent(parent),
+            caption="Save File",
+            dir=default_input,
+            filter=effective_filter,
+        )
+        if selected_filter == "":
+            return None  # Cancelled
+
+        selected_format = next(f for f in FileFormat if f.filter == selected_filter)
+        if selected_format == FileFormat.All:
+            try:
+                ext = file_path.split(".")[-1]
+                selected_format = next(f for f in FileFormat if f.extension == ext)
+            except StopIteration:
+                # Default to QGraph instead of erroring — it is this app's
+                # native ZX graph format.
+                selected_format = FileFormat.QGraph
+
+        # Append the extension if the user omitted it
+        if file_path.split(".")[-1].lower() != selected_format.extension:
+            file_path += "." + selected_format.extension
+
+        return file_path, selected_format
+
+    zx_dialogs.get_file_path_and_format = get_file_path_and_format
+    _zxlive_dialogs_patched = True
 
 
 class ZXCanvas(QWidget):
@@ -70,6 +153,22 @@ class ZXCanvas(QWidget):
 
     def _embed_zxlive_engine(self):
         """Instantiate ZXLive, capture its central core, and dock it natively with localised menus."""
+
+        # Respect the system theme when ZXLive can read it; only fall back to dark
+        # mode when it can't. WSL2 reports Qt.ColorScheme.Unknown, which ZXLive
+        # otherwise treats as light (→ white canvas). Override the in-memory cache
+        # only — never persist — so a detectable system theme always wins.
+        try:
+            scheme = QApplication.instance().styleHints().colorScheme()
+        except AttributeError:
+            scheme = Qt.ColorScheme.Unknown
+        if scheme == Qt.ColorScheme.Unknown:
+            display_setting._cached_dark_mode = True
+            display_setting._cached_effective_colors = None
+
+        # Patch ZXLive's save/export dialog helper so file dialogs parent to a
+        # visible window (not the ghosted shell) and default to a concrete format.
+        _patch_zxlive_dialogs()
 
         # Get ZXLive as an embedded app
         self.zxlive_app = get_embedded_app()
