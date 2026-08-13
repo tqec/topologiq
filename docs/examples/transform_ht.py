@@ -12,7 +12,7 @@ kwargs = {
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID [str]
     "graph_traverse_mode": "bfs-layers",  # Graph traversing strategy [str]
     # "gravity": 7,  # Pull paths towards graph centre [int]
-    "post_process": False,
+    "post_process": True,
     # "z_stretch": 1,
 }
 
@@ -22,7 +22,7 @@ kwargs = {
 if __name__ == "__main__":
     # Give pretty name to graph
     graph_name = "ht"
-    num_t = 10
+    num_t = 5
     print(f"\n#####################\nGRAPH NAME: {graph_name} * {num_t}. \n#####################\n")
 
     # Get graph
