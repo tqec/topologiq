@@ -21,7 +21,8 @@ from topologiq.assets.pyzx_graphs import (
     xyi,  # noqa: F401
     yi,  # noqa: F401
 )
-from topologiq.input.zx_manager import ZXGraphManager
+
+# from topologiq.input.zx_manager import ZXGraphManager
 
 ###############
 # PYZX KWARGS #
