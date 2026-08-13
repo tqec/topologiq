@@ -9,82 +9,265 @@ import random
 
 import networkx as nx
 
-from topologiq.core.pathfinder.symbolic import check_exits
-from topologiq.utils.classes import StandardBlock, StandardCoord
+from topologiq.core.beams import CubeBeams
+from topologiq.core.blocks import ZXBlock, ZXBlockRegistry
+from topologiq.core.pathfinder.symbolic import check_exits_add_beams
+from topologiq.utils.classes import StandardCoord
 
 
-def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -> int:
+###########
+# MANAGER #
+###########
+def get_first_cube_data(
+    bgraph: nx.Graph,
+    first_id_strategy: str,
+    qubits: dict[int, int],
+    inputs: list[int],
+    beams_len_short: int,
+    first_coords: StandardCoord = (0, 0, 0),
+    override_first_cube: tuple[int | None, str | None] = (None, None),
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    random_seed: int | None = None,
+) -> tuple[int, ZXBlock, CubeBeams, CubeBeams]:
+    """Define and place the very first cube of the blockgraph.
+
+    Args:
+        bgraph: The BlockGraph being built.
+        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
+            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
+        qubits: Spiders organised by qubit.
+        inputs: A list of spiders formally declared as graph inputs.
+        beams_len_short: The length of any short beams.
+        first_coords (optional): First coords are (0,0,0) unless a specific value is given.
+        override_first_cube: Override ID and kind (used to replicate specific cases).
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
+        random_seed: random_seed (optional): Typically `None`, but used to pass a seed across the entire algorithm.
+
+    Returns:
+        first_id: The ID of the first cube.
+        other_ids: A list of other IDs relevant to the type of first spider strategy used, None if such list does not exist
+        zx_block: The ZX block for the node corresponding to the first cube.
+        src_beams: The beams for the first node.
+        src_beams_short: The short beams for the first node.
+
+
+    """
+
+    # Pick and ID and kind for first cube
+    first_id, first_kind, other_ids = pick_id_and_kind(
+        bgraph,
+        first_id_strategy=first_id_strategy,
+        qubits=qubits,
+        inputs=inputs,
+        override_first_cube=override_first_cube,
+        s_gates=s_gates,
+        t_gates=t_gates,
+        random_seed=random_seed,
+    )
+
+    # Create ZXBlock corresponding to chosen kind
+    zx_block = ZXBlockRegistry.get_create(kind=first_kind)
+
+    # Get and write beams for corresponding node
+    _, src_beams, src_beams_short = check_exits_add_beams(
+        zx_block, first_coords, [], [first_coords], beams_len_short
+    )
+
+    return first_id, other_ids, zx_block, src_beams, src_beams_short
+
+
+###############
+# ID/KIND GEN #
+###############
+
+
+def pick_id_and_kind(
+    bgraph: nx.Graph,
+    first_id_strategy: str,
+    qubits: dict[int, int],
+    inputs: list[int],
+    override_first_cube: tuple[int | None, str | None] = (None, None),
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    random_seed: int | None = None,
+) -> tuple[int, str, list[int]]:
+    """Determine the iID and kind of the first block to place in 3D space.
+
+    Args:
+        bgraph: The BlockGraph being built.
+        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
+            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
+        qubits: Spiders organised by qubit.
+        inputs: A list of spiders formally declared as graph inputs.
+        override_first_cube: Override ID and kind (used to replicate specific cases).
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
+        random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
+
+    Returns:
+        first_id: ID of the first block to place in 3D space
+        first_kind: Kind of the first block to place in 3D space
+        other_ids: A list of other IDs relevant to the type of first spider strategy used, None if such list does not exist
+
+    """
+
+    first_id, first_kind = override_first_cube
+
+    if (not first_id or not first_kind) and random_seed:
+        random.seed(random_seed)
+
+    if override_first_cube:
+        other_ids = []
+
+    if not first_id:
+        first_id, other_ids = pick_first_id(
+            bgraph, first_id_strategy, qubits, inputs, s_gates=s_gates, t_gates=t_gates
+        )
+
+    if not first_kind:
+        # Set process as deterministic or not depending on KWARGs
+        deterministic = False if first_id_strategy == "centrality-random" else True
+
+        # Pull the ZX block of first ID
+        first_zx_block = bgraph.nodes[first_id].get("zx_block")
+        first_zx_type = first_zx_block.zx_type
+
+        # Assign tentative kinds manually if special block
+        if first_zx_type in ["Y", "T", "XZ"]:
+            proper_kind = (first_zx_block.zx_type * 2) + "O"
+            tentative_kinds = [proper_kind]
+        else:
+            tentative_kinds = bgraph.nodes[first_id].get("zx_block").get_fulfillment_kinds
+        first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
+
+    return first_id, first_kind, other_ids
+
+
+def pick_first_id(
+    bgraph: nx.Graph,
+    first_id_strategy: str,
+    qubits: dict[int, int],
+    inputs: list[int],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> int:
     """Pick a node for use as starting point by outer graph manager BFS.
 
     Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        first_id_strategy (optional): Enables switch between available strategies for choosing first node.
+        bgraph: The BlockGraph being built.
+        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
+            centrality-majority: Use a majority vote from several centrality measures (deterministic).
+            centrality-random: Pick randomly from a list of central spiders (probabilistic).
+            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
+        qubits: Spiders organised by qubit.
+        inputs: A list of spiders formally declared as graph inputs.
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
 
     Returns:
         first_id: ID of node with highest closeness centrality or random ID from list of highest centrality.
+        other_ids: A list of other IDs relevant to the type of first spider strategy used, None if such list does not exist
 
     """
 
     # Terminate if graph is empty
-    if not nx_g.nodes:
-        raise ValueError("ERROR: nx_g.nodes() empty. Graph appears empty.")
+    if not bgraph.nodes:
+        raise ValueError("ERROR: bgraph.nodes() empty. Graph appears empty.")
+
+    # Default other_ids to None
+    first_ids = None
 
     # ID of first non-boundary node
-    if first_id_strategy == "first_spider":
-        # Sort all IDS in graph excluding boundaries
-        all_node_ids = sorted(
-            [node_id for node_id, node_info in nx_g.nodes(data=True) if node_info["type"] != "O"]
-        )
+    if first_id_strategy == "first-spider":
+        # Try getting the lowest formally declared input ID.
+        if inputs:
+            all_node_ids = sorted(inputs)
+
+        # If no inputs are formally declared try fetching boundary spider with lowest ID
+        else:
+            all_node_ids = sorted(
+                [
+                    n_id
+                    for n_id, attrs in bgraph.nodes(data=True)
+                    if attrs["zx_block"].zx_type == "O"
+                ]
+            )
+
+        # Worse case scenario, fetch smallest ID in graph.
+        if not all_node_ids:
+            all_node_ids = sorted([n_id for n_id in bgraph.nodes()])
 
         # Pick first
         first_id = all_node_ids[0]
 
     # Majority vote from applicable centrality measures
-    elif first_id_strategy == "centrality_majority":
+    elif first_id_strategy == "centrality-majority":
         # Append ID determined as central by several centrality measures to a single array
         central_nodes = []
 
-        degree_centrality = nx.degree_centrality(nx_g)
+        degree_centrality = nx.degree_centrality(bgraph)
         central_nodes.append(sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0])
 
-        closeness_centrality = nx.closeness_centrality(nx_g)
+        closeness_centrality = nx.closeness_centrality(bgraph)
         central_nodes.append(
             sorted(closeness_centrality, key=closeness_centrality.get, reverse=True)[0]
         )
 
-        info_centrality = nx.current_flow_closeness_centrality(nx_g, weight=None, solver="lu")
+        info_centrality = nx.current_flow_closeness_centrality(bgraph, weight=None, solver="lu")
         central_nodes.append(sorted(info_centrality, key=info_centrality.get, reverse=True)[0])
 
-        betweenness_centrality = nx.betweenness_centrality(nx_g, normalized=True, endpoints=True)
+        betweenness_centrality = nx.betweenness_centrality(bgraph, normalized=True, endpoints=True)
         central_nodes.append(
             sorted(betweenness_centrality, key=betweenness_centrality.get, reverse=True)[0]
         )
 
-        harmonic_centrality = nx.harmonic_centrality(nx_g, nbunch=None, distance=None, sources=None)
+        harmonic_centrality = nx.harmonic_centrality(
+            bgraph, nbunch=None, distance=None, sources=None
+        )
         central_nodes.append(
             sorted(harmonic_centrality, key=harmonic_centrality.get, reverse=True)[0]
         )
 
         laplacian = nx.laplacian_centrality(
-            nx_g, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
+            bgraph, normalized=True, nodelist=None, weight="weight", walk_type=None, alpha=0.95
         )
         central_nodes.append(sorted(laplacian, key=laplacian.get, reverse=True)[0])
-
-        eigen_centrality = nx.eigenvector_centrality_numpy(nx_g)
-        central_nodes.append(sorted(eigen_centrality, key=eigen_centrality.get, reverse=True)[0])
 
         # Choose most common
         first_id = max(set(central_nodes), key=central_nodes.count)
 
+    elif first_id_strategy == "central-in-first-cycle":
+        try:
+            # Try determining central spider in first cycle
+            # Will fail when the circuit has no cycles
+            first_cycle = nx.cycle_basis(bgraph)[0]
+            central_id, max_degree = (None, 0)
+            for spider_id in first_cycle:
+                degree = bgraph.degree[spider_id]
+                if degree > max_degree:
+                    max_degree = degree
+                    central_id = spider_id
+            first_id = central_id
+        except IndexError:
+            # If circuit has no cycles use a centrality measure
+            degree_centrality = nx.betweenness_centrality(bgraph)
+            first_id = sorted(degree_centrality, key=degree_centrality.get, reverse=True)[0]
+
     # Random choice from central spiders
-    elif first_id_strategy == "centrality_random":
+    elif first_id_strategy in ["centrality-random", "random"]:
         # Loose build a list of central spiders
         max_degree = -1
         central_nodes: list[int] = []
-        node_degrees = nx_g.degree
+        node_degrees = bgraph.degree
 
         if isinstance(node_degrees, int):
-            raise ValueError("ERROR: nx_g.degree() returned int. Cannot determine first ID.")
+            raise ValueError("ERROR: bgraph.degree() returned int. Cannot determine first ID.")
 
         for node, degree in node_degrees:
             if degree > max_degree:
@@ -94,89 +277,59 @@ def get_first_id(nx_g: nx.Graph, first_id_strategy: str = "centrality_random") -
                 central_nodes.append(node)
 
         # Randomly pick a spider from list of central spiders
-        first_id: int = random.choice(central_nodes)
+        if first_id_strategy == "random":
+            first_id: int = random.choice(
+                [
+                    n_id
+                    for n_id, b in bgraph.nodes(data="zx_block")
+                    if b.zx_type not in ["O", "Y", "XZ", "T"]
+                ]
+            )
+        else:
+            first_id: int = random.choice(central_nodes)
+
+    elif first_id_strategy == "central-qubit":
+        # Extract T-gate patterns to single list
+        all_ids_in_t_gates = []
+        [all_ids_in_t_gates.extend(i) for pat in t_gates.values() for i in pat]
+
+        # Tracker for edges across qubits
+        q_to_q_edges: dict[int, dict[int, list[int]]] = {}
+
+        # Tracker for first IDs for each qubit
+        infer_inputs_from_id = False
+        if inputs:
+            q_first_ids: dict[int, int] = {qubits[i]: i for i in inputs}
+        else:
+            infer_inputs_from_id = True
+            q_first_ids: dict[int, int] = {}
+
+        # Loop over nodes detecting edges to other qubits
+        for node_id in bgraph.nodes():
+            # Skip if spider is part of S- or T-gate pattern
+            if node_id in s_gates or node_id in all_ids_in_t_gates:
+                continue
+
+            # Add qubit to tracker if qubit has never been visited
+            if qubits[node_id] not in q_to_q_edges:
+                q_to_q_edges[qubits[node_id]] = []
+                if infer_inputs_from_id:
+                    q_first_ids[qubits[node_id]] = node_id
+
+            # Add to qubit-to-qubit tracker if edge goes out of qubit
+            for neigh_id in bgraph.neighbors(node_id):
+                if qubits[node_id] != qubits[neigh_id]:
+                    q_to_q_edges[qubits[node_id]].append(neigh_id)
+
+        # Sort the connection tracker based on number of edges to other qubits
+        q_to_q_edges_sorted = sorted(
+            q_to_q_edges.items(), key=lambda item: len(item[1]), reverse=True
+        )
+        # Get the corresponding inputs for each qubit
+        first_ids = [q_first_ids[q] for q, _ in q_to_q_edges_sorted if q in q_first_ids]
+        first_id = first_ids[0]
 
     else:
-        raise ValueError("ERROR @ get_first_id. Invalid selection strategy.")
+        raise ValueError("ERROR @ pick_first_id. Invalid selection strategy.")
 
-    return first_id
-
-
-def get_first_cube(
-    nx_g: nx.Graph,
-    first_cube: tuple[int | None, str | None] = (None, None),
-    first_id_strategy: str = "centrality_random",
-    random_seed: int | None = None,
-) -> tuple[int, str]:
-    """Determine the iID and kind of the first block to place in 3D space.
-
-    Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        first_cube (optional): Override ID and kind (used to replicate specific cases).
-        first_id_strategy (optional): Strategy for selecting the ID of the first spider processed by the algorithm.
-            centrality_majority: Use a majority vote from several centrality measures (deterministic).
-            centrality_random: Pick randomly from a list of central spiders (probabilistic).
-            first_spider: Select lowest ID non-boundary spider, typically 1st spider on 1st qubit (deterministic).
-        random_seed: Typically `None`, but can be used to pass a specific seed across the entire algorithm.
-
-    Returns:
-        first_id: ID of the first block to place in 3D space
-        first_kind: Kind of the first block to place in 3D space
-
-    """
-
-    first_id, first_kind = first_cube
-
-    if (not first_id or not first_kind) and random_seed:
-        random.seed(random_seed)
-
-    if not first_id:
-        first_id = get_first_id(nx_g, first_id_strategy=first_id_strategy)
-
-    if not first_kind:
-        deterministic = False if first_id_strategy == "centrality_random" else True
-        tentative_kinds = nx_g.nodes[first_id].get("type_fam")
-        first_kind = tentative_kinds[0] if deterministic else random.choice(tentative_kinds)
-
-    return first_id, first_kind
-
-
-def place_first_cube(
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    first_cube: StandardBlock,
-    log_stats_id: int | None = None,
-    debug: int = 0,
-) -> tuple[list[StandardCoord], nx.Graph]:
-    """Place the first cube in the 3D space.
-
-    Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        first_cube: ID and kind for the very first spider/cube to place in 3D space.
-        log_stats_id (optional): A unique datetime-based identifier for the purposes of logging stats for an specific run.
-        debug (optional): Debug mode (0: off, 1: graph manager, 2: pathfinder, 3: pathfinder w. discarded paths).
-
-    Returns:
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-
-    """
-
-    # Update taken
-    taken.append((0, 0, 0))
-
-    # Get beams
-    first_id, first_kind = first_cube
-    _, src_beams, src_beams_short = check_exits((0, 0, 0), first_kind, taken, [(0, 0, 0)])
-
-    # Write info to nx_g
-    nx_g.nodes[first_id]["coords"] = (0, 0, 0)
-    nx_g.nodes[first_id]["kind"] = first_kind
-    nx_g.nodes[first_id]["beams"] = src_beams
-    nx_g.nodes[first_id]["beams_short"] = src_beams_short
-
-    if log_stats_id or debug > 0:
-        print(f"First cube ID: {first_id} ({first_kind}).")
-
-    return nx_g, taken
+    return first_id, first_ids

@@ -5,505 +5,1266 @@ Usage:
 
 """
 
-from collections import deque
-from typing import cast
-
-import matplotlib
 import networkx as nx
+import numpy as np
 
-from topologiq.core.beams import CubeBeams
-from topologiq.core.graph_manager.beams import check_path_to_beam_clashes, check_tgt_beam_clashes
-from topologiq.core.graph_manager.callers import call_debug_vis, call_pathfinder
-from topologiq.core.graph_manager.utils import get_node_degree, prune_beams, update_edge_paths
-from topologiq.core.pathfinder.spatial import get_taken_coords
-from topologiq.core.pathfinder.symbolic import check_exits
-from topologiq.core.paths import PathBetweenNodes
-from topologiq.utils.classes import (
-    Colors,
-    StandardBlock,
-    StandardCoord,
-)
-from topologiq.utils.core import datetime_manager
+from topologiq.core.blocks import ZXBlock
+from topologiq.core.graph_manager.spatial import pipe_kind_inference
+from topologiq.utils.classes import StandardCoord
 
 
-##############################
-# STANDARD EDGES / DISCOVERY #
-##############################
-def handle_std_edge(
-    src_id: int,
-    tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
-    circuit_name: str = "circuit",
-    init_step: int = 3,
-    fig_data: matplotlib.figure.Figure | None = None,
-    twin_mode: bool = False,
-    ids_to_twin: list[int] | None = None,
-    **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
-    """Position target cube in the 3D space as part of the primary BFS flow.
-
-    This function calls the inner pathfinder algorithm on any arbitrary combination of an already-placed
-    `src_id` and a yet-to-be-placed `tgt_id`. The inner pathfinder algorithm returns a list of viable
-    paths to a number of valid placements for `tgt_id`, and chooses a best path from this list
-    using hyperparameters passed as `kwargs` and a value function.
+################
+# QUEUE PRECAL #
+################
+def queue_precalc(
+    bgraph: nx.Graph,
+    first_id: int,
+    rows: dict[int, int],
+    qubits: dict[int, int],
+    inputs: list[int],
+    outputs: list[int],
+    graph_traverse_strategy: str,
+    other_first_ids: list[int] = [],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
 
     Args:
-        src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
-        tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        circuit_name: The name of the ZX circuit.
-        init_step: The ideal/intended (Manhattan) distance between source and target blocks.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        twin_mode (optional): True when this function is used to create a twin of a given cube.
-        ids_to_twin (optional): Cube IDs flagged as potentially problematic, passed only when function is used to create a twin node.
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms).
+        rows: Spiders organised by row.
+        qubits: Spiders organised by qubit.
+        inputs: The inputs of the base graph.
+        outputs: The outputs of the base graph.
+        graph_traverse_strategy: The graph traversing strategy.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy).
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
 
     Returns:
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        (bool): A boolean flag to signal success (True if placement was succesful).
+        edge_queue: A list of (u, v) tuples to use as queue.
 
     """
+    # Init empty edge queue
+    edge_queue: list[tuple[int, int]] = []
 
-    # Start timer
-    t_1, _ = datetime_manager()
+    # Standard edge BFS
+    if graph_traverse_strategy == "bfs":
+        edge_queue = list(nx.edge_bfs(bgraph, first_id))
 
-    # Always prune beams to ensure recent placements are accounted for
-    nx_g = prune_beams(nx_g, taken)
+    # Standard edge BFS + cross edge priority
+    if graph_traverse_strategy == "bfs-cross":
+        edge_queue = _queue_bfs_cross(bgraph, first_id)
 
-    # Get source cube data
-    src_coords: StandardCoord | None = nx_g.nodes[src_id].get("coords")
-    src_kind: str | None = nx_g.nodes[src_id].get("kind")
-    if src_coords is None or src_kind is None:
-        return nx_g, taken, edge_paths, False
-    src_block_info: StandardBlock = (src_coords, src_kind)
+    # BFS with priority cross-edges strategy and boundaries last
+    if graph_traverse_strategy == "bfs-cross-boundaries-last":
+        edge_queue = _queue_bfs_cross_boundaries_last(bgraph, first_id)
 
-    # Check position of target cube (should be None)
-    nxt_neigh_coords: StandardCoord | None = nx_g.nodes[tgt_id].get("coords")
+    if graph_traverse_strategy == "bfs-cycles":
+        edge_queue = _queue_bfs_cycles(bgraph, first_id)
 
-    # Process targets that have yet to be placed in the 3D space
-    edge_success = False
-
-    if nxt_neigh_coords is None:
-        # Geat target information
-        nxt_neigh_node_data = nx_g.nodes[tgt_id]
-        nxt_neigh_zx_type: str = cast(str, nxt_neigh_node_data.get("type"))
-
-        # Get edge information
-        zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-        hdm: bool = True if zx_edge_type == "HADAMARD" else False
-
-        # Remove source coordinates from occupied coords
-        taken_coords_c = taken[:]
-        if src_coords in taken_coords_c:
-            taken_coords_c.remove(src_coords)
-
-        # Get clean candidate paths
-        # Note. Topologically correct but not necessarily smart paths
-        clean_paths, pathfinder_vis_data = call_pathfinder(
-            src_block_info,
-            nxt_neigh_zx_type,
-            init_step,
-            taken_coords_c if taken else [],
-            hdm=hdm,
-            src_tgt_ids=(src_id, tgt_id),
-            **kwargs,
+    # Layered BFS (by rows)
+    if graph_traverse_strategy == "bfs-rows":
+        edge_queue = _queue_bfs_rows(
+            bgraph, first_id, rows, inputs, other_first_ids=other_first_ids, t_gates=t_gates
         )
 
-        # Assemble a preliminary dictionary of viable paths
-        # Note. A smart subset of clean paths
-        viable_paths = []
-        tgt_degree = int(get_node_degree(nx_g, tgt_id))
-        for clean_path in clean_paths:
-            # Extract key path information
-            tgt_coords, tgt_kind = clean_path[-1]
-            coords_in_path = get_taken_coords(clean_path)
+    # Layered BFS (by T-gate sections)
+    if graph_traverse_strategy == "bfs-layers":
+        edge_queue = _queue_bfs_layers(
+            bgraph,
+            first_id,
+            qubits,
+            rows,
+            inputs,
+            s_gates=s_gates,
+            t_gates=t_gates,
+        )
 
-            # Check if exits are unobstructed
-            tgt_unobstr_exit_n, tgt_beams, tgt_beams_short = check_exits(
-                tgt_coords, tgt_kind, taken_coords_c, coords_in_path
-            )
+    # Layered BFS (by T-gates)
+    if graph_traverse_strategy == "tfs":
+        edge_queue = _queue_tfs(bgraph, first_id, inputs, s_gates=s_gates, t_gates=t_gates)
 
-            # Check path doesn't obstruct an absolutely necessary exit for a pre-existing cube
-            # Reset # of unobstructed exits and node beams if target is a boundary
-            if nxt_neigh_zx_type == "O":
-                tgt_unobstr_exit_n, tgt_beams = (6, [])
+    # An almost-no-longer-BFS that lays out the central qubit before traversing CNOTs
+    if graph_traverse_strategy == "bfs-cnots":
+        edge_queue = _queue_bfs_cnots(
+            bgraph, rows, qubits, inputs, other_first_ids=other_first_ids, t_gates=t_gates
+        )
 
-            if tgt_unobstr_exit_n >= tgt_degree - 1:
-                # Check if path breaks more beams than tolerable
-                path_to_beam_clashes, beams_broken_by_path, _ = check_path_to_beam_clashes(
-                    nx_g,
-                    src_id,
-                    tgt_id,
-                    coords_in_path,
-                    twin_mode=twin_mode,
-                    ids_to_twin=ids_to_twin,
-                )
+    # An almost-no-longer-BFS that lays out the central qubit before traversing CNOT cycles
+    if graph_traverse_strategy == "bfs-cnot-cycles":
+        edge_queue = _queue_bfs_cnot_cycles(
+            bgraph, rows, qubits, inputs, other_first_ids=other_first_ids, t_gates=t_gates
+        )
 
-                # Check if there are more beam-to-beam clashes than tolerable
-                tgt_beam_clashes, beams_broken_by_path = check_tgt_beam_clashes(
-                    nx_g,
-                    src_id,
-                    tgt_id,
-                    tgt_beams,
-                    tgt_beams_short,
-                    tgt_degree,
-                    beams_broken_by_path,
-                    **kwargs,
-                )
+    # A T-gate First Search (TFS) approach that visits T-gates before expanding using CNOTs
+    if graph_traverse_strategy == "tfs-cnots":
+        edge_queue = _queue_tfs_cnots(
+            bgraph,
+            rows,
+            qubits,
+            inputs,
+            other_first_ids=other_first_ids,
+            s_gates=s_gates,
+            t_gates=t_gates,
+        )
 
-                # Append path to viable paths if path clears all checks
-                if not path_to_beam_clashes and not tgt_beam_clashes:
-                    all_nodes_in_path = [p for p in clean_path]
+    if not edge_queue:
+        raise ValueError("No valid edge queue strategy was found or queue generation failed.")
 
-                    # Re-write type of boundary nodes for consistency
-                    if nxt_neigh_zx_type == "O":
-                        tgt_kind = "ooo"
-                        all_nodes_in_path[-1] = (all_nodes_in_path[-1][0], tgt_kind)
-
-                    # Consolidate path data
-                    path_data = {
-                        "tgt_coords": tgt_coords,
-                        "tgt_kind": tgt_kind,
-                        "tgt_beams": tgt_beams,
-                        "tgt_beams_short": tgt_beams_short,
-                        "coords_in_path": coords_in_path,
-                        "all_nodes_in_path": all_nodes_in_path,
-                        "beams_broken_by_path": beams_broken_by_path,
-                        "len_of_path": len(clean_path),
-                        "tgt_unobstr_exit_n": tgt_unobstr_exit_n,
-                    }
-
-                    # Append to viable paths
-                    viable_paths.append(PathBetweenNodes(**path_data))
-
-        # Choose a winner path from all viable paths
-        winner_path: PathBetweenNodes | None = None
-        if viable_paths:
-            winner_path = max(viable_paths, key=lambda path: path.weighed_value(**kwargs))
-
-        # Finish timer before popping up visualisation
-        _, t_total_iter = datetime_manager(t_1=t_1)
-
-        # Call visualisation if applicable
-        if kwargs["debug"] > 1 or kwargs["vis_options"][0] == "detail" or kwargs["vis_options"][1]:
-            call_debug_vis(
-                circuit_name,
-                nx_g,
-                edge_paths,
-                winner_path,
-                None,
-                (src_id, tgt_id),
-                src_block_info,
-                pathfinder_vis_data,
-                fig_data=fig_data,
-                **kwargs,
-            )
-
-        # Write to edge_paths if winner is found
-        if winner_path:
-            nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                nx_g, edge_paths, winner_path, clean_paths, taken, zx_edge_type, src_id, tgt_id
-            )
-
-        # Update user
-        if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-            volume = (
-                len([i for i in winner_path.all_nodes_in_path if "o" not in i[1]])
-                if winner_path
-                else 0
-            )
-            print(
-                f"ADD CUBE: {src_id} -> {tgt_id}.",
-                (Colors.GREEN + "Success." + Colors.RESET)
-                if edge_success
-                else f"{(Colors.YELLOW + 'Increasing search distance.' + Colors.RESET) if init_step < 15 else (Colors.RED + 'FAIL.' + Colors.RESET)}",
-                f"Vol: {volume - 1}." if edge_success else "",
-                f"Runtime: ~{int(t_total_iter * 1000)}ms.",
-            )
-
-    nx_g = prune_beams(nx_g, taken)
-    return nx_g, taken, edge_paths, edge_success
+    return edge_queue
 
 
-####################################################
-# CROSS EDGES / JOIN PREVIOUSLY DISCOVERED SPIDERS #
-####################################################
-def handle_cross_edge(
-    src_id: int,
-    tgt_id: int,
-    nx_g: nx.Graph,
-    taken: list[StandardCoord],
-    edge_paths: dict,
-    circuit_name: str = "circuit",
-    fig_data: matplotlib.figure.Figure | None = None,
-    **kwargs,
-) -> tuple[list[StandardCoord], list[CubeBeams], dict, bool]:
-    """Search for a path between two cubes that have already been placed in 3D space.
-
-    This function calls the inner pathfinder algorithm to search for paths between cubes that have
-    been already-placed in the 3D space. The inner pathfinder algorithm returns a single paths, indeed
-    the shortest path respecting all restrictoins.
+####################
+# QUEUE RATIONALES #
+####################
+def _queue_bfs_cross(
+    bgraph: nx.Graph,
+    first_id: int,
+    edge_queue: list[tuple[int, int]] | None = None,
+    standard_edges: list[tuple[int, int]] | None = None,
+    cross_edges: list[tuple[int, int]] | None = None,
+    visited: set[int] = set(),
+) -> list[tuple[int, int]]:
+    """Build queue using a BFS with priority cross-edges strategy.
 
     Args:
-        src_id: The ID of the source node, i.e., the one that has already been placed in the 3D space as part of previous operations.
-        tgt_id: The ID of the neighbouring or next node, i.e., the one that needs to be placed in the 3D space.
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
-        taken: A list of all coordinates occupied by any blocks/pipes placed throughout the algorithmic process.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        circuit_name: The name of the ZX circuit.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms).
+        edge_queue (optional): A pre-existing edge-queue with some edges already completed.
+        standard_edges (optional): Pre-built NX BFS (avoids duplication if running in a different hander).
+        cross_edges (optional): Pre-built list of cross edges (avoids duplication if running in a different hander).
+        visited (optional): Pre-built list of visited nodes (avoids duplication if running in a different hander).
 
     Returns:
-        taken: Updated list of all coordinates occupied by any blocks/pipes, including any placed by this function iteration.
-        edge_paths: An edge-by-edge summary of the 3D object Topologiq builds, updated to the last edge processsed successfully.
-        edge_success: A boolean flag declaring whether the edge was built successfully or not.
+        edge_queue: A list of (u, v) tuples to use as queue.
 
     """
-    # Start timer
-    t_1, _ = datetime_manager()
 
-    # Prune taken and beams
-    edge_success = False
-    taken = list(set(taken))
-    nx_g = prune_beams(nx_g, taken)
+    # Instantiate empty edge queue if not given
+    edge_queue = edge_queue if edge_queue else []
 
-    # Get source and target data for current (src_id, tgt_id) pair
-    u_coords, v_coords = (nx_g.nodes[src_id].get("coords"), nx_g.nodes[tgt_id].get("coords"))
+    # Get native NX queues to use as basis for construction
+    standard_edges = standard_edges if standard_edges else list(nx.bfs_edges(bgraph, first_id))
 
-    # Process edge only if both src_id and tgt_id have already been placed in the 3D space
-    # Note. Function should never run into (src_id, tgt_id) pairs not already in 3D space
-    if u_coords is not None and v_coords is not None:
-        # Format adjustments to match existing operations
-        u_kind = cast(str, nx_g.nodes[src_id].get("kind"))
-        v_zx_type = cast(str, nx_g.nodes[tgt_id].get("type"))
-        edge = tuple(sorted((src_id, tgt_id)))
+    if not cross_edges:
+        edge_bfs = list(nx.edge_bfs(bgraph, first_id))
+        cross_edges = [e for e in edge_bfs if e not in standard_edges]
+    else:
+        cross_edges = []
 
-        # Call pathfinder on any graph edge that does not have an entry in edge_paths
-        if edge not in edge_paths:
-            critical_beams = _assemble_critical_beams(nx_g)
-
-            # Check if edge is hadamard
-            zx_edge_type = nx_g.get_edge_data(src_id, tgt_id).get("type")
-            hdm: bool = True if zx_edge_type == "HADAMARD" else False
-
-            # Call pathfinder using optional parameters that flag second pass nature of operation
-            v_kind: str | None = nx_g.nodes[tgt_id].get("kind")
-
-            if v_coords and v_kind:
-                clean_paths, pathfinder_vis_data = call_pathfinder(
-                    (u_coords, u_kind),
-                    v_zx_type,
-                    3,
-                    taken[:],
-                    tgt_block_info=(v_coords, v_kind),
-                    hdm=hdm,
-                    critical_beams=critical_beams,
-                    src_tgt_ids=(src_id, tgt_id),
-                    **kwargs,
-                )
-
-                # Finish timer before popping up visualisation
-                _, t_total_iter = datetime_manager(t_1=t_1)
-
-                # For visualisation, create a new graph on each step irrespective of outcome
+    visited = visited if visited else set()
+    for u, v in standard_edges:
+        if (u, v) not in edge_queue and (v, u) not in edge_queue:
+            [
+                edge_queue.append((uu, vv))
+                for uu, vv in cross_edges
                 if (
-                    kwargs["debug"] > 1
-                    or kwargs["vis_options"][0] == "detail"
-                    or kwargs["vis_options"][1]
-                    # or (src_id == 75 and (tgt_id in [14, 15]))
-                ):
-                    # kwargs["debug"] = 3
-                    # Call visualisation
-                    call_debug_vis(
-                        circuit_name,
-                        nx_g,
-                        edge_paths,
-                        None,
-                        clean_paths[0] if clean_paths else None,
-                        (src_id, tgt_id),
-                        (u_coords, u_kind),
-                        pathfinder_vis_data,
-                        fig_data=fig_data,
-                        **kwargs,
-                    )
-
-                # Write to edge_paths if an edge is found
-                nx_g, taken, edge_paths, edge_success = update_edge_paths(
-                    nx_g,
-                    edge_paths,
-                    None,
-                    clean_paths[0] if clean_paths else None,
-                    taken,
-                    zx_edge_type,
-                    src_id,
-                    tgt_id,
-                    second_pass=True,
+                    (uu, vv) not in edge_queue
+                    and (vv, uu) not in edge_queue
+                    and uu in visited
+                    and vv in visited
                 )
+            ]
+            edge_queue.append((u, v))
+            visited.update([u, v])
 
-                # Update user
-                if kwargs["log_stats_id"] or kwargs["debug"] > 0:
-                    volume = (
-                        len([i for i in clean_paths[0] if "o" not in i[1]]) if edge_success else 0
-                    )
-                    print(
-                        f"CONNECT PRE-EXISTING CUBES: {src_id} -> {tgt_id}.",
-                        (Colors.GREEN + "Success." + Colors.RESET)
-                        if edge_success
-                        else Colors.RED + "FAIL." + Colors.RESET,
-                        f"Vol: {volume - 2}." if edge_success else "",
-                        f"Runtime: ~{int(t_total_iter * 1000)}ms.",
-                    )
-
-    nx_g = prune_beams(nx_g, taken)
-    return nx_g, taken, edge_paths, edge_success
+    return edge_queue
 
 
-def _assemble_critical_beams(
-    nx_g: nx.Graph,
-) -> dict[StandardCoord, int, tuple[int, CubeBeams], tuple[int, CubeBeams]]:
-    """Assemble a dictionary of beams and related information.
+def _queue_bfs_cross_boundaries_last(bgraph: nx.Graph, first_id: int) -> list[tuple[int, int]]:
+    """Build queue using a BFS with priority cross-edges strategy and boundaries last.
 
     Args:
-        nx_g: A nx_graph initially like the input ZX graph but with 3D-amicable structure, updated regularly.
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms).
 
     Returns:
-        critical_beams: A dictionary containing beams to and key related information, to be used by the pathfinder.
-            Keys:
-                cube_id: The ID of an arbitrary cube.
-            Values:
-                cube_coords: The coordinates of the cube.
-                cube_pending_edges: The number of edges still needed by the particular cube.
-                cube_beams: The infinite beams for the specific node.
-                cube_beams_short: The short beams for the specific node.
+        edge_queue: A list of (u, v) tuples to use as queue.
 
     """
 
-    critical_beams = {}
-    for cube_id in nx_g.nodes():
-        cube_coords = nx_g.nodes[cube_id]["coords"]
-        cube_beams = nx_g.nodes[cube_id]["beams"]
-        cube_beams_short = nx_g.nodes[cube_id]["beams_short"]
-        if cube_beams or cube_beams_short:
-            cube_degree = get_node_degree(nx_g, cube_id)
-            cube_pending_edges = cube_degree - nx_g.nodes[cube_id]["completed"]
-            if cube_pending_edges != 0:
-                critical_beams[cube_id] = (
-                    cube_coords,
-                    cube_pending_edges,
-                    cube_beams,
-                    cube_beams_short,
+    # Get native NX queues
+    standard_edges = list(nx.bfs_edges(bgraph, first_id))
+    edge_bfs = list(nx.edge_bfs(bgraph, first_id))
+    cross_edges = [e for e in edge_bfs if e not in standard_edges]
+
+    # Shuffle edges into a ckear standard -> cross -> boundary edges
+    boundary_edges = [
+        (u, v)
+        for u, v in standard_edges
+        if "O" in [bgraph.nodes[u]["zx_block"].zx_type, bgraph.nodes[v]["zx_block"].zx_type]
+    ]
+    boundary_spiders = [i for i in bgraph.nodes() if bgraph.nodes[i]["zx_block"].zx_type == "O"]
+    alt_edge_queue = [
+        (u, v)
+        for u, v in standard_edges
+        if (u not in boundary_spiders and v not in boundary_spiders)
+    ]
+    return [*alt_edge_queue, *cross_edges, *boundary_edges]
+
+
+def _queue_bfs_rows(
+    bgraph: nx.Graph,
+    first_id: int,
+    rows: dict[int, int],
+    inputs: list[int],
+    other_first_ids: list[int] = [],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
+) -> list[tuple[int, int]]:
+    """Build queue using a row by row graph traverse strategy.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        rows: Spiders organised by row.
+        inputs: The inputs of the base graph.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy)
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Faux first spiders
+    faux_input_input_edges = []
+    prev_id = first_id
+
+    for other_id in other_first_ids[1:]:
+        faux_input_input_edges.append((prev_id, other_id))
+        bgraph.add_edge(
+            prev_id,
+            other_id,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
+            kind=None,
+        )
+        prev_id = other_id
+    edge_queue = faux_input_input_edges
+
+    # Calculate all layers starting at inputs
+    spiders_by_row: dict[int, set[int]] = {}
+    ids_in_t_patterns: set[int] = set()
+    for pat in t_gates.values():
+        ids_in_t_patterns.update(tuple(x for edge in pat for x in edge))
+
+    for spider_id, row_number in rows.items():
+        if spider_id in inputs or spider_id in ids_in_t_patterns:
+            continue
+        if row_number not in spiders_by_row:
+            spiders_by_row[row_number] = set([spider_id])
+        else:
+            spiders_by_row[row_number].add(spider_id)
+
+    # Visit the full breadth of row
+    visited = set(inputs)
+
+    for row_number, spider_ids_in_row in spiders_by_row.items():
+        # Reset list of same row edges (CNOT/CZ/T-gadgets)
+        same_row_edges = []
+
+        # Visit each neighbour of each spider in row
+        for spider_id in spider_ids_in_row:
+            # Safekeeper for edges to S- and T-gates patterns
+            # Note. Not all S- and T-gates will be handled here,
+            #   as this depends on the exact position given to the
+            #   base of the S- or T-gate pattern.
+            hold_edges = []
+
+            # Loop over all neighbours of current spider
+            neighs = bgraph.neighbors(spider_id)
+            for neigh_id in neighs:
+                # If edge to current neighbour not already in queue
+                if (neigh_id, spider_id) not in edge_queue and (
+                    spider_id,
+                    neigh_id,
+                ) not in edge_queue:
+                    # Edges to spiders in previous rows
+                    # Covers all spiders in same qubit, most S-gates,
+                    # and potentially some T-gates.
+                    if rows[neigh_id] < rows[spider_id]:
+                        # Most edges will be to previous spider in same qubits
+                        # in which case the neighbour has been visited
+                        if neigh_id in visited:
+                            edge_queue.append((neigh_id, spider_id))
+                            visited.add(spider_id)
+                        # Edges to S- and T-gates must wait until spider is visited at least once
+                        else:
+                            hold_edges.append((spider_id, neigh_id))
+                    # (Rare) S-gates placed on subsequent rows
+                    elif bgraph.nodes[neigh_id]["zx_block"].zx_type in ["Y", "T"]:
+                        hold_edges.append((spider_id, neigh_id))
+
+                    # Handle CNOT/CZ
+                    if rows[neigh_id] == rows[spider_id]:
+                        # Check that cross edge is not being duplicated
+                        if tuple(sorted([spider_id, neigh_id])) not in same_row_edges:
+                            # Add the actual edge to list of same row edges
+                            same_row_edges.append(tuple(sorted([spider_id, neigh_id])))
+                            # Add any associated T-pattern to list of same row edges
+                            if neigh_id in t_gates:
+                                same_row_edges.extend(t_gates[neigh_id])
+                                (visited.update([u, v]) for u, v in t_gates[neigh_id])
+            # Current spider has been visited at this point if it has neighbours,
+            # so it is possible to add any S- or T-gates encountered
+            if hold_edges:
+                edge_queue.extend(hold_edges)
+                [visited.update([u, v]) for u, v in hold_edges]
+
+        # Add list of same row edges to edge queue
+        edge_queue.extend(same_row_edges)
+        # Add the full T-pattern if circuit had T-gates
+        if t_gates:
+            alt_edge_queue: list[tuple[int, int]] = []
+            for u, v in edge_queue:
+                alt_edge_queue.append((u, v))
+                if v in t_gates and t_gates[v][0] not in edge_queue:
+                    alt_edge_queue.extend(t_gates[v])
+                    [visited.update([u, v]) for u, v in t_gates[v]]
+            edge_queue = alt_edge_queue
+
+    return edge_queue
+
+
+def _queue_bfs_layers(
+    bgraph: nx.Graph,
+    first_id: int,
+    qubits: dict[int, int],
+    rows: dict[int, int],
+    inputs: list[int],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> list[tuple[int, int]]:
+    """Build queue using a row by row graph traverse strategy.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        qubits: Spiders with their respective qubit.
+        rows: Spiders with their respective row.
+        inputs: The inputs of the base graph.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy).
+        s_gates (optional): A dictionary containing the edges of each S-gate pattern in base graph.
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Init empty edge queue and visited with first id
+    edge_queue = []
+    visited = set([first_id])
+    visited_edges = set()
+
+    # Extract all IDs not part of an original qubit
+    all_ids_in_special_patterns = []
+    if t_gates:
+        for pat in t_gates.values():
+            [all_ids_in_special_patterns.extend([u, v]) for u, v in pat]
+    if s_gates:
+        for pat in s_gates.values():
+            [all_ids_in_special_patterns.extend([u, v]) for u, v in pat]
+
+    # Organise qubits by length
+    inverted_qubits = {}
+    for k, v in qubits.items():
+        if k in all_ids_in_special_patterns:
+            continue
+        if v not in inverted_qubits:
+            inverted_qubits[v] = [k]
+        else:
+            inverted_qubits[v].append(k)
+    qubits_by_len = sorted(
+        [(k, v) for k, v in inverted_qubits.items()], key=lambda x: len(x), reverse=True
+    )
+    longest_qubit = qubits_by_len[0]
+
+    # Start by visiting all inputs
+    if len(inputs) > 1:
+        for in_id in inputs:
+            if in_id not in visited:
+                # Get path to current input
+                path_to_in_id = nx.shortest_path(bgraph, source=first_id, target=in_id)
+                u_v_to_t = [
+                    (path_to_in_id[i - 1], s_id) for i, s_id in enumerate(path_to_in_id) if i != 0
+                ]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+    # Traverse longest qubit
+    first_in_qubit, last_in_qubit = (longest_qubit[1][0], longest_qubit[1][0])
+    for spider_id in longest_qubit[1]:
+        if rows[spider_id] < rows[first_in_qubit]:
+            first_in_qubit = spider_id
+        if rows[spider_id] > rows[last_in_qubit]:
+            last_in_qubit = spider_id
+
+    path_from_first_to_last = path_to_in_id = nx.shortest_path(
+        bgraph, source=first_in_qubit, target=last_in_qubit
+    )
+    u_v_to_t = [
+        (path_from_first_to_last[i - 1], s_id)
+        for i, s_id in enumerate(path_from_first_to_last)
+        if i != 0
+    ]
+    for u, v in u_v_to_t:
+        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+            edge_queue.append((u, v))
+            visited_edges.add((u, v))
+            visited.add(v)
+
+    # Priority T-gates
+    if t_gates:
+        for t_pattern in t_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if t_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the T-pattern
+                edge_queue.extend(t_pattern)
+                visited_edges.update(t_pattern)
+
+    # Priority S-gates
+    if s_gates:
+        for s_pattern in s_gates.values():
+            # If first edge in a S-pattern is in visited, all S-pattern is in visited
+            if s_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the S-pattern
+                edge_queue.extend(s_pattern)
+                visited_edges.update(s_pattern)
+
+        # CNOTs
+        cross_edges = []
+        for spider_id in qubits_by_len[0][1]:
+            neighs = bgraph.neighbors(spider_id)
+            for neigh_id in neighs:
+                if (
+                    rows[neigh_id] == rows[spider_id]
+                    and (spider_id, neigh_id) not in edge_queue
+                    and (neigh_id, spider_id) not in edge_queue
+                ):
+                    cross_edges.append((spider_id, neigh_id))
+                    visited.add(neigh_id)
+                    visited_edges.add((spider_id, neigh_id))
+        edge_queue.extend(list(cross_edges))
+
+    # Complete remainder using a NX BFS strategy with cross edge priority
+    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue, visited=visited)
+
+    return edge_queue
+
+
+def _queue_bfs_cycles(bgraph: nx.Graph, first_id: int) -> list[tuple[int, int]]:
+    """Build queue using a BFS with priority cross-edges strategy.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms).
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    def _distance_to_cycle(cycle, path_lens):
+        d = [path_lens[n] for n in cycle if n in path_lens]
+        return min(d) if d else np.info
+
+    # Get NX cycles
+    nx_cycles_init = nx.cycle_basis(bgraph, first_id)
+
+    # Fallback to standard BFS if circuit has no cycles
+    if not nx_cycles_init:
+        print("Circuit has no cycles, returning a standard BFS")
+        return list(nx.edge_bfs(bgraph, first_id))
+
+    # Initialise key objects
+    edge_queue: list[tuple[int, int]] = []
+    visited: set[int] = set([first_id])
+    visited_edges: set[tuple[int, int]] = set()
+    cycle_leader_id = None
+
+    # Get native NX queue as basis for construction
+    edge_bfs = list(nx.edge_bfs(bgraph, first_id))
+
+    # Check that first ID is in first cycle
+    if first_id not in nx_cycles_init[0]:
+        path_lens = nx.single_source_shortest_path_length(bgraph, first_id)
+        nx_cycles = sorted(nx_cycles_init, key=lambda x: (_distance_to_cycle(x, path_lens), len(x)))
+    else:
+        nx_cycles = nx_cycles_init
+
+    # Iteratively add cycles to edge_queue
+    for cycle in nx_cycles:
+        # Start by defining most NB! spider in cycle
+        if cycle_leader_id:
+            new_cycle_leader_id = None
+            max_degree_in_round = 0
+            for cycle_member_id in cycle:
+                if cycle_member_id in visited:
+                    cycle_member_degree = bgraph.degree[cycle_member_id]
+                    if not new_cycle_leader_id or cycle_member_degree > max_degree_in_round:
+                        new_cycle_leader_id = cycle_member_id
+            cycle_leader_id = new_cycle_leader_id
+        else:
+            cycle_leader_id = first_id
+
+        # If no cycle leader is found cycle is disconnected and needs to be connected
+        # This is expensive but one wouldn't want to use this queue strategy for
+        # circuits with many disconnected cycles.
+        if not cycle_leader_id:
+            shortest_path = None
+            for cycle_member_id in cycle:
+                shortest_paths_to_cycle_member = nx.single_target_shortest_path(
+                    bgraph, cycle_member_id
                 )
 
-    return critical_beams
+                iter_min_len = np.inf
+                for k, v in shortest_paths_to_cycle_member.items():
+                    if k not in visited:
+                        continue
+
+                    path_len = len(v)
+                    if path_len == 1:
+                        continue
+
+                    if path_len < iter_min_len:
+                        iter_min_len = path_len
+                        iter_shortest_path = v
+
+                if not shortest_path and not iter_shortest_path:
+                    continue
+
+                if iter_shortest_path:
+                    if not shortest_path or (len(iter_shortest_path) < len(shortest_path)):
+                        shortest_path = iter_shortest_path
+
+            if shortest_path:
+                cycle_leader_id = shortest_path[-1]
+
+            first = True
+            for i, spider_id in enumerate(shortest_path):
+                if first:
+                    first = False
+                    continue
+                if ((shortest_path[i - 1], spider_id) not in visited_edges) and (
+                    (spider_id, shortest_path[i - 1]) not in visited_edges
+                ):
+                    edge_queue.append((shortest_path[i - 1], spider_id))
+                    visited_edges.add((shortest_path[i - 1], spider_id))
+                    visited.add(spider_id)
+
+        # BFS through current cycle
+        cycle_subgraph = bgraph.subgraph(cycle)
+        cycle_bfs = nx.edge_bfs(cycle_subgraph, cycle_leader_id)
+
+        # Add cycle BFS to edge queue
+        for u, v in cycle_bfs:
+            if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                edge_queue.append((u, v))
+                visited_edges.add((u, v))
+                visited.add(v)
+
+    # Loop over all edges of graph picking up non-completed spiders
+    hold_these_edges = []
+    for u, v in edge_bfs:
+        if (u, v) not in visited_edges and (v, u) not in visited_edges:
+            if u in visited:
+                edge_queue.append((u, v))
+                visited_edges.add((u, v))
+                if v not in visited:
+                    visited.add(v)
+            elif v in visited:
+                edge_queue.append((v, u))
+                visited_edges.add((v, u))
+                if u not in visited:
+                    visited.add(u)
+            else:
+                hold_these_edges.append((v, u))
+
+    if hold_these_edges:
+        hold_these_edges_copy = hold_these_edges.copy()
+        while hold_these_edges_copy:
+            for u, v in hold_these_edges:
+                if u in visited:
+                    edge_queue.append((u, v))
+                    visited_edges.add((u, v))
+                    visited.add(v)
+                    hold_these_edges_copy.remove((u, v))
+                elif v in visited:
+                    edge_queue.append((v, u))
+                    visited_edges.add((v, u))
+                    visited.add(u)
+                    hold_these_edges_copy.remove((u, v))
+
+    return edge_queue
 
 
-#####################################################
-# RECOVERY EDGES / CREATE SPIDERS TO AVOID SHUTDOWN #
-#####################################################
-def add_twin(
-    circuit_name,
-    nx_g,
-    queue,
-    visited,
-    edge_paths,
-    taken,
-    fig_data,
-    twins,
-    priority_ids,
-    src_id,
-    **kwargs,
-):
-    """Create a twin spider for any given number of priority spiders."""
+def _queue_bfs_cnots(
+    bgraph: nx.Graph,
+    rows: dict[int, int],
+    qubits: dict[int, int],
+    inputs: list[int],
+    other_first_ids: list[int] = [],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
 
-    hold_for_edge_removal = []
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        rows: Spiders organised by row.
+        qubits: Spiders organised by qubit.
+        inputs: The inputs of the base graph.
+        graph_traverse_strategy: The graph traversing strategy.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy)
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
 
-    for priority_id in priority_ids:
-        # Define new ID
-        twin_id = max(nx_g.nodes) + 1
-        twins[priority_id] = twin_id
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
 
-        # Add the twin
-        nx_g.add_node(
-            twin_id,
-            type=nx_g.nodes[priority_id]["type"],
-            type_fam=nx_g.nodes[priority_id]["type_fam"],
-            kind=None,
-            coords=None,
-            beams=None,
-            beams_short=None,
-            completed=0,
+    """
+
+    # Strategy only works if first_spider is an input
+    if not inputs:
+        raise ValueError(
+            "CNOT cycles graph traversing requires the base graph to have at least one input"
         )
 
-        # Get neighbours pending for original and transfer to twin
-        twin_pending_neighs = [
-            n
-            for n in nx_g.neighbors(priority_id)
-            if tuple(sorted((n, priority_id))) not in list(edge_paths.keys())
-        ]
-        twin_pending_neighs = [n if n not in twins else twins[n] for n in twin_pending_neighs]
+    # Initialise edge queue
+    edge_queue: list[tuple[int, int]] = []
 
-        nx_g.add_edge(priority_id, twin_id, type="SIMPLE")
-        for twin_neigh_id in twin_pending_neighs:
-            edge_type = nx_g.get_edge_data(priority_id, twin_neigh_id)
-            hold_for_edge_removal.append((priority_id, twin_neigh_id))
-            nx_g.add_edge(twin_id, twin_neigh_id, type=edge_type)
+    # Extract T-gate patterns if applicable
+    t_gate_pats_ids = set()
+    for edges_in_t_pat in t_gates.values():
+        if edges_in_t_pat:
+            t_gate_pats_ids.update([i for e in edges_in_t_pat for i in e])
 
-        # Try to place twin slightly away from current blockgraph
-        taken = list(set(taken))
+    # Organise spiders by qubit
+    spiders_by_qubit_row: dict[int, list[tuple[int, int]]] = {}
+    for spider_id, qubit_number in qubits.items():
+        if qubit_number not in spiders_by_qubit_row:
+            spiders_by_qubit_row[qubit_number] = [spider_id]
+        else:
+            spiders_by_qubit_row[qubit_number].append(spider_id)
 
-        step, max_step = (6, 15)
-        while step <= max_step:
-            nx_g, taken, edge_paths, edge_success = handle_std_edge(
-                priority_id,
-                twin_id,
-                nx_g,
-                taken,
-                edge_paths,
-                circuit_name=circuit_name,
-                init_step=step,
-                fig_data=fig_data,
-                twin_mode=True,
-                ids_to_twin=priority_ids,
-                **kwargs,
+    # Sort qubit layers
+    spiders_by_qubit_row_sorted = {
+        k: sorted(v, key=lambda x: rows[x]) for k, v in spiders_by_qubit_row.items()
+    }
+
+    # Traverse the full central qubit
+    visited = set([other_first_ids[0]])
+    visited_edges = set()
+    cross_edges = []
+    central_qubit = qubits[other_first_ids[0]]
+    for spider_id in spiders_by_qubit_row_sorted[central_qubit]:
+        neighs = bgraph.neighbors(spider_id)
+        for neigh_id in neighs:
+            if rows[neigh_id] < rows[spider_id]:
+                if neigh_id in visited and (neigh_id, spider_id) not in edge_queue:
+                    edge_queue.append((neigh_id, spider_id))
+                    visited.add(spider_id)
+                    visited_edges.add((neigh_id, spider_id))
+            if (
+                rows[neigh_id] == rows[spider_id]
+                and (spider_id, neigh_id) not in edge_queue
+                and (neigh_id, spider_id) not in edge_queue
+            ):
+                cross_edges.append((spider_id, neigh_id))
+                visited.add(neigh_id)
+                visited_edges.add((spider_id, neigh_id))
+    edge_queue.extend(list(cross_edges))
+
+    # Complete remainder using a more standard BFS strategy
+    edge_queue = _bfs_remainder(bgraph, visited, visited_edges, edge_queue, qubits, t_gates)
+
+    return edge_queue
+
+
+def _queue_bfs_cnot_cycles(
+    bgraph: nx.Graph,
+    rows: dict[int, int],
+    qubits: dict[int, int],
+    inputs: list[int],
+    other_first_ids: list[int] = [],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        rows: Spiders organised by row.
+        qubits: Spiders organised by qubit.
+        inputs: The inputs of the base graph.
+        graph_traverse_strategy: The graph traversing strategy.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy)
+        t_gates (optional): A dictionary containing the edges of each T-gate pattern in base graph.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Strategy only works if first_spider is an input
+    if not inputs:
+        raise ValueError(
+            "CNOT cycles graph traversing requires the base graph to have at least one input"
+        )
+
+    # Initialise key objects
+    edge_queue: list[tuple[int, int]] = []
+    visited = set([other_first_ids[0]])
+    visited_edges: set[tuple[int, int]] = set()
+    central_qubit = qubits[other_first_ids[0]]
+
+    central_qubit_cycles: list[tuple[list[int], int]] = []
+    outer_qubits_cycles: list[tuple[list[int], int]] = []
+
+    # Extract T-gate patterns is applicable
+    t_gate_pats_ids = set()
+    for edges_in_t_pat in t_gates.values():
+        if edges_in_t_pat:
+            t_gate_pats_ids.update([i for e in edges_in_t_pat for i in e])
+
+    # Organise spiders by qubit
+    spiders_by_qubit_row: dict[int, list[tuple[int, int]]] = {}
+    for spider_id, qubit_number in qubits.items():
+        if qubit_number not in spiders_by_qubit_row:
+            spiders_by_qubit_row[qubit_number] = [spider_id]
+        else:
+            spiders_by_qubit_row[qubit_number].append(spider_id)
+
+    # Sort qubit layers
+    spiders_by_qubit_row_sorted = {
+        k: sorted(v, key=lambda x: rows[x]) for k, v in spiders_by_qubit_row.items()
+    }
+
+    # Traverse the full central qubit
+    for spider_id in spiders_by_qubit_row_sorted[central_qubit]:
+        neighs = bgraph.neighbors(spider_id)
+        for neigh_id in neighs:
+            if rows[neigh_id] < rows[spider_id]:
+                if neigh_id in visited and (neigh_id, spider_id) not in edge_queue:
+                    edge_queue.append((neigh_id, spider_id))
+                    visited.add(spider_id)
+                    visited_edges.add((neigh_id, spider_id))
+
+    nx_cycles_init: list[list[int]] = nx.simple_cycles(bgraph)
+    for cycle in nx_cycles_init:
+        if any([i in visited for i in cycle]):
+            central_qubit_cycles.append((cycle, len(cycle)))
+        else:
+            outer_qubits_cycles.append((cycle, len(cycle)))
+    central_qubit_cycles = sorted(central_qubit_cycles, key=lambda x: x[1], reverse=True)
+    outer_qubits_cycles = sorted(outer_qubits_cycles, key=lambda x: x[1], reverse=True)
+
+    # Incorporate cycles into edge_queue
+    for cycle_group in [central_qubit_cycles, outer_qubits_cycles]:
+        for cycle, _ in cycle_group:
+            # Find a starting point in cycle
+            cycle_leader_id = None
+            for cycle_member_id in cycle:
+                if cycle_member_id in visited:
+                    cycle_leader_id = cycle_member_id
+                    break
+
+            # Rotate cycle so items are in correct neigh-to-neigh sequence
+            if cycle_leader_id:
+                idx = cycle.index(cycle_leader_id)
+            # Skip if no spider in cycle has been visited yet
+            else:
+                continue
+
+            # Process if there is a valid idx
+            rotated_cycle = cycle[idx:] + cycle[:idx]
+
+            # Add spiders sequentially if not already in queue
+            first = True
+            for i, spider_id in enumerate(rotated_cycle):
+                if first:
+                    first = False
+                    continue
+                if ((rotated_cycle[i - 1], spider_id) not in visited_edges) and (
+                    (spider_id, rotated_cycle[i - 1]) not in visited_edges
+                ):
+                    edge_queue.append((rotated_cycle[i - 1], spider_id))
+                    visited_edges.add((rotated_cycle[i - 1], spider_id))
+                    visited.add(spider_id)
+            if (rotated_cycle[-1], rotated_cycle[0]) not in visited_edges and (
+                rotated_cycle[0],
+                rotated_cycle[-1],
+            ) not in visited_edges:
+                edge_queue.append((rotated_cycle[-1], rotated_cycle[0]))
+                visited_edges.add((rotated_cycle[-1], rotated_cycle[0]))
+                visited.add(rotated_cycle[0])
+
+    # Complete remainder using a more standard BFS strategy
+    edge_queue = _bfs_remainder(bgraph, visited, visited_edges, edge_queue, qubits, t_gates)
+
+    return edge_queue
+
+
+def _queue_tfs_cnots(
+    bgraph: nx.Graph,
+    rows: dict[int, int],
+    qubits: dict[int, int],
+    inputs: list[int],
+    other_first_ids: list[int] = [],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        rows: Spiders organised by row.
+        qubits: Spiders organised by qubit.
+        inputs: The inputs of the base graph.
+        graph_traverse_strategy: The graph traversing strategy.
+        other_first_ids (optional): Other IDS to use as basis for queue (in BFS-layers strategy)
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Strategy only works if first_spider is an input
+    if not inputs:
+        raise ValueError(
+            "CNOT cycles graph traversing requires the base graph to have at least one input"
+        )
+
+    # Initialise key objects
+    edge_queue: list[tuple[int, int]] = []
+    visited = set([other_first_ids[0]])
+    visited_edges: set[tuple[int, int]] = set()
+    central_qubit = qubits[other_first_ids[0]]
+
+    # Traverse central qubit
+    spiders_by_qubit_row: dict[int, list[tuple[int, int]]] = {}
+    for spider_id, qubit_number in qubits.items():
+        if qubit_number not in spiders_by_qubit_row:
+            spiders_by_qubit_row[qubit_number] = [spider_id]
+        else:
+            spiders_by_qubit_row[qubit_number].append(spider_id)
+
+    spiders_by_qubit_row_sorted = {
+        k: sorted(v, key=lambda x: rows[x]) for k, v in spiders_by_qubit_row.items()
+    }
+
+    hold_cnots = []
+    for spider_id in spiders_by_qubit_row_sorted[central_qubit]:
+        neighs = bgraph.neighbors(spider_id)
+        for neigh_id in neighs:
+            if rows[neigh_id] < rows[spider_id]:
+                if neigh_id in visited and (neigh_id, spider_id) not in edge_queue:
+                    edge_queue.append((neigh_id, spider_id))
+                    visited.add(spider_id)
+                    visited_edges.add((neigh_id, spider_id))
+            if rows[neigh_id] == rows[spider_id]:
+                if (spider_id, neigh_id) not in edge_queue and (
+                    neigh_id,
+                    spider_id,
+                ) not in edge_queue:
+                    hold_cnots.append((spider_id, neigh_id))
+
+    # Resolve T-gates
+    if t_gates:
+        for t_pattern in t_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if t_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the T-pattern
+                edge_queue.extend(t_pattern)
+                visited_edges.update(t_pattern)
+
+    # Resolve S-gates
+    if s_gates:
+        for s_pattern in s_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if s_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the T-pattern
+                edge_queue.extend(s_pattern)
+                visited_edges.update(s_pattern)
+
+    # Add any remaining CNOTs from central qubit
+    if hold_cnots:
+        for u, v in hold_cnots:
+            if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                edge_queue.append((u, v))
+                visited.add(v)
+                visited_edges.add((u, v))
+
+    edge_queue = _bfs_remainder(bgraph, visited, visited_edges, edge_queue, qubits)
+
+    return edge_queue
+
+
+def _queue_tfs(
+    bgraph: nx.Graph,
+    first_id: int,
+    inputs: list[int],
+    s_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+    t_gates: dict[int, list[tuple[int, int] | None]] | None = None,
+) -> list[tuple[int, int]]:
+    """Build queue using strategy defined in kwargs.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        first_id: The spider ID at which to begin traversing (needed for some algorithms)
+        inputs: The inputs of the base graph.
+        s_gates (optional): A dictionary containing all IDs and edges in S-gate patterns.
+        t_gates (optional): A dictionary containing all IDs and edges in T-gate patterns.
+
+    Returns:
+        edge_queue: A list of (u, v) tuples to use as queue.
+
+    """
+
+    # Strategy only works if first_spider is an input
+    if not inputs:
+        raise ValueError(
+            "CNOT cycles graph traversing requires the base graph to have at least one input"
+        )
+
+    # Initialise key objects
+    edge_queue: list[tuple[int, int]] = []
+    visited = set([first_id])
+    visited_edges: set[tuple[int, int]] = set()
+
+    # Resolve T-gates
+    if t_gates:
+        for t_pattern in t_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if t_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the T-pattern
+                edge_queue.extend(t_pattern)
+                visited_edges.update(t_pattern)
+
+    # Resolve S-gates first
+    if s_gates:
+        for s_pattern in s_gates.values():
+            # If first edge in a S-pattern is in visited, all S-pattern is in visited
+            if s_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
+
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the S-pattern
+                edge_queue.extend(s_pattern)
+                visited_edges.update(s_pattern)
+
+    # Complete remainder using a NX BFS strategy with cross edge priority
+    edge_queue = _queue_bfs_cross(bgraph, first_id, edge_queue=edge_queue)
+
+    return edge_queue
+
+
+def _bfs_remainder(
+    bgraph: nx.Graph,
+    visited: set,
+    visited_edges: set[tuple[int, int]],
+    edge_queue: list[tuple[int, int]],
+    qubits: dict[int, int],
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
+):
+    """Traverse rest of the graph using BFS."""
+
+    num_t_gate_edges = (len(t_gates) * 4) if t_gates else 0
+    while len(edge_queue) < (len(bgraph.edges()) - num_t_gate_edges):
+        add_to_visited = []
+        cross_edges = []
+        for spider_id in visited:
+            neighs = bgraph.neighbors(spider_id)
+            if spider_id in t_gates:
+                continue
+            for neigh_id in neighs:
+                if qubits[spider_id] == qubits[neigh_id]:
+                    if (spider_id in visited or neigh_id in visited) and (
+                        (spider_id, neigh_id) not in visited_edges
+                        and (neigh_id, spider_id) not in visited_edges
+                    ):
+                        edge_queue.append((spider_id, neigh_id))
+                        visited_edges.add((spider_id, neigh_id))
+                        if spider_id not in visited:
+                            add_to_visited.append(spider_id)
+                        if neigh_id not in visited:
+                            add_to_visited.append(neigh_id)
+                elif (spider_id, neigh_id) not in visited_edges and (
+                    neigh_id,
+                    spider_id,
+                ) not in visited_edges:
+                    cross_edges.append((spider_id, neigh_id))
+                    visited_edges.add((spider_id, neigh_id))
+                    add_to_visited.append(neigh_id)
+
+        edge_queue.extend(list(cross_edges))
+        visited.update(add_to_visited)
+
+    # Add T-gates
+    if t_gates:
+        alt_edge_queue: list[tuple[int, int]] = []
+        for u, v in edge_queue:
+            alt_edge_queue.append((u, v))
+            if v in t_gates and t_gates[v][0] not in visited_edges:
+                alt_edge_queue.extend(t_gates[v])
+                visited_edges.update([(u, v) for u, v in t_gates[v]])
+        edge_queue = alt_edge_queue
+
+    return edge_queue
+
+
+##############
+# TRANSFORMS #
+##############
+def add_path_to_bgraph(
+    bgraph: nx.Graph,
+    taken: set[StandardCoord],
+    full_path: list[tuple[StandardCoord, ZXBlock]],
+    curr_src_id: int,
+    curr_tgt_id: int,
+    is_hadamard: bool,
+    cross_edge: bool,
+) -> tuple[nx.Graph, set[StandardCoord], set[int]]:
+    """Add a winner path to the main blockgraph.
+
+    Args:
+        bgraph: The BlockGraph currently being built.
+        taken: The set of taken coordinates.
+        full_path: The full path being added.
+        curr_src_id: The ID of the current source cube.
+        curr_tgt_id: The ID of the current target cube.
+        is_hadamard: True if the current edge is a Hadamard in the input ZX graph.
+        cross_edge: True if the current edge is a cross-edge (as opposed to a standard edge).
+
+    Returns:
+        bgraph: An updated BlockGraph containing the new path.
+        taken: An updated set of taken coordinates.
+        intermediate_ids: A set containing all IDs in the new path.
+
+
+    """
+
+    # Health checks for source and target
+    src_coords, src_zx_block = full_path.pop(0)
+    tgt_coords, tgt_zx_block = full_path.pop(-1)
+    if (
+        bgraph.nodes[curr_src_id]["coords"] != src_coords
+        or bgraph.nodes[curr_src_id]["zx_block"] != src_zx_block
+    ):
+        raise ValueError(
+            "ERROR. Cannot add standard edge. Source must always match a pre-existing cube."
+        )
+    if cross_edge:
+        if (
+            bgraph.nodes[curr_tgt_id]["coords"] != tgt_coords
+            or bgraph.nodes[curr_tgt_id]["zx_block"] != tgt_zx_block
+        ):
+            raise ValueError(
+                "ERROR. Cannot add cross-edge. Target of a cross edge must match a pre-existing cube."
             )
 
-            # Move to next if there is a succesful placement
-            if edge_success:
-                visited.add(twin_id)
-                nx_g = prune_beams(nx_g, taken)
-                break
+    # Update source
+    bgraph.nodes[curr_src_id]["completions"]["pending"] -= 1
 
-            if step >= max_step:
-                print(
-                    Colors.RED,
-                    "==> Failed to add twin nodes:" + Colors.RESET,
-                    priority_ids,
+    # Handle any intermediate cubes before target
+    # Since both source and target have been popped,
+    # if winner path has cubes left, there are intermediate cubes
+    intermediate_cubes_present = False
+    intermediate_ids = set()
+    if full_path:
+        # Update intermediate cube flag
+        intermediate_cubes_present = True
+
+        # In-loop trackers
+        first_in_sequence = True
+        prev_id = None
+
+        # Add intermediate cubes one by one
+        for coords, zx_block in full_path:
+            # Calculate intermediate node ID
+            n_id = max(list(bgraph.nodes())) + 1
+
+            # Add intermediate node
+            bgraph.add_node(
+                n_id,
+                zx_block=zx_block,
+                coords=coords,
+                completions={
+                    "degree": 2,
+                    "pending": 0,
+                },
+            )
+            intermediate_ids.update([n_id])
+
+            # Add intermediate cube coords to taken
+            taken.add(coords)
+
+            # Add edge as appropriate
+            if first_in_sequence:
+                # Make the foundational connection
+                bgraph.add_edge(
+                    curr_src_id,
+                    n_id,
+                    edge_type=bgraph.edges[(curr_src_id, curr_tgt_id)]["edge_type"],
+                    start_coords=None,
+                    end_coords=None,
+                    kind=None,
                 )
 
-            # Increase distance between nodes if placement not possible
-            step += 3
+                # Remove flag for first pipe in sequence
+                first_in_sequence = False
 
-    # Re-write queue to exchange priority IDs with new twin IDs
-    new_queue: deque[int] = deque([src_id])
-    while queue:
-        next_in_queue = queue.popleft()
-        if next_in_queue in priority_ids:
-            new_queue.append(twins[next_in_queue])
-            visited.add(twins[next_in_queue])
+                # Infer pipe kind
+                start_coords, end_coords, pipe_kind = pipe_kind_inference(
+                    bgraph, curr_src_id, n_id, is_hadamard=is_hadamard
+                )
+
+                # Complete edge attributes
+                bgraph.edges[(curr_src_id, n_id)]["start_coords"] = start_coords
+                bgraph.edges[(curr_src_id, n_id)]["end_coords"] = end_coords
+                bgraph.edges[(curr_src_id, n_id)]["kind"] = pipe_kind
+
+            else:
+                # Make the foundational connection
+                bgraph.add_edge(
+                    prev_id,
+                    n_id,
+                    edge_type="SIMPLE",
+                    start_coords=None,
+                    end_coords=None,
+                    kind=None,
+                )
+
+                # Infer pipe kind
+                start_coords, end_coords, pipe_kind = pipe_kind_inference(bgraph, prev_id, n_id)
+
+                # Complete edge attributes
+                bgraph.edges[(prev_id, n_id)]["start_coords"] = start_coords
+                bgraph.edges[(prev_id, n_id)]["end_coords"] = end_coords
+                bgraph.edges[(prev_id, n_id)]["kind"] = pipe_kind
+
+            # Update previous node ID
+            prev_id = n_id
+
+    # Handle target (in either case, there is already a node for target)
+    # Replace source-target edge if intermediate nodes were added
+    if intermediate_cubes_present:
+        # Add edge from last intermediate cube to target
+        bgraph.add_edge(
+            prev_id,
+            curr_tgt_id,
+            edge_type="SIMPLE",
+            start_coords=None,
+            end_coords=None,
+            kind=None,
+        )
+        # Remove original source-target edge
+        bgraph.remove_edge(curr_src_id, curr_tgt_id)
+
+    # Update target attributes
+    bgraph.nodes[curr_tgt_id]["zx_block"] = tgt_zx_block
+    bgraph.nodes[curr_tgt_id]["coords"] = tgt_coords
+    bgraph.nodes[curr_tgt_id]["completions"]["pending"] -= 1
+
+    # Add target to taken
+    taken.add(tgt_coords)
+    if tgt_zx_block.zx_type == "T":
+        taken.update([(tgt_coords[0], tgt_coords[1], tgt_coords[2] - i) for i in range(1, 4)])
+
+    # Check for faux edges in case they're present in path and kill them
+    if (
+        bgraph.nodes[curr_src_id]["zx_block"].zx_type == "O"
+        and bgraph.nodes[curr_tgt_id]["zx_block"].zx_type == "O"
+    ):
+        bgraph.remove_edge(curr_src_id, curr_tgt_id)
+
+    # Infer pipe kind and other attributes
+    else:
+        if intermediate_cubes_present:
+            start_coords, end_coords, pipe_kind = pipe_kind_inference(bgraph, prev_id, curr_tgt_id)
+            bgraph.edges[(prev_id, curr_tgt_id)]["start_coords"] = start_coords
+            bgraph.edges[(prev_id, curr_tgt_id)]["end_coords"] = end_coords
+            bgraph.edges[(prev_id, curr_tgt_id)]["kind"] = pipe_kind
         else:
-            new_queue.append(next_in_queue)
-    queue.extend(new_queue)
+            start_coords, end_coords, pipe_kind = pipe_kind_inference(
+                bgraph, curr_src_id, curr_tgt_id, is_hadamard=is_hadamard
+            )
+            bgraph.edges[(curr_src_id, curr_tgt_id)]["start_coords"] = start_coords
+            bgraph.edges[(curr_src_id, curr_tgt_id)]["end_coords"] = end_coords
+            bgraph.edges[(curr_src_id, curr_tgt_id)]["kind"] = pipe_kind
 
-    priority_ids = []
-
-    return nx_g, queue, visited, twins, taken, priority_ids, hold_for_edge_removal
+    return bgraph, taken, intermediate_ids

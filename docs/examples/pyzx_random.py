@@ -1,94 +1,72 @@
-"""Example of how to use Topologiq to perform LS on random PyZX graphs.
+"""Example of how to use Topologiq to perform LS with random PyZX graphs and produce BGRAPH files as output."""
 
-This script contains an example of how to use Topologiq to perform algorithmic lattice
-surgery (LS) on random PyZX graphs.
-
-Usage:
-    Run script as given.
-
-Notes:
-    While we have identified improvements that might allow Topologiq to handle large graphs,
-        this is not yet possible. You will start to see some attempts fail at around 50 spiders,
-        which can be recovered by asking Topologiq to increase the number of attempts per graph.
-        Graphs over 100 spiders might fail entirely irrespective of number of attempts.
-
-"""
-
-import matplotlib.figure
-from pyzx.graph.base import BaseGraph
-from pyzx.graph.graph_s import GraphS
+import random
+from pathlib import Path
 
 from topologiq.assets.pyzx_graphs import random_graph
-from topologiq.core.graph_manager.graph_manager import runner
-from topologiq.input.pyzx import pyzx_g_to_simple_g
-from topologiq.kwargs import VALUE_FUNCTION_HYPERPARAMS
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
+from topologiq.input.zx_manager import ZXGraphManager
 
+###############
+# WRITE PATHS #
+###############
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 
-####################
-# MAIN RUN MANAGER #
-####################
-def run_random(pyzx_graph: BaseGraph | GraphS, fig_data: matplotlib.figure.Figure, **kwargs):
-    """Run a single random PyZX graph m_times.
+##########
+# KWARGS #
+##########
+# Note. Topologiq auto-completes any KWARGs not given explicitly.
+# By extension, you only need to give KWARGs that deviate from default parameters.
+# All default parameters are available at the repository root: `src/topologiq/kwargs.py`.
+kwargs = {
+    "first_id_strategy": "first-spider",
+    "seed": 1330,
+    "debug": 1,
+    "graph_traverse_mode": "tfs-cnots",
+    "gravity": 7,
+    "z_stretch": 3,
+}
+# Available `first_id_strategy` values:
+# - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
+# Available `graph_traverse_mode` values:
+# - ["bfs", "bfs-cross", "bfs-cycles", "bfs-layers", "tfs-cnots"]
 
-    Args:
-        pyzx_graph: The random PyZX graph.
-        fig_data (optional): The visualisation of the input ZX graph (to overlay it over other visualisations).
-        **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-            NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-            NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
-
-    """
-
-    # call Topologiq on graph if graph is available
-    if pyzx_graph is not None:
-        # Convert graph to simple graph
-        simple_graph = pyzx_g_to_simple_g(pyzx_graph)
-
-        # Call Topologiq on `simple_graph` of circuit
-        # Default values for key parameters
-        if circuit_name and simple_graph["nodes"] and simple_graph["edges"]:
-            _, _, _, _ = runner(
-                simple_graph,
-                circuit_name,
-                fig_data=fig_data,
-                **kwargs,
-            )
-
-    # Explain why graph wouldn't be available and close shop.
-    else:
-        print(
-            "Try again. Valid graph not available.\nPyZX sometimes generates graphs with disconnected subgraphs, which are incompatible with Topologiq and need to be discarded."
-        )
-
-
-# ...
+#######
+# RUN #
+#######
 if __name__ == "__main__":
-    # Topologiq generation parameters
-    kwargs = {
-        "weights": VALUE_FUNCTION_HYPERPARAMS,
-        "first_id_strategy": "first_spider",
-        "seed": 42,
-        "vis_options": ("final", None),
-        "max_attempts": 1,
-        "stop_on_first_success": True,
-        "debug": 1,
-        "log_stats": True,
-    }
+    # Set seed if in KWARGS
+    if "seed" in kwargs:
+        random.seed(kwargs["seed"])
 
-    # General description of circuit
-    qubit_n = 5
-    depth = 100
+    # Retrieve circuit
+    had_phase = True
+    qubit_n, depth = (4, 50)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
-
-    # Get a valid random PyZX circuit graph
-    graph_type = "cnot"  # Tells PyZX to generate a circuit based on CNOTS
-    pyzx_graph, fig_data = random_graph(
-        qubit_n, depth, graph_type=graph_type, draw_graph=True, **kwargs
-    )
-
-    # Build and run Topologiq on random graph
-    run_random(
-        pyzx_graph,
-        fig_data,
+    pyzx_graph = random_graph(
+        qubit_n,
+        depth,
+        p_t=0.2,
+        draw_graph=False,
+        graph_type="cnot_had_phase" if had_phase else "cnot",
         **kwargs,
     )
+
+    # ZX graph --> AugmentedZXGraph
+    zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
+    aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, use_primary=True)
+
+    # AugmentedZXGraph -> BlockGraph
+    bgraph_manager = BlockGraphManager(aug_zx, **kwargs)
+    bgraph_manager.build()
+
+    # Write results to file
+    bgraph_manager.write_bgraph(circuit_name=circuit_name)
+
+    # Visualise results
+    bgraph_manager.draw_blockgraph()
+
+    # Animate and cleanup
+    if kwargs.get("animate"):
+        bgraph_manager.animate(filename_prefix=circuit_name)

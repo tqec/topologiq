@@ -19,7 +19,7 @@ Example:
             "first_id_strategy": FIRST_ID_STRATEGY,
             "beams_len_short": BEAMS_SHORT_LEN,
             "seed": SEED,
-            "vis_options": (None, None),
+            "animate": ANIMATE,
             "max_attempts": MAX_ATTEMPTS,
             "stop_on_first_success": STOP_ON_FIRST_SUCCESS,
             "min_succ_rate": MIN_SUCC_RATE,
@@ -47,17 +47,37 @@ Notes:
 
 """
 
-# Weights for the main value function to choose best of several valid paths (length of path, beams broken by path)
+# Weights for the main value function to choose best path
+# Hyperparams A tuple of integers where 1st item weighs the length of path and 2nd the number of beams broken by path.
+# Z_stretch: Int or None, to favour paths that move along Z axis and apply graph bounds.
+# Gravity: Int or None, to favour paths that end closer to a specific point in graph
 VALUE_FUNCTION_HYPERPARAMS = (-1, -1)
+Z_STRETCH = 0
+GRAVITY = 0
 
 # Strategy for selecting the ID of the first spider processed by the algorithm
-# centrality_majority: Use a majority vote from several centrality measures
-# centrality_random: Pick randomly from a list of central spiders
-# first_spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
-FIRST_ID_STRATEGY = "centrality_random"
+# - first-spider: Select lowest ID non-boundary spider (typically first spider on first qubit)
+# - random: Pick randomly from all non-boundary spiders
+# - centrality-random: Pick randomly from a list of central spiders
+# - centrality-majority: Use a majority vote from several centrality measures
+# - central-qubit: Lowest ID in most central qubit (defined as the qubit with most CNOTs)
+# - central-in-first-cycle: Pick the central spider from the first cycle in graph (per nx.cycle_basis).
+FIRST_ID_STRATEGY = "first-spider"
 
-# Deterministic or randomised running mode
-BEAMS_SHORT_LEN = 7
+# Strategy for graph traversing
+# - bfs: Standard BFS tree search including cross edges
+# - bfs-cross: Standard BFS giving priority to cross edges
+# - bfs-cross-boundaries-last: Standard BFS giving priority to cross edges and holding boundaries for the end
+# - bfs-cycles: BFS per cycles (per nx.cycle_basis) with bridge recovery subroutine (to join disconnected cycles) and boundary handling at the end
+# - bfs-rows: BFS per (ZX) rows in the graph, one row at a time
+# - bfs-cnots: BFS using central qubit and graph CNOTs as pillars (almost no longer a BFS but let's say it is).
+# - tfs-cnots: Combines BFS cnots with priority queuing of all edges needed to complete T-gates before traversing rest of the graph.
+# - tfs: Starts at any given node and finds shortest paths between visited spiders and all T-gates, then traverses the graph BFS.
+GRAPH_TRAVERSE_MODE = "bfs-cross"
+
+# Length of short beams
+# (Long beams are always np.inf)
+BEAMS_SHORT_LEN = 2
 
 # Single seed to use across any randomised operations
 SEED = None
@@ -82,3 +102,18 @@ LOG_STATS = False
 
 # Turn debug mode on, with increasing level of stringency: 0 -> 4
 DEBUG = 0
+
+# Override value for first cube placement
+FIRST_CUBE = (None, None)
+
+# Default vis options
+ANIMATE = None
+
+# Whether to check and add twins
+TWINS = True
+
+# Whether to trigger any post-processing
+POST_PROCESS = False
+
+# Skip intermediate block in Y-cube and place direct
+TWISTED_Y = False

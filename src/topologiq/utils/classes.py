@@ -5,9 +5,22 @@ Usage:
 
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import TypedDict
 
-# Types & class for input ZX graph
+###############
+# QUICK TYPES #
+###############
+StandardCoord = tuple[int, int, int]
+StandardBlock = tuple[StandardCoord, str]
+StandardBeam = list[StandardCoord]
+
+
+################
+# SIMPLE GRAPH #
+#################
 GraphNode = tuple[int, str]
 GraphEdge = tuple[tuple[int, int], str]
 
@@ -19,13 +32,18 @@ class SimpleDictGraph(TypedDict):
     edges: list[GraphEdge]
 
 
-# Type & classes needed to create, store, and manage beams
-StandardCoord = tuple[int, int, int]
-StandardBlock = tuple[StandardCoord, str]
-StandardBeam = list[StandardCoord]
+#######
+# AUX #
+#######
+@dataclass
+class GraphBounds:
+    """Class to initialise and hold graph boundaries."""
+
+    x: int | None = None
+    y: int | None = None
+    z: None = None
 
 
-# Misc classes
 class Colors:
     """Colours to use in printouts."""
 

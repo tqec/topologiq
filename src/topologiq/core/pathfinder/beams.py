@@ -10,168 +10,100 @@ Note:
 
 """
 
+import networkx as nx
 import numpy as np
 
 from topologiq.core.beams import CubeBeams
 from topologiq.utils.classes import StandardCoord
 
-##################
-# STANDARD EDGES #
-##################
-# Beam management for standard edges currently happens in the graph manager.
-# There is a need to either move standard edges to the pathfinder or
-# cross-edges beam management to the graph manager, or place them both somewhere
-# common.
-# At the moment, I favour moving cross edges out of the pathfinder.
-# It is cheaper to test a full path once at the end than to check many times
-# on each move. Not everyone agrees with this assessment.
-
 
 ###############
-# CROSS EDGES #
+# BEAM CHECKS #
 ###############
-def check_critical_beams(
-    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
-    full_path_coords: list[StandardCoord],
+def check_beams(
+    bgraph: nx.Graph,
+    beams: CubeBeams,
+    beams_short: CubeBeams,
+    curr_src_id: int,
+    curr_tgt_id: int,
     nxt_coords: StandardCoord,
-    tgt_coords: StandardCoord,
-    src_tgt_ids: tuple[int, int],
+    tent_coords: list[StandardCoord],
+    curr_path_coords: list[StandardCoord],
+    strict: bool = False,
 ) -> bool:
     """Check that move does not break any beams of cubes that need all their exits.
 
     Args:
-        critical_beams: A dictionary containing beam information for cubes with beams.
-        full_path_coords: All coordinates occupied by current path.
+        bgraph: The BlockGraph currently being built.
+        beams: The beams for all the cubes in blockgraph that need beams.
+        beams_short: The short beams for all the cubes in blockgraph that need beams.
+        curr_src_id: The ID of the current source cube.
+        curr_tgt_id: The ID of the current target cube.
         nxt_coords: The coordinates being checked as potential next position to place a block.
-        tgt_coords: The final "target" coordinates at which path should arrive.
-        src_tgt_ids: The exact IDs of the source and target cubes.
+        tent_coords: The final "target" coordinates at which path should arrive.
+        curr_path_coords: The coordinates for the current path.
+        strict (optional): Whether to check against full or short beams.
 
     Return:
         (bool): True if move clears all checks, False otherwise.
 
     """
 
+    # Select short of full beams as appropriate
+    all_beams = beams if strict else beams_short
+    check_coords = [*curr_path_coords, nxt_coords]
+
     # Check each cube against all other cubes
-    for out_id, (_, out_min_exit_num, _, out_beams_short) in critical_beams.items():
+    for out_id, out_beams in all_beams.items():
         # Track outer beams in a way that remembers which beam is which
-        out_clash_tracker = np.array([False for _ in out_beams_short])
+        out_clash_tracker = np.array([False for _ in out_beams])
 
-        # Look for clashes against path
         broken_beams = [
-            any([out_beam.contains(coord) for coord in full_path_coords])
-            for out_beam in out_beams_short
+            any([out_beam.contains(coord) for coord in check_coords]) for out_beam in out_beams
         ]
-
         out_clash_tracker = out_clash_tracker + np.array(broken_beams)
 
-        # Look for clashes against the beams of other cubes
-        if any(broken_beams) and nxt_coords == tgt_coords and out_id not in src_tgt_ids:
-            for in_id, (_, in_min_exit_num, _, in_beams_short) in critical_beams.items():
-                in_clash_tracker = 0
-                for in_beam in in_beams_short:
-                    intersections = [out_beam.intersects(in_beam) for out_beam in out_beams_short]
-                    # out_clash_tracker = out_clash_tracker + np.array(intersections)
-                    in_clash_tracker += any(intersections)
-
-                src_tgt_adjust = 1 if in_id in src_tgt_ids else 0
-                in_pending = 1 if in_id not in src_tgt_ids else in_min_exit_num
-                if len(in_beams_short) + src_tgt_adjust - in_clash_tracker < min(in_pending, 1):
-                    return False
-
-        # Determine if clashes are within tolerance
-        src_tgt_adjust = 1 if out_id in src_tgt_ids else 0
-        out_pending = 1 if out_id not in src_tgt_ids else out_min_exit_num
-        if len(out_beams_short) + src_tgt_adjust - sum(out_clash_tracker) < min(out_pending, 1):
+        # Determine if out clashes are within tolerance
+        src_tgt_adjust = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
+        out_pending = (
+            min(1, bgraph.nodes[out_id]["completions"]["pending"])
+            if src_tgt_adjust == 0
+            else bgraph.nodes[out_id]["completions"]["pending"]
+        )
+        if len(out_beams) + src_tgt_adjust - sum(out_clash_tracker) < out_pending:
             return False
 
     return True
 
 
-###########################################################
-# CROSS EDGES NOT CURRENTLY IN USED BUT NOT DISCARDED YET #
-###########################################################
-def split_critical_beams(
-    critical_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
-    src_tgt_ids: tuple[int, int],
-) -> tuple[
-    dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
-    dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
-]:
-    """Split critical beams into simple and verbose object containing different kinds of beams.
+def check_beams_clashes_magic_state(
+    bgraph: nx.Graph,
+    all_magic_coords: list[StandardCoord],
+    beams_short,
+    curr_src_id: int,
+    curr_tgt_id: int,
+) -> bool:
+    """Check if there are beam clashes."""
 
-    This function separates the `critical_beams` object into a quickly iterable object containing
-    coordinates of beams for nodes that needs absolutely all beams they have and a more verbose
-    dictionary containing the beams for nodes that can lose some beams.
+    # Check each cube against all other cubes
+    for out_id, out_beams in beams_short.items():
+        # Check if any magic coordinate is contained in current beam
+        broken_beams = np.array(
+            [
+                any([out_beam.contains(check_coord) for check_coord in all_magic_coords])
+                for out_beam in out_beams
+            ]
+        )
 
-    Args:
-        critical_beams: Beams considered critical for future operations.
-        src_tgt_ids: The exact IDs of the source and target cubes.
-        max_span: the longest edge of the bounding box, equivalent to largest beam needed to clear box.
+        # Determine if clashes are within tolerance
+        src_tgt_adjusts = 1 if out_id in (curr_src_id, curr_tgt_id) else 0
+        pendings = (
+            min(1, bgraph.nodes[out_id]["completions"]["pending"])
+            if src_tgt_adjusts == 0
+            else bgraph.nodes[out_id]["completions"]["pending"]
+        )
 
-    Returns:
-        unbreakable_beams: The joint beam coordinates for nodes that need all beams they currently have.
-        negotiable_beams: A minified `critical_beams` object containing beams for nodes that can lose some beams.
+        if len(out_beams) + src_tgt_adjusts - broken_beams.sum() < pendings:
+            return True
 
-    """
-
-    unbreakable_beams = {}
-    negotiable_beams = {}
-    for node_id, (
-        node_coords,
-        min_exit_num,
-        node_beams,
-        node_beams_short,
-    ) in critical_beams.items():
-        if node_id not in src_tgt_ids and min_exit_num == len(node_beams):
-            unbreakable_beams[node_id] = (
-                node_coords,
-                min_exit_num,
-                [beam for beam in node_beams],
-                [beam for beam in node_beams_short],
-            )
-        else:
-            negotiable_beams[node_id] = (
-                node_coords,
-                min_exit_num,
-                [beam for beam in node_beams],
-                [beam for beam in node_beams_short],
-            )
-
-    return unbreakable_beams, negotiable_beams
-
-
-def check_unbreakable_beams(
-    unbreakable_beams: dict[int, tuple[StandardCoord, int, CubeBeams, CubeBeams]],
-    full_path_coords: list[StandardCoord],
-    src_tgt_ids: tuple[int, int],
-) -> tuple[bool, list[StandardCoord]]:
-    """Check that move does not break any beams of cubes that need all their exits.
-
-    Args:
-        unbreakable_beams: The joint beam coordinates for nodes that need all beams they currently have.
-        full_path_coords: All coordinates occupied by current path.
-        src_tgt_ids: The exact IDs of the source and target cubes.
-
-    Return:
-        (bool): True if move clears all checks, False otherwise.
-        clash_coords: A list of coordinates where unbreakable beams get broken.
-
-    """
-
-    clash_coords = []
-    for node_id, (_, _, _, node_beams_short) in unbreakable_beams.items():
-        broken_beams = 0
-        for single_beam in node_beams_short:
-            clash_coords = [coord for coord in full_path_coords if single_beam.contains(coord)]
-            if clash_coords:
-                # Reject if beam is of nodes other src and tgt
-                if node_id not in src_tgt_ids:
-                    return False, clash_coords
-
-                # Reject if more than one beam of src and tgt cubes is broken
-                if broken_beams == 1:
-                    return False, clash_coords
-                # Add to broken beams if dealing with src or tgt cube
-                broken_beams += 1
-
-    return True, clash_coords
+    return False
