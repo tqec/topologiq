@@ -43,14 +43,11 @@ The general aspects of the process is orchestrated by an (outer) BFS graph manag
     - ***BFS***: Subroutines following traditional or near-traditional BFS rationales.
         * ***BFS:*** Starting at FIRST_SPIDER, for each ID in queue, remove ID from queue, visit each neighbour, and add neighbour to queue, then query the graph again for any edges not completed in the main pass (aka. "cross" edges).
         * ***BFS priority cross-edges:*** *BFS* as above, reshuffled to handle cross-edges as soon as their respective (u,v) nodes are visited rather than at the end of queue.
-        * ***BFS boundaries last:*** *BFS* as above, reshuffled to group standard, cross, and boundary edges together and visit each group in that order (requires *centrality-majority* ID selection strategy).
-    - ***Layered BFS*** Subroutines that layer the circuit as first step and then exhaust each layer before moving to next, akin to iteratively visiting the max-breadth of circuit each layer allows.
-        * ***BFS rows:*** For each row, for each ID in row, visit each neighbour in a prior or same row (requires *central-qubit* ID selection strategy).
         * ***BFS cycles:*** For each cycle in graph, *BFS* over cycle if cycle is connected to previously visited IDs or connect cycle to visited spiders using a shortest topologically-correct path and then *BFS* over cycle, then *BFS* over remainders of the graph not included in the main pass due to not being part of a cycle (requires *central-in-first-cycle* ID selection strategy).
     - ***Experimental (almost-no-longer) BFS:***
         * ***BFS CNOTS:*** Starting at FIRST_SPIDER, visit all spiders in central qubit, then *BFS* the remainder of the graph starting by any CNOTs coming out of central qubit (requires *central-qubit* ID selection strategy).
-        * ***TFS [T-gate first search]:*** Starting at FIRST_SPIDER, find shortest topologically-correct path to all T-gates in circuit and realise each associated *T_PATTERN*, then *BFS* over the remainder of the graph (requires *central-qubit* ID selection strategy).
-        * ***TFS CNOTS:*** A combination of *TFS* and *BFS CNOTS* (requires *central-qubit* ID selection strategy).
+        * ***BFS layers:*** Find a shortest path to all inputs, then visit all spiders in central qubit, then fulfill all T-gate patterns, then resolve the rest of the graph using BFS.
+        * ***TFS CNOTS:*** Same as *BFS CNOTS* but resolving T-gate patterns as a priority (requires *central-qubit* ID selection strategy).
 3. **Call the pathfinder for each *ZX_EDGE* in *EDGE_QUEUE***.
     - For every *(u, v)* in *EDGE_QUEUE*, considering **GEOMETRIC CONSTRAINTS**:
         * If *v* has no assigned coordinates (standard edge):

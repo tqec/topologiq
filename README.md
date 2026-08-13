@@ -12,7 +12,7 @@ The general algorithmic rationale is as follows:
   - Realised paths often correspond to the actual shortest path *possible given constraints*.
   - The value function can be used to influence path choices, an aspect of Topologiq that welcomes improvements: [open an issue here to give the value function a go](https://github.com/tqec/topologiq/issues/new/choose).
 
-An animated visualisation is given below, and the algorithm is described in more detail [here](docs/concepts/topologiq_algorithm.md).
+An animated visualisation is given below.
 
 ![Algorithmic lattice surgery of three CNOTs using Topologiq](./docs/media/cnots.gif)
 
