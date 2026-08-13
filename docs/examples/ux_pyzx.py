@@ -39,7 +39,7 @@ kwargs = {
     "graph_traverse_mode": "tfs",  # Graph traversing strategy
     "gravity": 7,  # Integer weight that pulls paths towards graph centre
     "z_stretch": 1,
-    #"animate": "MP4",
+    # "animate": "MP4",
 }
 
 #######
@@ -67,15 +67,15 @@ if __name__ == "__main__":
     # graph_name = "pyzx_xyi"
 
     # QASM -> ZX manager
-    #zx_graph_manager = ZXGraphManager()
-    #aug_zx_in = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, graph_key="input")
+    # zx_graph_manager = ZXGraphManager()
+    # aug_zx_in = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, graph_key="input")
 
     # Run Topologiq
-    #bgraph_manager = aug_zx_in.get_blockgraph(**kwargs)
+    # bgraph_manager = aug_zx_in.get_blockgraph(**kwargs)
 
     # Visualise results
-    #bgraph_manager.draw_blockgraph()
+    # bgraph_manager.draw_blockgraph()
 
     # Animate and clean up
-    #if kwargs.get("animate"):
-        #bgraph_manager.animate(filename_prefix=graph_name)
+    # if kwargs.get("animate"):
+    # bgraph_manager.animate(filename_prefix=graph_name)

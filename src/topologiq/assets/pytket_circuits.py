@@ -15,4 +15,3 @@ def cnots_pytket(circuit_name):
 
 
 circuit = cnots_pytket("cnot")
-

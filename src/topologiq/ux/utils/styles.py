@@ -158,9 +158,7 @@ SECTION_LABEL_STYLE = "color: #ffffff; font-weight: bold; font-size: 11px; lette
 STATUS_BADGE_UNVERIFIED = "padding: 2px 10px; background: #992222; border-radius: 10px; font-size: 10px; border: 1px solid black;"
 STATUS_BADGE_VERIFIED = "background: #1a3d1a; color: #99ff99; border-radius: 10px; font-size: 10px;"
 CONTROL_BAR_STYLE = "background-color: #1a1a1a; border-top: 1px solid #333;"
-PRIMARY_ACTION_STYLE = (
-    "background-color: #1fffb4; color: black; border: 1px solid white; font-weight: bold; padding: 5px 15px;"
-)
+PRIMARY_ACTION_STYLE = "background-color: #1fffb4; color: black; border: 1px solid white; font-weight: bold; padding: 5px 15px;"
 x = "#1fffb4"
 PILL_BTN_BASE = (
     "padding: 4px 12px; font-size: 10px; font-weight: bold; border: 1px solid; border-radius: 0px;"

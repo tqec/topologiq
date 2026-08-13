@@ -36,8 +36,7 @@ def create_split_controls(parent, labels, signal_to_emit):
                 padding-left: 10px;
                 padding-right: 10px;
             }
-        """
-        )
+        """)
         # Connect to the passed signal
         btn.clicked.connect(lambda checked=False, t=txt: signal_to_emit(t))
         layout.addWidget(btn)

@@ -11,16 +11,15 @@ kwargs = {
     "debug": 0,  # Verbosity & visualisation control [int]
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID [str]
     "graph_traverse_mode": "bfs-layers",  # Graph traversing strategy [str]
-    #"gravity": 7,  # Pull paths towards graph centre [int]
+    # "gravity": 7,  # Pull paths towards graph centre [int]
     "post_process": False,
-    #"z_stretch": 1,
+    # "z_stretch": 1,
 }
 
 #######
 # RUN #
 #######
 if __name__ == "__main__":
-
     # Give pretty name to graph
     graph_name = "ht"
     num_t = 10

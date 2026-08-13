@@ -47,11 +47,15 @@ class CircuitManager:
 
         return aug_qb.qasm
 
-    def add_qiskit_circuit(self, circuit: Any, key: str = "primary", is_primary: bool = True) -> str:
+    def add_qiskit_circuit(
+        self, circuit: Any, key: str = "primary", is_primary: bool = True
+    ) -> str:
         """Add Qiskit circuit, save .qasm file, and return the qasm_str."""
         return self._process(circuit, key, is_primary)
 
-    def add_pytket_circuit(self, circuit: Any, key: str = "primary", is_primary: bool = True) -> str:
+    def add_pytket_circuit(
+        self, circuit: Any, key: str = "primary", is_primary: bool = True
+    ) -> str:
         """Add PyTKET circuit, save .qasm file, and return the qasm_str."""
         return self._process(circuit, key, is_primary)
 

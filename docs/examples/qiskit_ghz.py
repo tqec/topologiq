@@ -61,9 +61,7 @@ if __name__ == "__main__":
     # ORIGINAL GRAPH: QASM -> ZX manager
     print("\n################\n# GHZ CANONICAL #\n################")
     in_zx_graph_manager = ZXGraphManager()
-    aug_zx = in_zx_graph_manager.add_graph_from_qasm(
-        qasm_str=qasm_str, graph_key=circuit_name
-    )
+    aug_zx = in_zx_graph_manager.add_graph_from_qasm(qasm_str=qasm_str, graph_key=circuit_name)
     zx.draw(aug_zx.zx_graph, labels=True)
 
     # ORIGINAL GRAPH: AugmentedZXGraph -> BlockGraph

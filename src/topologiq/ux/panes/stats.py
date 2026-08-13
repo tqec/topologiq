@@ -400,4 +400,3 @@ class StatsPane(BasePane):
             self.table_physical.setItem(current_row, 0, item_name)
             self.table_physical.setItem(current_row, 1, item_val)
             current_row += 1
-

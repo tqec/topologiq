@@ -5,7 +5,6 @@ Usage:
 
 """
 
-
 from enum import Enum
 from fractions import Fraction
 

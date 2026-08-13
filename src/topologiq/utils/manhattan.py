@@ -15,6 +15,7 @@ import numpy as np
 if TYPE_CHECKING:
     from topologiq.utils.classes import StandardCoord
 
+
 #######################
 # MANHATTAN DISTANCES #
 #######################
@@ -33,6 +34,7 @@ def get_manhattan(src_coords: StandardCoord, tgt_coords: StandardCoord) -> int:
 
     return np.sum(np.abs(np.array(src_coords) - np.array(tgt_coords)))
 
+
 def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
     """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.
 
@@ -49,6 +51,7 @@ def get_max_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord])
         return max([get_manhattan(src_coord, c) for c in all_coords])
 
     return 0
+
 
 def get_min_manhattan(src_coord: StandardCoord, all_coords: list[StandardCoord]) -> int:
     """Calculate the maximum Manhattan distance between a coordinate and a list of coordinates.

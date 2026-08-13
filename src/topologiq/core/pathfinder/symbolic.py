@@ -102,7 +102,10 @@ def check_exits_add_beams(
         )
 
         is_unobstr, single_beam, single_beam_short = check_unobstructed(
-            src_coords, tgt_coords, taken, beams_len_short,
+            src_coords,
+            tgt_coords,
+            taken,
+            beams_len_short,
         )
         if is_unobstr and not any([single_beam.contains(coord) for coord in coords_in_path]):
             unobstr_exits_n += 1

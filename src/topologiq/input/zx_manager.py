@@ -158,7 +158,7 @@ class AugmentedZXGraph:
         qasm_str: str | None = None,
         path_to_qasm_file: Path | None = None,
         remove_lonely_resets: bool = True,
-        debug: int = 0
+        debug: int = 0,
     ) -> AugmentedZXGraph:
         """Create ZX graph from a QASM string or QASM file.
 
