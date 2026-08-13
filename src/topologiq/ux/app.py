@@ -61,6 +61,7 @@ class TopologiqApp(QMainWindow):
         # Window
         self.setWindowTitle("TOPOLOGIQ: Algorithmic Lattice Surgery")
         self.resize(1400, 850)
+        self.setStyleSheet(styles.MAIN_WINDOW_STYLE)
         self._set_icon()
 
         # Primary widget & stack
@@ -220,6 +221,7 @@ async def main():
 
     # Fire App
     app = QApplication(sys.argv)
+    styles.apply_dark_theme(app)
 
     # Fire UX manager
     manager = UXManager()
