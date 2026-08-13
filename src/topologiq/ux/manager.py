@@ -366,7 +366,7 @@ class UXManager(QObject):
 
         # Bind isolated block graph management context shell to track surgery
         if hasattr(aug_zx_in, "zx_graph"):
-            bgraph_manager = BlockGraphManager(aug_zx_in.zx_graph)
+            bgraph_manager = BlockGraphManager(aug_zx_in)
             self._data_store["lattice_surgery"][graph_key] = bgraph_manager
 
         self.zx_staged_ready.emit(graph_key, aug_zx_in)
@@ -384,7 +384,7 @@ class UXManager(QObject):
             return
 
         # Isolate target context within a thread-safe instance
-        local_bgraph_manager = BlockGraphManager(aug_zx_in.zx_graph)
+        local_bgraph_manager = BlockGraphManager(aug_zx_in)
         override_kwargs = options if options is not None else {}
         local_session = self._session_id
 

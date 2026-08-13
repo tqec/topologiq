@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 
 from topologiq.assets.pyzx_graphs import random_graph
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.zx_manager import ZXGraphManager
 
 ###############
@@ -35,7 +36,6 @@ kwargs = {
 # RUN #
 #######
 if __name__ == "__main__":
-
     # Set seed if in KWARGS
     if "seed" in kwargs:
         random.seed(kwargs["seed"])
@@ -53,12 +53,13 @@ if __name__ == "__main__":
         **kwargs,
     )
 
-    # Convert ZX graph into AugmentedZXGraph
-    zx_graph_manager = ZXGraphManager()
+    # ZX graph --> AugmentedZXGraph
+    zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
     aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, use_primary=True)
 
-    # Run Topologiq
-    bgraph_manager = aug_zx.get_blockgraph(**kwargs)
+    # AugmentedZXGraph -> BlockGraph
+    bgraph_manager = BlockGraphManager(aug_zx, **kwargs)
+    bgraph_manager.build()
 
     # Visualise results
     bgraph_manager.draw_blockgraph()

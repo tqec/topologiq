@@ -1,6 +1,7 @@
 """Example of how to use Topologiq to perform LS with predefined PyZX graphs."""
 
 from topologiq.assets import pyzx_graphs
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.zx_manager import ZXGraphManager
 
 ##########
@@ -16,7 +17,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 # Note 4. Not all "first_id_strategy" and "graph_traverse_mode" are compatible with all graphs.
 # Contributinos geared to create fallbacks for when specialised strategies fail are welcome.
 kwargs = {
-    "debug": 1,  # Verbosity. Change to `3` for step by step visuals.
+    "debug": 0,  # Verbosity. Change to `3` for step by step visuals.
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID.
     "graph_traverse_mode": "bfs-cross",  # Graph traversing strategy
     "gravity": 7,  # Integer weight that pulls paths towards graph centre
@@ -62,18 +63,25 @@ if __name__ == "__main__":
     # Loop over available encoding functions
     for graph_name in include:
         # Update user
-        print(f"\n==> Now processing: {graph_name}.")
+        print(f"\n#####################\nGRAPH NAME: {graph_name}. \n#####################\n")
 
         # Get PyZX graph
         encoding_fx = getattr(pyzx_graphs, graph_name)
         pyzx_graph = encoding_fx(draw_graph=False)
 
-        # QASM -> ZX manager
-        zx_graph_manager = ZXGraphManager()
-        aug_zx_in = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, graph_key="input")
+        # PyZX -> AugmentedZXGraph
+        zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
+        aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, graph_key="input")
 
-        # Run Topologiq
-        bgraph_manager = aug_zx_in.get_blockgraph(**kwargs)
+        # AugmentedZXGraph -> BlockGraph
+        bgraph_manager = BlockGraphManager(aug_zx, **kwargs)
+        bgraph_manager.build()
+
+        # Verification for standard graphs
+        if graph_name not in ["yi", "s", "msc", "t", "ht"]:
+            # Verify input/output logical equality
+            zx_out = bgraph_manager.to_zx_graph()
+            equality = aug_zx.check_equality(zx_out)
 
         # Visualise results
         bgraph_manager.draw_blockgraph()
@@ -85,12 +93,5 @@ if __name__ == "__main__":
         if kwargs.get("animate"):
             bgraph_manager.animate(filename_prefix=graph_name)
 
-        # Verification for standard graphs
-        if graph_name not in ["yi", "s", "msc", "t", "ht"]:
-            # Verify input/output logical equality
-            aug_zx_out = zx_graph_manager.add_graph_from_blockgraph(
-                bgraph_manager, graph_key="output"
-            )
-            equality = aug_zx_in.check_equality(aug_zx_out)
-            print(f"Equality verification: {equality}")
-            print("------------------------------------\n")
+        # Say good bye
+        print("\n---\nThank you for flying Topologiq.\n")

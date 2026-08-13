@@ -21,7 +21,7 @@ import networkx as nx
 import numpy as np
 import pyzx as zx
 from numpy.typing import NDArray
-from pyzx.pauliweb import PauliWeb, compute_pauli_webs
+from pyzx.pauliweb import PauliWeb
 
 from topologiq.core.beams import CubeBeams
 from topologiq.core.blocks import CandidatePath, PositionedZXBlock, ZXBlock, ZXBlockRegistry
@@ -40,6 +40,7 @@ from topologiq.core.graph_manager.spatial import (
 )
 from topologiq.core.pathfinder.pathfinder import PathfinderInitState, PathFinderManager
 from topologiq.core.pathfinder.symbolic import check_exits_add_beams
+from topologiq.input.zx_manager import AugmentedZXGraph
 from topologiq.utils.classes import GraphBounds, StandardCoord
 from topologiq.utils.file import rm_temp_files
 from topologiq.utils.manhattan import get_manhattan
@@ -64,7 +65,7 @@ class BlockGraphManager:
 
     def __init__(
         self,
-        input_zx_graph: zx.Graph,
+        aug_zx: AugmentedZXGraph,
         graph_name: str = "computation",
         **kwargs,
     ):
@@ -75,7 +76,7 @@ class BlockGraphManager:
 
         # Direct assignations
         self.graph_name: str = graph_name
-        self.input_zx_graph: zx.Graph = input_zx_graph
+        self.aug_zx: AugmentedZXGraph = aug_zx
 
         # Pad (if some given) or build (if none given) kwargs
         self._kwargs = check_assemble_kwargs(**kwargs)
@@ -94,23 +95,23 @@ class BlockGraphManager:
         """Internalise input ZX graph."""
 
         # Extract key data for future reference
-        self.in_ids: set[int] = self.input_zx_graph.vertex_set()
-        self.in_qubits: dict[int, int] = self.input_zx_graph.qubits()
-        self.in_rows: dict[int, int] = self.input_zx_graph.rows()
-        self.in_inputs: list[int] = self.input_zx_graph.inputs()
-        self.in_outputs: list[int] = self.input_zx_graph.outputs()
-        self.in_phases: dict[int, int | Fraction] = self.input_zx_graph.phases()
+        self.in_ids: set[int] = self.aug_zx.zx_graph.vertex_set()
+        self.in_qubits: dict[int, int] = self.aug_zx.zx_graph.qubits()
+        self.in_rows: dict[int, int] = self.aug_zx.zx_graph.rows()
+        self.in_inputs: list[int] = self.aug_zx.zx_graph.inputs()
+        self.in_outputs: list[int] = self.aug_zx.zx_graph.outputs()
+        self.in_phases: dict[int, int | Fraction] = self.aug_zx.zx_graph.phases()
         self.in_edge_types: dict[tuple[int, int], str] = {
-            edge_id: ZXEdgeTypes(self.input_zx_graph.edge_type(edge_id)).name
-            for edge_id in self.input_zx_graph.edges()
+            edge_id: ZXEdgeTypes(self.aug_zx.zx_graph.edge_type(edge_id)).name
+            for edge_id in self.aug_zx.zx_graph.edges()
         }
         self.in_degrees: dict[int, int] = {
-            k: len(self.input_zx_graph.neighbors(k)) for k in self.input_zx_graph.vertex_set()
+            k: len(self.aug_zx.zx_graph.neighbors(k)) for k in self.aug_zx.zx_graph.vertex_set()
         }
 
         self.in_types: dict[int, str] = {}
-        for k, v in self.input_zx_graph.types().items():
-            switch_to_cube = self.input_zx_graph.vdata(k, "switch_to_cube", default=None)
+        for k, v in self.aug_zx.zx_graph.types().items():
+            switch_to_cube = self.aug_zx.zx_graph.vdata(k, "switch_to_cube", default=None)
             if not switch_to_cube:
                 self.in_types[k] = "O" if v == 0 else ZXTypes(v).name
             else:
@@ -164,7 +165,7 @@ class BlockGraphManager:
                     "pending": self.degrees[n_id],
                 },
             )
-            for n_id in self.input_zx_graph.vertices()
+            for n_id in self.aug_zx.zx_graph.vertices()
         ]
 
         # Edges
@@ -243,10 +244,11 @@ class BlockGraphManager:
     def build_deps_from_pauli_webs(self):
         """Build a dictionary of cubes with ANTECESSORs."""
         # Proceed only if Pauli Webs exist
-        print("=> Computing Paulis webs using PyZX. Give it a minute!")
-        order, zwebs, xwebs = compute_pauli_webs(self.input_zx_graph)
-        print("Pauli webs computed.\n")
 
+        # Extract Pauli webs from input AugZXGraph
+        order, zwebs, xwebs = self.aug_zx.pauli_pack
+
+        # Proceed if Pauli webs are available
         if order and zwebs and xwebs:
             # Build ANTE dependencies
             _prep_ante(self.ante, self.t_zx_tracker, order, zwebs, xwebs)
@@ -327,6 +329,8 @@ class BlockGraphManager:
         """Define and place the very first cube of the blockgraph."""
 
         # Reset trackers innaplicable to single cube placement
+        if self._kwargs["debug"] > 0:
+            print("* First cube.")
         self.cross_edge = False
         self.is_hadamard = False
 
@@ -359,7 +363,7 @@ class BlockGraphManager:
         # Update user if applicable
         if self._kwargs["debug"] > 0:
             print(
-                f"First cube placed. ID: {self.first_id}. Kind: {self.first_zx_block.kind}. Coords: {self.first_coords}."
+                f"  - Completed. ID: {self.first_id}. Kind: {self.first_zx_block.kind}, Coords: {self.first_coords}."
             )
 
     def get_queue(self):
@@ -378,6 +382,9 @@ class BlockGraphManager:
 
     def build(self, override_kwargs: dict = {}):
         """Build the blockgraph using pre-defined edge queue."""
+
+        # Announce build
+        print("\n=> Building BlockGraph.")
 
         # Start timer
         self.t1, _ = datetime_manager()
@@ -431,7 +438,7 @@ class BlockGraphManager:
             # Announce edge
             if self._kwargs["debug"] > 0:
                 print(
-                    f"\n=> Edge: {u} ({self.bgraph.nodes[u]['zx_block'].zx_type}) --> {v} ({self.curr_tgt_zx_type}). {'CROSS' if self.cross_edge else 'STANDARD'}"
+                    f"* Edge: {u} ({self.bgraph.nodes[u]['zx_block'].zx_type}) --> {v} ({self.curr_tgt_zx_type}). {'CROSS' if self.cross_edge else 'STANDARD'}"
                 )
 
             # Edge fulfillment
@@ -460,7 +467,7 @@ class BlockGraphManager:
             # Update user if applicable
             if self._kwargs["debug"] > 0:
                 print(
-                    "Edge completed.",
+                    "  - Completed.",
                     f"Vol +: {len(self.winner_path.full_path) - (2 if (self.cross_edge or self.curr_tgt_zx_type == 'O') else 1)}.",
                     f"Duration: {duration_iter:.2f}s",
                 )
@@ -477,7 +484,9 @@ class BlockGraphManager:
 
         # Final user updates if applicable
         print(
-            f"\nSUCCESS! Habemus BlockGraph. Volume: {self.get_volume()}. Duration: {duration_total:.2f}s\n"
+            "\n=> SUCCESS! Habemus BlockGraph.",
+            f"\n  - Volume: {self.get_volume()}.",
+            f"\n  - Duration: {duration_total:.2f}s.\n",
         )
         self._kwargs["animate"] = "MP4"
 
@@ -599,7 +608,7 @@ class BlockGraphManager:
 
         # Announce need for twins
         if self._kwargs["debug"] > 0:
-            print(f"\n=> Twins needed for IDs: {self.ids_to_twin}")
+            print(f"* Entering TWIN mode. IDs to twin: {self.ids_to_twin}")
 
         for orig_id in self.ids_to_twin:
             # Define new ID
@@ -717,7 +726,7 @@ class BlockGraphManager:
             # Update user if applicable
             if self._kwargs["debug"] > 0:
                 print(
-                    f"Twin added succesfully: {self.curr_src_id} --> {self.curr_tgt_id}.",
+                    f"  - Completed: {self.curr_src_id} --> {self.curr_tgt_id}.",
                     f"Vol +: {len(self.winner_path.full_path) - 1}.",
                     f"Duration: {duration_iter:.2f}s",
                 )
@@ -727,7 +736,7 @@ class BlockGraphManager:
 
         # Update user if applicable
         if self._kwargs["debug"] > 0:
-            print("=> TWINS round complete.\n")
+            print("  - Exiting TWIN mode.")
 
     def prune_beams(self):
         """Prune beams eliminating broken beams and beams of completed nodes."""
@@ -941,6 +950,45 @@ class BlockGraphManager:
             path_to_output_file = output_dir / f"{circuit_name}.bgraph"
             with open(path_to_output_file, "w") as f:
                 f.writelines(bgraph_lines)
+
+    def to_zx_graph(self):
+        """Distill into a PyZX graph."""
+
+        # Create empty ZX graph
+        zx_graph = zx.Graph()
+
+        # Extract cubes into spiders
+        for cube_id, attrs in self.bgraph.nodes(data=True):
+            # Each cube gets a spider
+            zx_block = attrs.get("zx_block")
+            zx_type = ZXTypes.from_str(zx_block.zx_type)
+            coords = attrs.get("coords")
+
+            # Qubit and row number possible if ID in input ZX
+            if cube_id in self.in_ids:
+                qubit = self.in_qubits[cube_id]
+                row = self.in_rows[cube_id]
+            else:
+                qubit = -1
+                row = -1
+
+            # Add spider
+            vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row, index=cube_id)
+            zx_graph.set_vdata(vertex, "coords", coords)
+
+        # Add edges
+        for u, v, attrs in self.bgraph.edges(data=True):
+            zx_type = ZXEdgeTypes.from_str(attrs.get("edge_type"))
+            zx_graph.add_edge((u, v), edgetype=zx_type)
+
+        # Write inputs and outputs explicitly
+        if self.inputs:
+            zx_graph.set_inputs(self.inputs)
+        if self.outputs:
+            zx_graph.set_outputs(self.outputs)
+
+        # Return PyZX graph
+        return zx_graph
 
     def animate(self, filename_prefix: str = "computation"):
         """Call animation sequence."""
@@ -1184,7 +1232,7 @@ class BlockGraphManager:
         """Pause the computation at an arbitrary Z-index (post-processing)."""
 
         # Announce slicing
-        print(f"=> START. Slice & Stretch BlockGraph at Z={slice_at_z}.")
+        print(f"\n=> Slice & Stretch BlockGraph at Z={slice_at_z}.")
 
         # Start timer
         self.t1_iter, _ = datetime_manager()
@@ -1246,6 +1294,8 @@ class BlockGraphManager:
         # Reconnect broken edges
         for u, v in broken_edges:
             # Internalise key edge characteristics & clear iteration-specific parameters
+            if self._kwargs["debug"] > 1:
+                print(f"* Reconnecting: {u} --> {v}")
             self.curr_src_id, self.curr_tgt_id = (u, v)
             self.clear_iter(u, v)
 
@@ -1255,7 +1305,6 @@ class BlockGraphManager:
                 src_block = self.bgraph.nodes[u]["zx_block"]
                 temp_block = ZXBlockRegistry.get_create(kind=src_block.kind)
                 self.bgraph.nodes[v]["zx_block"] = temp_block
-
             # Call pathfinder
             call_pathfinder_bfs_cross(self, stretch=True)
 
@@ -1264,7 +1313,13 @@ class BlockGraphManager:
 
             # Add path to blockgraph
             if self.winner_path:
+                # Exchange final block of winner path if target is boundary
+                if tgt_block.zx_type == "O":
+                    self.winner_path.full_path[-1] = (self.curr_tgt_coords, tgt_block)
+
+                # Add path
                 self.add_path()
+
                 # Exchange conditional back if target is conditional
                 if "*" in tgt_block.kind:
                     self.bgraph.nodes[v]["zx_block"] = tgt_block

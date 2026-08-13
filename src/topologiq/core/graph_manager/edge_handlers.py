@@ -360,15 +360,28 @@ def _queue_bfs_layers(
     visited = set([first_id])
     visited_edges = set()
 
+    # Extract all IDs not part of an original qubit
+    all_ids_in_special_patterns = []
+    if t_gates:
+        for pat in t_gates.values():
+            [all_ids_in_special_patterns.extend([u, v]) for u, v in pat]
+    if s_gates:
+        for pat in s_gates.values():
+            [all_ids_in_special_patterns.extend([u, v]) for u, v in pat]
+
+    # Organise qubits by length
     inverted_qubits = {}
     for k, v in qubits.items():
+        if k in all_ids_in_special_patterns:
+            continue
         if v not in inverted_qubits:
             inverted_qubits[v] = [k]
         else:
             inverted_qubits[v].append(k)
     qubits_by_len = sorted(
-        [(k, sorted(v)) for k, v in inverted_qubits.items()], key=lambda x: len(x), reverse=True
+        [(k, v) for k, v in inverted_qubits.items()], key=lambda x: len(x), reverse=True
     )
+    longest_qubit = qubits_by_len[0]
 
     # Start by visiting all inputs
     if len(inputs) > 1:
@@ -387,61 +400,67 @@ def _queue_bfs_layers(
                         visited_edges.add((u, v))
                         visited.add(v)
 
-        # Traverse longest qubit
-        u_v_to_t = [
-            (qubits_by_len[0][1][i - 1], s_id)
-            for i, s_id in enumerate(qubits_by_len[0][1])
-            if i != 0
-        ]
-        for u, v in u_v_to_t:
-            if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
-                edge_queue.append((u, v))
-                visited_edges.add((u, v))
-                visited.add(v)
+    # Traverse longest qubit
+    first_in_qubit, last_in_qubit = (longest_qubit[1][0], longest_qubit[1][0])
+    for spider_id in longest_qubit[1]:
+        if rows[spider_id] < rows[first_in_qubit]:
+            first_in_qubit = spider_id
+        if rows[spider_id] > rows[last_in_qubit]:
+            last_in_qubit = spider_id
 
-        # Priority T-gates
-        if t_gates:
-            for t_pattern in t_gates.values():
-                # If first edge in a T-pattern is in visited, all T-pattern is in visited
-                if t_pattern[0] not in visited_edges:
-                    # Get path to first spider in T-pattern
-                    _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
-                    u_v_to_t = [
-                        (path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0
-                    ]
+    path_from_first_to_last = path_to_in_id = nx.shortest_path(
+        bgraph, source=first_in_qubit, target=last_in_qubit
+    )
+    u_v_to_t = [
+        (path_from_first_to_last[i - 1], s_id)
+        for i, s_id in enumerate(path_from_first_to_last)
+        if i != 0
+    ]
+    for u, v in u_v_to_t:
+        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+            edge_queue.append((u, v))
+            visited_edges.add((u, v))
+            visited.add(v)
 
-                    # Add any edges in path not already in edge_queue
-                    for u, v in u_v_to_t:
-                        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
-                            edge_queue.append((u, v))
-                            visited_edges.add((u, v))
-                            visited.add(v)
+    # Priority T-gates
+    if t_gates:
+        for t_pattern in t_gates.values():
+            # If first edge in a T-pattern is in visited, all T-pattern is in visited
+            if t_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=t_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
 
-                    # Add the T-pattern
-                    edge_queue.extend(t_pattern)
-                    visited_edges.update(t_pattern)
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
 
-        # Priority S-gates
-        if s_gates:
-            for s_pattern in s_gates.values():
-                # If first edge in a S-pattern is in visited, all S-pattern is in visited
-                if s_pattern[0] not in visited_edges:
-                    # Get path to first spider in T-pattern
-                    _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
-                    u_v_to_t = [
-                        (path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0
-                    ]
+                # Add the T-pattern
+                edge_queue.extend(t_pattern)
+                visited_edges.update(t_pattern)
 
-                    # Add any edges in path not already in edge_queue
-                    for u, v in u_v_to_t:
-                        if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
-                            edge_queue.append((u, v))
-                            visited_edges.add((u, v))
-                            visited.add(v)
+    # Priority S-gates
+    if s_gates:
+        for s_pattern in s_gates.values():
+            # If first edge in a S-pattern is in visited, all S-pattern is in visited
+            if s_pattern[0] not in visited_edges:
+                # Get path to first spider in T-pattern
+                _, path_to_t = nx.multi_source_dijkstra(bgraph, visited, target=s_pattern[0][0])
+                u_v_to_t = [(path_to_t[i - 1], s_id) for i, s_id in enumerate(path_to_t) if i != 0]
 
-                    # Add the S-pattern
-                    edge_queue.extend(s_pattern)
-                    visited_edges.update(s_pattern)
+                # Add any edges in path not already in edge_queue
+                for u, v in u_v_to_t:
+                    if ((u, v) not in visited_edges) and ((v, u) not in visited_edges):
+                        edge_queue.append((u, v))
+                        visited_edges.add((u, v))
+                        visited.add(v)
+
+                # Add the S-pattern
+                edge_queue.extend(s_pattern)
+                visited_edges.update(s_pattern)
 
         # CNOTs
         cross_edges = []

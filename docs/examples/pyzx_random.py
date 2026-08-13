@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 
 from topologiq.assets.pyzx_graphs import random_graph
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.zx_manager import ZXGraphManager
 
 ###############
@@ -22,16 +23,14 @@ kwargs = {
     "first_id_strategy": "first-spider",
     "seed": 1330,
     "debug": 1,
-    "size_of_chip": (12, 12),
-    "k": 3,
-    "graph_traverse_mode": "bfs-layers",
+    "graph_traverse_mode": "tfs-cnots",
     "gravity": 7,
-    "z_stretch": 2,
+    "z_stretch": 3,
 }
 # Available `first_id_strategy` values:
 # - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
 # Available `graph_traverse_mode` values:
-# - ["bfs", "bfs-cross", "bfs-cross-boundaries-last", "bfs-cycles", "bfs-rows", "bfs-cnots", "tfs-cnots", "tfs"]
+# - ["bfs", "bfs-cross", "bfs-cycles", "bfs-layers", "tfs-cnots"]
 
 #######
 # RUN #
@@ -49,23 +48,24 @@ if __name__ == "__main__":
         qubit_n,
         depth,
         p_t=0.2,
-        draw_graph=True,
+        draw_graph=False,
         graph_type="cnot_had_phase" if had_phase else "cnot",
         **kwargs,
     )
 
-    # Convert ZX graph into AugmentedZXGraph
-    zx_graph_manager = ZXGraphManager()
+    # ZX graph --> AugmentedZXGraph
+    zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
     aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, use_primary=True)
 
-    # Run Topologiq
-    bgraph_manager = aug_zx.get_blockgraph(**kwargs)
-
-    # Visualise results
-    bgraph_manager.draw_blockgraph()
+    # AugmentedZXGraph -> BlockGraph
+    bgraph_manager = BlockGraphManager(aug_zx, **kwargs)
+    bgraph_manager.build()
 
     # Write results to file
     bgraph_manager.write_bgraph(circuit_name=circuit_name)
+
+    # Visualise results
+    bgraph_manager.draw_blockgraph()
 
     # Animate and cleanup
     if kwargs.get("animate"):

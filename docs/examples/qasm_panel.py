@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pyzx as zx
 
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.zx_manager import ZXGraphManager
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -42,8 +43,9 @@ if __name__ == "__main__":
         )
         zx.draw(aug_zx.zx_graph)
 
-        # Run Topologiq
-        bgraph_manager = aug_zx.get_blockgraph(**kwargs)
+        # AugmentedZXGraph -> BlockGraph
+        bgraph_manager = BlockGraphManager(aug_zx, **kwargs)
+        bgraph_manager.build()
 
         # Visualise results
         bgraph_manager.draw_blockgraph()

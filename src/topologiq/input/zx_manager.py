@@ -14,8 +14,8 @@ from typing import Any
 import networkx as nx
 import pyzx as zx
 from pyzx.circuit import Circuit
+from pyzx.pauliweb import compute_pauli_webs
 
-from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 
 
@@ -25,10 +25,11 @@ from topologiq.utils.zx import ZXColors, ZXEdgeTypes, ZXTypes
 class ZXGraphManager:
     """Registry class to keep AugmentedZXGraph(s) organised."""
 
-    def __init__(self, primary_key: str = "primary"):
+    def __init__(self, primary_key: str = "primary", debug: int = 0):
         """Initialise class with incoming or default primary key and empty collection."""
-        self.primary_key: str = primary_key
         self._collection: dict[str, AugmentedZXGraph] = {}
+        self.primary_key = primary_key
+        self.debug = debug
 
     def get_graph(
         self,
@@ -58,6 +59,7 @@ class ZXGraphManager:
             aug_zx_graph: The AugmentedZXGraph to preserve.
             use_primary: Flag to set key to primary key.
             graph_key: String to use as collection key.
+            debug: Debug mode to use.
 
         """
         if not graph_key:
@@ -76,10 +78,11 @@ class ZXGraphManager:
             zx_graph: The PyZX graph.
             use_primary: Flag to set key to primary key.
             graph_key: Open key string to save intermediate/modified ZX graphs.
+            debug: Debug mode to use.
 
         """
         key = self.primary_key if use_primary else graph_key
-        self.add_graph(AugmentedZXGraph(zx_graph), graph_key=key)
+        self.add_graph(AugmentedZXGraph(zx_graph, debug=self.debug), graph_key=key)
         return self._collection[key]
 
     def add_graph_from_qasm(
@@ -96,32 +99,13 @@ class ZXGraphManager:
             path_to_qasm_file: A path to a QASM file.
             use_primary: Flag to set key to primary key.
             graph_key: Open key string to save intermediate/modified ZX graphs.
+            debug: Debug mode to use.
 
         """
         key = self.primary_key if use_primary else graph_key
         aug_zx_graph = AugmentedZXGraph.from_qasm(
-            qasm_str=qasm_str, path_to_qasm_file=path_to_qasm_file
+            qasm_str=qasm_str, path_to_qasm_file=path_to_qasm_file, debug=self.debug
         )
-        self.add_graph(aug_zx_graph, graph_key=key)
-        return self._collection[key]
-
-    def add_graph_from_blockgraph(
-        self,
-        bgraph_manager: BlockGraphManager,
-        use_primary: bool = False,
-        graph_key: str = "",
-    ) -> AugmentedZXGraph:
-        """Add an AugmentedZXGraph to the collection from a blockgraph.
-
-        Args:
-            bgraph_manager: The BlockGraph manager with the BlockGraph to be transformed back into ZX.
-            use_primary: Flag to set key to primary key.
-            graph_key: Open key string to save intermediate/modified ZX graphs.
-            other: A separate ZX graph against which to compare.
-
-        """
-        key = self.primary_key if use_primary else graph_key
-        aug_zx_graph = AugmentedZXGraph.from_blockgraph(bgraph_manager)
         self.add_graph(aug_zx_graph, graph_key=key)
         return self._collection[key]
 
@@ -138,11 +122,35 @@ class ZXGraphManager:
 class AugmentedZXGraph:
     """Topologiq's dual-graph PyZX Graph implementation."""
 
-    def __init__(self, zx_graph: zx.Graph):
-        """Initialise class with incoming ZX graph or empty one."""
+    def __init__(
+        self,
+        zx_graph: zx.Graph,
+        debug: int = 0,
+    ):
+        """Initialise class with incoming ZX graph or empty one.
+
+        Args:
+            zx_graph: The PyZX graph to use as basis for initialisation.
+            debug: Debug mode to use.
+
+        """
+
+        print("\n=> Ingesting PyZX graph.")
+        self.debug = debug
+
+        # Store the primary graph
+        if self.debug > 0:
+            print("* Consuming raw input graph.")
         self.zx_graph = zx_graph if zx_graph else zx.Graph()
+
+        # Store a reduced version of the graph
+        if self.debug > 0:
+            print("* Storing a reduced version of graph.")
         self.zx_graph_reduced = self.zx_graph.copy()
         zx.full_reduce(self.zx_graph_reduced)
+
+        # Get Pauli webs and order for full and reduced graphs
+        self.add_pauli_packs()
 
     @classmethod
     def from_qasm(
@@ -150,6 +158,7 @@ class AugmentedZXGraph:
         qasm_str: str | None = None,
         path_to_qasm_file: Path | None = None,
         remove_lonely_resets: bool = True,
+        debug: int = 0
     ) -> AugmentedZXGraph:
         """Create ZX graph from a QASM string or QASM file.
 
@@ -160,6 +169,7 @@ class AugmentedZXGraph:
                 * Lonely resets happen when QASM uses reset for initialisation and create isolated island graphs.
                 * Lonely resets are always followed by a gap and, immediately after, an initialisation spider.
                 * Lonely resets are therefore irrelevant for computation.
+            debug: Debug mode to use.
 
         """
 
@@ -189,105 +199,64 @@ class AugmentedZXGraph:
 
         return cls(zx_graph)
 
-    @classmethod
-    def from_blockgraph(
-        cls,
-        bgraph_manager: BlockGraphManager,
-    ) -> AugmentedZXGraph:
-        """Create ZX graph from an blockgraph.
+    def add_pauli_packs(self):
+        """Calculate and store Pauli webs as attributes."""
+        if self.debug > 0:
+            print("* Calculating Pauli webs using PyZX.")
+        try:
+            self.pauli_pack = compute_pauli_webs(self.zx_graph)
+        except Exception as _:
+            print(
+                " - WARNING. PyZX Pauli webs unavailable for full graph, which can hinder lattice surgery."
+            )
+        try:
+            self.pauli_pack_reduced = compute_pauli_webs(self.zx_graph_reduced)
+        except Exception as _:
+            print(
+                " - WARNING. PyZX Pauli webs unavailable for reduced graph, which can hinder lattice surgery."
+            )
 
-        Args:
-            bgraph_manager: The blockgraph to be transformed back into ZX.
-            other: A separate ZX graph against which to compare.
-
-        """
-        zx_graph = zx.Graph()
-
-        for cube_id, attrs in bgraph_manager.bgraph.nodes(data=True):
-            zx_block = attrs.get("zx_block")
-            zx_type = ZXTypes.from_str(zx_block.zx_type)
-            coords = attrs.get("coords")
-
-            if cube_id in bgraph_manager.in_ids:
-                qubit = bgraph_manager.in_qubits[cube_id]
-                row = bgraph_manager.in_rows[cube_id]
-            else:
-                qubit = -1
-                row = -1
-
-            vertex = zx_graph.add_vertex(ty=zx_type, qubit=qubit, row=row, index=cube_id)
-
-            zx_graph.set_vdata(vertex, "coords", coords)
-
-        for u, v, attrs in bgraph_manager.bgraph.edges(data=True):
-            zx_type = ZXEdgeTypes.from_str(attrs.get("edge_type"))
-            zx_graph.add_edge((u, v), edgetype=zx_type)
-
-        if bgraph_manager.in_inputs:
-            zx_graph.set_inputs(bgraph_manager.in_inputs)
-
-        if bgraph_manager.in_outputs:
-            zx_graph.set_outputs(bgraph_manager.in_outputs)
-
-        # Set graph in class
-        return cls(zx_graph)
-
-    def get_blockgraph(
-        self: AugmentedZXGraph,
-        use_reduced: bool = False,
-        **kwargs,
-    ) -> BlockGraphManager | None:
-        """Perform algorithmic lattice surgery on ZX graph.
-
-        Args:
-            circuit_name: The name of the circuit.
-            use_reduced: Whether to use the full or reduced version of the ZX graph.
-            final_vis: Trigger simple visualisation of output blockgraph.
-            **kwargs: See `./kwargs.py` for a comprehensive breakdown.
-                NB! If an arbitrary kwarg is not given explicitly, it is created against defaults on `./src/topologiq/kwargs.py`.
-                NB! By extension, it only makes sense to give the specific kwargs where user wants to deviate from defaults.
-
-        """
-
-        # Choose if to show visualisation of outcome or not
-        if not kwargs:
-            kwargs = {}
-
-        # Choose full or reduced ZX graph
-        zx_graph = self.zx_graph_reduced if use_reduced else self.zx_graph
-
-        # Perform lattice surgery
-        bgraph_manager = BlockGraphManager(zx_graph, **kwargs)
-        bgraph_manager.build()
-
-        return bgraph_manager
-
-    def check_equality(self, other: AugmentedZXGraph) -> bool:
+    def check_equality(self, zx_graph: zx.Graph) -> bool:
         """Check if two PyZX graphs are equivalent."""
 
+        print("=> Verifying input/output equality.")
+
+        # Use reduced version of AugZXGraph
+        zx_graph_in = self.zx_graph_reduced.copy()
+
         try:
-            zx_graph_in = self.zx_graph_reduced.copy()
-            zx_graph_out = other.zx_graph_reduced.copy()
+            zx_graph_out = zx_graph.copy()
+            zx.full_reduce(self.zx_graph_reduced)
+        except Exception as _:
+            print("Equality verification not possible. Cannot reduce output ZX graph.")
 
-            for zx_graph in [zx_graph_in, zx_graph_out]:
-                if not zx_graph.inputs():
-                    dummy = zx_graph.add_vertex(ty=0)
-                    dummy_z = zx_graph.add_vertex(ty=1)
-                    zx_graph.add_edge((dummy, dummy_z))
-                    zx_graph.set_inputs(tuple([dummy]))
-                if not zx_graph.outputs():
-                    dummy = zx_graph.add_vertex(ty=0)
-                    dummy_z = zx_graph.add_vertex(ty=1)
-                    zx_graph.add_edge((dummy, dummy_z))
-                    zx_graph.set_outputs(tuple([dummy]))
+        if zx_graph_out:
+            try:
+                # Add dummy inputs and outputs if not present
+                for g in [zx_graph_in, zx_graph_out]:
+                    if not zx_graph.inputs():
+                        dummy = g.add_vertex(ty=0)
+                        dummy_z = g.add_vertex(ty=1)
+                        g.add_edge((dummy, dummy_z))
+                        g.set_inputs(tuple([dummy]))
+                    if not g.outputs():
+                        dummy = g.add_vertex(ty=0)
+                        dummy_z = g.add_vertex(ty=1)
+                        g.add_edge((dummy, dummy_z))
+                        g.set_outputs(tuple([dummy]))
 
-            g1 = zx_graph_in.to_tensor(preserve_scalar=False)
-            g2 = zx_graph_out.to_tensor(preserve_scalar=False)
-            return zx.compare_tensors(g1, g2)
-        except Exception as e:
-            print(f"Compare tensors failed during verification: {e}")
+                # Convert to tensor
+                g1 = zx_graph_in.to_tensor(preserve_scalar=False)
+                g2 = zx_graph_out.to_tensor(preserve_scalar=False)
 
-        print("\nVerification inconclusive. Method returns False as default.")
+                # Compare tensors
+                verification = zx.compare_tensors(g1, g2)
+                print(f"  - Result: {'EQUIVALENT' if verification else 'NOT equivalent'}.")
+                return verification
+            except Exception as e:
+                print(f"  - Compare tensors failed during verification: {e}")
+
+        print("  - Verification inconclusive. Verification method returns `False` by default.")
         return False
 
     def get_native_visualisation(self, use_reduced: bool = False) -> Any:

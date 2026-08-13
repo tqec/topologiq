@@ -200,13 +200,9 @@ class CompilePane(QWidget):
             [
                 "bfs",
                 "bfs-cross",
-                "bfs-cross-boundaries-last",
                 "bfs-cycles",
-                "bfs-rows",
-                "bfs-cnots",
-                "bfs-cnot-cycles",
+                "bfs-layers",
                 "tfs-cnots",
-                "tfs",
             ]
         )
         drawer_layout.addWidget(self.bfs_label)

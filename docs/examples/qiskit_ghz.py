@@ -12,6 +12,7 @@ Usage:
 import pyzx as zx
 from qiskit.circuit import QuantumCircuit
 
+from topologiq.core.graph_manager.graph_manager import BlockGraphManager
 from topologiq.input.circuit_manager import CircuitManager
 from topologiq.input.zx_manager import ZXGraphManager
 
@@ -57,27 +58,39 @@ if __name__ == "__main__":
     qbraid_circuit_manager = CircuitManager()
     qasm_str = qbraid_circuit_manager.add_qiskit_circuit(ghz_circuit, key=circuit_name)
 
-    # QASM -> ZX manager
+    # ORIGINAL GRAPH: QASM -> ZX manager
+    print("\n################\n# GHZ CANONICAL #\n################")
     in_zx_graph_manager = ZXGraphManager()
-    augmented_zx_graph_in = in_zx_graph_manager.add_graph_from_qasm(
+    aug_zx = in_zx_graph_manager.add_graph_from_qasm(
         qasm_str=qasm_str, graph_key=circuit_name
     )
-    zx.draw(augmented_zx_graph_in.zx_graph, labels=True)
+    zx.draw(aug_zx.zx_graph, labels=True)
 
-    # Run Topologiq on full (unreduced graph)
-    bgraph_manager_full = augmented_zx_graph_in.get_blockgraph()
-    bgraph_manager_full.draw_blockgraph()
+    # ORIGINAL GRAPH: AugmentedZXGraph -> BlockGraph
+    bgraph_manager = BlockGraphManager(aug_zx)
+    bgraph_manager.build()
+    bgraph_manager.draw_blockgraph()
 
-    # Run Topologiq on reduced graph (Augmented ZX Graph always contains the reduced version of the graph)
-    zx.draw(augmented_zx_graph_in.zx_graph, labels=True)
-    zx.draw(augmented_zx_graph_in.zx_graph_reduced, labels=True)
-    bgraph_manager_reduced = augmented_zx_graph_in.get_blockgraph(use_reduced=True)
+    # REDUCED GRAPH: QASM -> ZX manager
+    print("\n###############\n# GHZ REDUCED #\n###############")
+    ghz_reduced = aug_zx.zx_graph.copy()
+    zx.full_reduce(ghz_reduced)
+    aug_zx_reduced = in_zx_graph_manager.add_graph_from_pyzx(
+        ghz_reduced, graph_key=f"{circuit_name}_reduced"
+    )
+    zx.draw(aug_zx_reduced.zx_graph, labels=True)
+
+    # REDUCED GRAPH: AugmentedZXGraph -> BlockGraph
+    bgraph_manager_reduced = BlockGraphManager(aug_zx_reduced)
+    bgraph_manager_reduced.build()
     bgraph_manager_reduced.draw_blockgraph()
 
-    # You can also confirm equality using the Augmented ZX Graph
-    out_zx_graph_manager = ZXGraphManager()
-    augmented_zx_graph_out = out_zx_graph_manager.add_graph_from_blockgraph(
-        bgraph_manager_reduced, graph_key="ghz_out"
-    )
-    equality = augmented_zx_graph_in.check_equality(augmented_zx_graph_out)
-    print(equality)
+    # You can also confirm equality of either surgery using the Augmented ZX Graph
+    print("\n################\n# VERIFICATION #\n################")
+    print("=> GHZ canonical")
+    zx_out = bgraph_manager.to_zx_graph()
+    equality = aug_zx.check_equality(zx_out)
+
+    print("\n=> GHZ reduced")
+    zx_out_reduced = bgraph_manager_reduced.to_zx_graph()
+    equality = aug_zx.check_equality(zx_out_reduced)
