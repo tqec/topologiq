@@ -41,6 +41,12 @@ def _resolve_dialog_parent(parent: QWidget) -> QWidget:
     over their parent, so those dialogs pop up off-screen and re-centre on the
     ghost on every invocation (the "can't keep position" effect). Re-parent to a
     visible window so the dialog lands on the active screen instead.
+
+    AI disclaimer:
+        category: Automated AI
+        model: Zhipu 5.2.
+        details: AI-generated helper; reviewed and integrated by the human author.
+
     """
     active = QApplication.activeWindow()
     if active is not None and active.isVisible() and active.isWindow():
@@ -59,6 +65,13 @@ def _patch_zxlive_dialogs() -> None:
     """Wrap ZXLive's save/export dialog helper to fix parenting and format defaults.
 
     Idempotent — safe to call repeatedly.
+
+    AI disclaimer:
+        category: Automated AI 
+        model: Zhipu 5.2.
+        details: The AI generated the dialog-parent/format patching logic; the
+            human author directed the diagnosis and reviewed the result.
+
     """
     global _zxlive_dialogs_patched
     if _zxlive_dialogs_patched:

@@ -263,6 +263,14 @@ def apply_dark_theme(app):
     the native Windows/macOS styles which ignore much of the palette — paired
     with a dark :class:`QPalette` and a small global stylesheet. Call once on
     the :class:`QApplication` before any widgets are shown.
+
+    AI disclaimer:
+        category: Automated AI 
+        model: Zhipu 5.2.
+        details: The AI generated this theme implementation (Fusion style, dark
+            palette, and global stylesheet); the requirements and review were
+            directed by the human author.
+
     """
     app.setStyle("Fusion")
 
