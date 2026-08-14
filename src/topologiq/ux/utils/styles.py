@@ -9,6 +9,8 @@ AI disclaimer:
 
 """
 
+from PySide6.QtGui import QColor, QPalette
+
 # APP
 MAIN_WINDOW_STYLE = "background-color: #1a1a1a;"
 STATUS_BAR_STYLE = """
@@ -170,3 +172,116 @@ PILL_BTN_REDUCE = f"{PILL_BTN_BASE} background-color: #222; border-color: #444; 
 
 
 MAIN_SPLITTER_STYLE = """ QSplitter#DesignMainSplitter::handle { border-left: 1px solid #333; margin: 7px 0; } QSplitter#DesignMainSplitter::handle:hover { background-color: #4d8dc1; } QSplitter#DesignMainSplitter::handle:pressed { background-color:#1e92df; } """
+
+
+# ---------------------------------------------------------------------------
+# GLOBAL DARK THEME
+# ---------------------------------------------------------------------------
+# A palette-driven theme applied at the QApplication level. It fills the gaps
+# left by the per-widget stylesheets above (the main window background, default
+# dialogs, combobox dropdowns, scrollbars, tooltips, and the embedded ZXLive
+# window) so nothing falls back to the light system theme. Per-widget
+# stylesheets still win by specificity, so existing visuals are preserved.
+_DARK_PALETTE = {
+    QPalette.Window: "#1a1a1a",
+    QPalette.WindowText: "#dcdcdc",
+    QPalette.Base: "#0f0f0f",
+    QPalette.AlternateBase: "#1a1a1a",
+    QPalette.ToolTipBase: "#2a2a2a",
+    QPalette.ToolTipText: "#dcdcdc",
+    QPalette.PlaceholderText: "#666666",
+    QPalette.Text: "#dcdcdc",
+    QPalette.Button: "#2a2a2a",
+    QPalette.ButtonText: "#dcdcdc",
+    QPalette.BrightText: "#ff0000",
+    QPalette.Highlight: "#007acc",  # Accent shared with STATUS_LABEL_STYLE
+    QPalette.HighlightedText: "#ffffff",
+    QPalette.Link: "#007acc",
+    QPalette.LinkVisited: "#007acc",
+}
+
+# Polish for the few controls Fusion renders with poor contrast at night.
+# Selectors are limited to controls that no per-widget stylesheet targets, so
+# they cannot collide with existing styles.
+_DARK_GLOBAL_QSS = """
+QToolTip {
+    background-color: #2a2a2a;
+    color: #dcdcdc;
+    border: 1px solid #444;
+    padding: 3px 5px;
+}
+QScrollBar:vertical {
+    background: transparent;
+    width: 12px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: #3a3a3a;
+    min-height: 24px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover { background: #007acc; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:horizontal {
+    background: transparent;
+    height: 12px;
+    margin: 0;
+}
+QScrollBar::handle:horizontal {
+    background: #3a3a3a;
+    min-width: 24px;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal:hover { background: #007acc; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
+QMenu {
+    background-color: #1a1a1a;
+    border: 1px solid #444;
+    color: #dcdcdc;
+    padding: 4px;
+}
+QMenu::item { padding: 4px 16px; }
+QMenu::item:selected { background-color: #007acc; }
+QMenu::separator { height: 1px; background: #333; margin: 4px 8px; }
+QComboBox QAbstractItemView {
+    background-color: #1a1a1a;
+    border: 1px solid #444;
+    color: #dcdcdc;
+    selection-background-color: #007acc;
+    selection-color: #ffffff;
+    outline: 0;
+}
+"""
+
+
+def apply_dark_theme(app):
+    """Apply a consistent dark theme to the application.
+
+    Uses the palette-driven ``Fusion`` style — uniform across platforms, unlike
+    the native Windows/macOS styles which ignore much of the palette — paired
+    with a dark :class:`QPalette` and a small global stylesheet. Call once on
+    the :class:`QApplication` before any widgets are shown.
+
+    AI disclaimer:
+        category: Automated AI 
+        model: Zhipu 5.2.
+        details: The AI generated this theme implementation (Fusion style, dark
+            palette, and global stylesheet); the requirements and review were
+            directed by the human author.
+
+    """
+    app.setStyle("Fusion")
+
+    palette = QPalette()
+    for role, hex_color in _DARK_PALETTE.items():
+        palette.setColor(role, QColor(hex_color))
+
+    # Dim disabled controls so they read as inactive
+    palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor("#666666"))
+    palette.setColor(QPalette.Disabled, QPalette.Text, QColor("#666666"))
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor("#666666"))
+
+    app.setPalette(palette)
+    app.setStyleSheet(_DARK_GLOBAL_QSS)
