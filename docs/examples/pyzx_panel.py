@@ -69,6 +69,12 @@ if __name__ == "__main__":
         encoding_fx = getattr(pyzx_graphs, graph_name)
         pyzx_graph = encoding_fx(draw_graph=False)
 
+        # Adjust tree search mode if needed
+        if graph_name in ["ht"]:
+            kwargs["graph_traverse_mode"] = "tfs"
+            kwargs["z_stretch"] = 3
+            kwargs["twins"] = False
+
         # PyZX -> AugmentedZXGraph
         zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
         aug_zx = zx_graph_manager.add_graph_from_pyzx(pyzx_graph, graph_key="input")
