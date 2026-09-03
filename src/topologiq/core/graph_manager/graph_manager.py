@@ -1179,6 +1179,7 @@ class BlockGraphManager:
         # Fail any attempt to discard a scheduled MSC
         if discard_id not in self.msc_factory:
             print("Skipping discard operation because requested discard ID is not a factory MSC.")
+            return
 
         # Get coords of MSC that is leaving the party
         msc_coords = self.bgraph.nodes[discard_id]["coords"]
@@ -1214,6 +1215,14 @@ class BlockGraphManager:
             discard_id to succeed.
 
         """
+
+        # Check that both include_id and discard_id are MSC blocks
+        include_zx_type = self.bgraph.nodes[include_id]["zx_block"].zx_type
+        remove_zx_type = self.bgraph.nodes[discard_id]["zx_block"].zx_type
+        print(include_zx_type, remove_zx_type)
+        if include_zx_type != "T" or remove_zx_type != "T":
+            print("Skipping exchange because one of the requested IDs is not an MSC.")
+            return
 
         # Get coords of MSC that is leaving the party and remove from taken
         remove_coords = self.bgraph.nodes[discard_id]["coords"]

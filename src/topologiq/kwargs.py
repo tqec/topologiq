@@ -67,12 +67,9 @@ FIRST_ID_STRATEGY = "first-spider"
 # Strategy for graph traversing
 # - bfs: Standard BFS tree search including cross edges
 # - bfs-cross: Standard BFS giving priority to cross edges
-# - bfs-cross-boundaries-last: Standard BFS giving priority to cross edges and holding boundaries for the end
 # - bfs-cycles: BFS per cycles (per nx.cycle_basis) with bridge recovery subroutine (to join disconnected cycles) and boundary handling at the end
-# - bfs-rows: BFS per (ZX) rows in the graph, one row at a time
-# - bfs-cnots: BFS using central qubit and graph CNOTs as pillars (almost no longer a BFS but let's say it is).
-# - tfs-cnots: Combines BFS cnots with priority queuing of all edges needed to complete T-gates before traversing rest of the graph.
-# - tfs: Starts at any given node and finds shortest paths between visited spiders and all T-gates, then traverses the graph BFS.
+# - bfs-layers: BFS per layers (ZX rows) in the graph, with some modifications to not miss out on early layers
+# - tfs: A modified BFS that traverses the central qubit and places T- and S-gates before traversing the rest of the graph.
 GRAPH_TRAVERSE_MODE = "bfs-cross"
 
 # Length of short beams
