@@ -49,12 +49,8 @@ def check_assemble_kwargs(**kwargs) -> dict[str, any]:
     """
 
     switch_strategy = {
-        "bfs-rows": "central-qubit",
-        "bfs-cross-boundaries-last": "centrality-majority",
         "bfs-cycles": "central-in-first-cycle",
-        "bfs-cnots": "central-qubit",
-        "bfs-cnot-cycles": "central-qubit",
-        "tfs-cnots": "central-qubit",
+        "tfs": "central-qubit",
     }
 
     if "graph_traverse_mode" in kwargs and kwargs["graph_traverse_mode"] in switch_strategy:

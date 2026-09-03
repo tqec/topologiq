@@ -34,7 +34,7 @@ def kind_to_zx_type(kind: str) -> str:
     elif kind[0] in ["Y", "T"]:
         zx_type = kind[0]
     elif "*" in kind:
-        zx_type = "ZX"
+        zx_type = "XZ"
     elif "O" in kind:
         zx_type = "HADAMARD" if "h" in kind else "SIMPLE"
     else:

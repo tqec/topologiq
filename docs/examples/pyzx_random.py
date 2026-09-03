@@ -23,14 +23,14 @@ kwargs = {
     "first_id_strategy": "first-spider",
     "seed": 1330,
     "debug": 1,
-    "graph_traverse_mode": "tfs-cnots",
+    "graph_traverse_mode": "tfs",
     "gravity": 7,
-    "z_stretch": 3,
+    "z_stretch": 2,
 }
 # Available `first_id_strategy` values:
 # - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
 # Available `graph_traverse_mode` values:
-# - ["bfs", "bfs-cross", "bfs-cycles", "bfs-layers", "tfs-cnots"]
+# - ["bfs-cross", "bfs-cycles", "bfs-layers", "tfs"]
 
 #######
 # RUN #
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     # Retrieve circuit
     had_phase = True
-    qubit_n, depth = (4, 50)
+    qubit_n, depth = (4, 20)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph = random_graph(
         qubit_n,

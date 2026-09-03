@@ -780,6 +780,8 @@ class BlockGraphManager:
             self.bounds,
             inputs=self.inputs,
             outputs=self.outputs,
+            s_gates=self.s_gates,
+            t_gates=self.t_gates,
         )
 
         # Gravity around a specific point in existing blockgraph if applicable
@@ -1106,7 +1108,7 @@ class BlockGraphManager:
             x, y, z = self.bgraph.nodes[cube_id]["coords"]
 
             # Try in increasing distance from existing MSC cube
-            for d in range(max_span):
+            for d in range(max_span + 2):
                 # Break if an MSC has been added
                 if msc_added:
                     break
@@ -1122,9 +1124,10 @@ class BlockGraphManager:
                     for c in sphere_coords
                     if (
                         c not in self.taken
-                        and x_min <= c[0] <= x_max
-                        and y_min <= c[1] <= y_max
+                        and x_min < c[0] < x_max + 1
+                        and y_min < c[1] < y_max + 1
                         and c[2] < z
+                        and c[2] > z_min + 3
                     )
                 ]
 
@@ -1160,12 +1163,47 @@ class BlockGraphManager:
                                 self.msc_factory[new_id] = (x, y, z)
                                 msc_added = True
 
-    def msc_exchange(self, connect_id: int, remove_id: int):
+    def msc_discard(self, discard_id: int):
+        """Discard an failed factory MSC cube.
+
+        Args:
+            discard_id: ID to remove from the computation.
+
+        Note. This operation is meant to be run only on factory MSCs to
+        clear the space of unused and failed attempts to produce a magic
+        state. To discard a scheduled MSC you must exchange it for a
+        factory MSC using `msc_exchange`.
+
+        """
+
+        # Fail any attempt to discard a scheduled MSC
+        if discard_id not in self.msc_factory:
+            print("Skipping discard operation because requested discard ID is not a factory MSC.")
+            return
+
+        # Get coords of MSC that is leaving the party
+        msc_coords = self.bgraph.nodes[discard_id]["coords"]
+        remove_coords = [
+            (msc_coords[0], msc_coords[1], msc_coords[2] - i)
+            for i in range(self.msc_stretch[discard_id])
+        ]
+
+        # Remove from taken
+        [self.taken.discard(c) for c in remove_coords]
+
+        # Remove from BGRAPH
+        self.bgraph.remove_node(discard_id)
+
+        # Remove from applicable trackers
+        del self.msc_factory[discard_id]
+        del self.msc_stretch[discard_id]
+
+    def msc_exchange(self, include_id: int, discard_id: int):
         """Exchange an MSC for another.
 
         Args:
-            connect_id: ID for factory MSC to plug into the computation.
-            remove_id: ID for scheduled MSC to remove from the computation.
+            include_id: ID for factory MSC to plug into the computation.
+            discard_id: ID for scheduled MSC to remove from the computation.
 
         NB!
             This operation **can** and *will sometimes* fail, especially in
@@ -1174,20 +1212,28 @@ class BlockGraphManager:
             release pressure on the main build. Additionally, this particular
             operation is not a last recourse. The last recourse alternative
             that cannot fail is to stretch the computation to give time for
-            remove_id to succeed.
+            discard_id to succeed.
 
         """
 
+        # Check that both include_id and discard_id are MSC blocks
+        include_zx_type = self.bgraph.nodes[include_id]["zx_block"].zx_type
+        remove_zx_type = self.bgraph.nodes[discard_id]["zx_block"].zx_type
+        print(include_zx_type, remove_zx_type)
+        if include_zx_type != "T" or remove_zx_type != "T":
+            print("Skipping exchange because one of the requested IDs is not an MSC.")
+            return
+
         # Get coords of MSC that is leaving the party and remove from taken
-        remove_coords = self.bgraph.nodes[remove_id]["coords"]
+        remove_coords = self.bgraph.nodes[discard_id]["coords"]
         self.taken.discard(remove_coords)
 
         # Find neighbour of the MSC that is leaving
-        neigh_id = list(self.bgraph.neighbors(remove_id))[0]
+        neigh_id = list(self.bgraph.neighbors(discard_id))[0]
 
         # Connect factory MSC cube to neigh of MSC to remove
         # Create empty edge
-        u, v = connect_id, neigh_id
+        u, v = include_id, neigh_id
         self.bgraph.add_edge(
             u,
             v,
@@ -1210,9 +1256,9 @@ class BlockGraphManager:
         # Add path to blockgraph
         if self.winner_path:
             # Remove old MSC since connection was possible
-            self.bgraph.remove_node(remove_id)
-            del self.msc_cubes[remove_id]
-            del self.msc_stretch[remove_id]
+            self.bgraph.remove_node(discard_id)
+            del self.msc_cubes[discard_id]
+            del self.msc_stretch[discard_id]
 
             # Add new path
             self.add_path()
@@ -1260,14 +1306,12 @@ class BlockGraphManager:
                     prev_id = predecessors[0]
                     prev_zx_type = self.bgraph.nodes[prev_id]["zx_block"].zx_type
                     if prev_zx_type == "T":
-                        p_x, p_y, p_z = self.bgraph.nodes[prev_id]["coords"]
-                        self.bgraph.nodes[prev_id]["coords"] = (p_x, p_y, p_z + shift_z)
                         self.msc_stretch[prev_id] = self.msc_stretch[prev_id] + shift_z
-
+                    else:
+                        self.bgraph.edges[prev_id, cube_id]["start_coords"] = None
+                        self.bgraph.edges[prev_id, cube_id]["end_coords"] = None
+                        self.bgraph.edges[prev_id, cube_id]["kind"] = None
                     broken_edges.append((prev_id, cube_id))
-                    self.bgraph.edges[prev_id, cube_id]["start_coords"] = None
-                    self.bgraph.edges[prev_id, cube_id]["end_coords"] = None
-                    self.bgraph.edges[prev_id, cube_id]["kind"] = None
 
         # Rebuild taken
         coords_dict = nx.get_node_attributes(self.bgraph, "coords")
@@ -1296,15 +1340,37 @@ class BlockGraphManager:
             # Internalise key edge characteristics & clear iteration-specific parameters
             if self._kwargs["debug"] > 1:
                 print(f"* Reconnecting: {u} --> {v}")
+
             self.curr_src_id, self.curr_tgt_id = (u, v)
             self.clear_iter(u, v)
+            added_volume = 0
+
+            if self.bgraph.nodes[self.curr_src_id]["zx_block"].zx_type == "T":
+                # Get original coords & remove from taken
+                x, y, z = self.bgraph.nodes[self.curr_src_id]["coords"]
+                [
+                    self.taken.remove((x, y, z - i))
+                    for i in range(self.msc_stretch[self.curr_src_id])
+                ]
+
+                # Add new coords and update taken
+                self.bgraph.nodes[self.curr_src_id]["coords"] = (x, y, z + shift_z)
+                x, y, z = self.bgraph.nodes[self.curr_src_id]["coords"]
+                [self.taken.add((x, y, z - i)) for i in range(self.msc_stretch[self.curr_src_id])]
+
+                # Update other applicable trackers
+                if self.curr_src_id in self.msc_factory:
+                    self.msc_factory[self.curr_src_id] = self.bgraph.nodes[self.curr_src_id][
+                        "coords"
+                    ]
 
             # Exchange conditional for standard cube if target is conditional
-            tgt_block = self.bgraph.nodes[v]["zx_block"]
-            if "*" in tgt_block.kind:
-                src_block = self.bgraph.nodes[u]["zx_block"]
-                temp_block = ZXBlockRegistry.get_create(kind=src_block.kind)
+            v_block = self.bgraph.nodes[v]["zx_block"]
+            if "*" in v_block.kind:
+                u_block = self.bgraph.nodes[u]["zx_block"]
+                temp_block = ZXBlockRegistry.get_create(kind=u_block.kind)
                 self.bgraph.nodes[v]["zx_block"] = temp_block
+
             # Call pathfinder
             call_pathfinder_bfs_cross(self, stretch=True)
 
@@ -1314,15 +1380,17 @@ class BlockGraphManager:
             # Add path to blockgraph
             if self.winner_path:
                 # Exchange final block of winner path if target is boundary
-                if tgt_block.zx_type == "O":
-                    self.winner_path.full_path[-1] = (self.curr_tgt_coords, tgt_block)
+                if v_block.zx_type == "O":
+                    self.winner_path.full_path[-1] = (self.curr_tgt_coords, v_block)
 
                 # Add path
                 self.add_path()
+                added_volume = len(self.winner_path.full_path) - 2
 
                 # Exchange conditional back if target is conditional
-                if "*" in tgt_block.kind:
-                    self.bgraph.nodes[v]["zx_block"] = tgt_block
+                if "*" in v_block.kind:
+                    self.bgraph.nodes[v]["zx_block"] = v_block
+
             else:
                 if self._kwargs["debug"] > 2 or self._kwargs["animate"]:
                     self.draw_blockgraph(is_final_vis=False, iter_fail=True)
@@ -1335,7 +1403,7 @@ class BlockGraphManager:
             if self._kwargs["debug"] > 0:
                 print(
                     f" - Reconnected: {u} --> {v}.",
-                    f"Vol +: {len(self.winner_path.full_path) - 2}.",
+                    f"Vol +: {added_volume}.",
                 )
                 if self._kwargs["debug"] > 2:
                     self.draw_blockgraph()
@@ -1344,9 +1412,25 @@ class BlockGraphManager:
         _, duration_iter = datetime_manager(t_1=self.t1_iter)
 
         print(
-            f"SUCCESS! Slice & Stretched BlockGraph at Z={slice_at_z}.",
+            f" - SUCCESS! Slice & Stretched BlockGraph at Z={slice_at_z}.",
             f"Duration: {duration_iter:.2f}s",
         )
+
+    def switch_conditional(self, switch_id: int, to_y: bool):
+        """Switches the conditional to and X or Y cube.
+
+        Args:
+            switch_id: The ID of the conditional to switch.
+            to_y: Whether to place a Y-cube or not.
+
+        """
+        if to_y:
+            self.bgraph.nodes[switch_id]["zx_block"] = ZXBlockRegistry.get_create(kind="YYO")
+        else:
+            conditional_kind = self.bgraph.nodes[switch_id]["zx_block"].kind
+            self.bgraph.nodes[switch_id]["zx_block"] = ZXBlockRegistry.get_create(
+                kind=conditional_kind[:2] + "X"
+            )
 
 
 ###########
@@ -1369,6 +1453,7 @@ def call_pathfinder_bfs_std(bgraph_manager: BlockGraphManager, twin_mode: bool =
         bgraph_manager.curr_tgt_id,
         bgraph_manager.curr_tgt_zx_type,
         bgraph_manager.qubits,
+        bgraph_manager.rows,
         twin_mode,
         bgraph_manager._kwargs["z_stretch"],
     )
@@ -1775,73 +1860,40 @@ def _handle_t_spider(
 
     else:
         # IDs for all spiders in sequence
-        msc_id = max_id + 1
-        x_bridge_id, y_id, xz_id = (max_id + 3, max_id + 4, max_id + 5)
+        msc_id, xz_id = (max_id + 1, max_id + 2)
 
-        # Add to MSC block to tracker
-        # Add to MSC block to tracker
+        # Update applicable trackers
         msc_cubes[msc_id] = "Mm"
-        t_gates[spider_id] = [
-            (spider_id, msc_id),
-            (spider_id, x_bridge_id),
-            (x_bridge_id, y_id),
-            (x_bridge_id, xz_id),
-        ]
+        t_gates[spider_id] = [(spider_id, msc_id), (spider_id, xz_id)]
         t_zx_tracker[spider_id] = xz_id
+        ante[xz_id] = set([spider_id, msc_id])
 
-        # Time orders for all spiders in sequence
-        ante[xz_id] = set([spider_id, msc_id, x_bridge_id, y_id])
-
-        # Reset phase on original spider since it is getting a pattern instead
+        # Reset phase on original spider (it is getting a pattern instead)
         phases[spider_id] = 0
 
-        # Attach T
-        bgraph.add_node(
-            msc_id,
-            zx_block=ZXBlockRegistry.get_create(zx_type="T"),
-            coords=None,
-            completions={
-                "degree": None,
-                "pending": None,
-            },
-        )
-        qubits[msc_id] = qubits[spider_id]
-        rows[msc_id] = rows[spider_id] - 1
-
-        bgraph.add_edge(
-            spider_id,
-            msc_id,
-            edge_type="SIMPLE",
-            start_coords=None,
-            end_coords=None,
-            kind=None,
-        )
-
-        # Attach Y-XZ combo pattern (full)
-        prev_id = spider_id
-        types_in_seq = {0: "X", 1: "Y", 2: "XZ"}
-        for i, s_id in enumerate([x_bridge_id, y_id, xz_id]):
-            zx_type = types_in_seq[i]
+        # Attach Magic State & Conditional Cubes
+        id_to_types = {msc_id: "T", xz_id: "XZ"}
+        for new_id in [msc_id, xz_id]:
             bgraph.add_node(
-                s_id,
-                zx_block=ZXBlockRegistry.get_create(zx_type=zx_type),
+                new_id,
+                zx_block=ZXBlockRegistry.get_create(zx_type=id_to_types[new_id]),
                 coords=None,
                 completions={
                     "degree": None,
                     "pending": None,
                 },
             )
-            qubits[s_id] = qubits[spider_id] - (0 if zx_type != "Y" else -1)
-            rows[s_id] = rows[prev_id] + (1 if zx_type != "Y" else 0)
+            qubits[new_id] = qubits[spider_id] + (0 if new_id == msc_id else -0.5)
+            rows[new_id] = rows[spider_id] - (0.3 if new_id == msc_id else -0.3)
+
             bgraph.add_edge(
-                prev_id if zx_type != "XZ" else x_bridge_id,
-                s_id,
+                spider_id,
+                new_id,
                 edge_type="SIMPLE",
                 start_coords=None,
                 end_coords=None,
                 kind=None,
             )
-            prev_id = s_id
 
 
 def _calculate_z_nudges(
@@ -1857,6 +1909,8 @@ def _calculate_z_nudges(
     bounds: GraphBounds,
     inputs: list[int] = [],
     outputs: list[int] = [],
+    s_gates: dict[int, list[tuple[int, int] | None]] = {},
+    t_gates: dict[int, list[tuple[int, int] | None]] = {},
 ):
     # Default values
     z_push, out_of_bounds = (0, 0)
@@ -1888,11 +1942,10 @@ def _calculate_z_nudges(
     if gravity and faux_edge:
         z_push = -100 * abs(last_coords[2])
 
-    # Push down for inputs and up for outputs
-    if curr_tgt_id in inputs:
-        z_push = last_coords[2] * 100 * -1
-    elif curr_tgt_id in inputs:
-        z_push = last_coords[2] * 100
+    # Discount move UP for Z-bases of T- and S-gate patterns
+    if curr_tgt_id in t_gates:
+        first_z_coords = coords_in_path[1][2]
+        z_push = first_z_coords * -1 * 100
 
     return z_push, out_of_bounds
 
@@ -1967,6 +2020,7 @@ def _calculate_overload(
     curr_tgt_id: int,
     curr_tgt_zx_type: str,
     qubits: dict[int, int],
+    rows: dict[int, int],
     twin_mode: bool,
     z_stretch: int | None,
 ) -> int:
@@ -1983,7 +2037,7 @@ def _calculate_overload(
                 step = max(z_stretch, 1)
         else:
             overload = 1
-    elif z_stretch:
+    elif z_stretch and rows[curr_src_id] != rows[curr_tgt_id]:
         overload = z_stretch
 
     if twin_mode:

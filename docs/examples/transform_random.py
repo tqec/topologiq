@@ -21,12 +21,11 @@ OUTPUT_DIR = ROOT_DIR / "output/bgraph"
 # require specifying the exact ID of a MSC cube (to emulate a control system),
 # so if the seed changes those steps will no longer work.
 kwargs = {
-    "first_id_strategy": "first-spider",
     "seed": 37,
     "debug": 1,
     "size_of_chip": (12, 12),
     "k": 3,
-    "graph_traverse_mode": "bfs-layers",
+    "graph_traverse_mode": "tfs",
     "gravity": 7,
     "z_stretch": 2,
     "post_process": True,
@@ -42,7 +41,7 @@ if __name__ == "__main__":
 
     # Retrieve circuit
     had_phase = True
-    qubit_n, depth = (4, 20)
+    qubit_n, depth = (4, 15)
     circuit_name = f"random_{kwargs['seed'] if kwargs.get('seed') else 'noseed'}_{qubit_n}_{depth}"
     pyzx_graph = random_graph(
         qubit_n,
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     # Note. Assumes the existence of a control system that
     # would flag a factory success near a MSC that hasn't succeeded
     if kwargs["post_process"]:
-        bgraph_manager.msc_exchange(connect_id=262, remove_id=86)
+        bgraph_manager.msc_exchange(include_id=122, discard_id=44)
         bgraph_manager.draw_blockgraph()
 
     # Example of how to stretch the computation to wait for an MSC
@@ -88,7 +87,7 @@ if __name__ == "__main__":
 
     # Example of how to stretch the computation to wait for a conditional
     if kwargs["post_process"]:
-        bgraph_manager.slice_stretch(slice_at_z=29, shift_z=3)
+        bgraph_manager.slice_stretch(slice_at_z=25, shift_z=3)
         bgraph_manager.draw_blockgraph()
 
     # Animate and cleanup

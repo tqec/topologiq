@@ -8,12 +8,13 @@ from topologiq.input.zx_manager import ZXGraphManager
 # KWARGS #
 ##########
 kwargs = {
-    "debug": 0,  # Verbosity & visualisation control [int]
+    "debug": 1,  # Verbosity & visualisation control [int]
     "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID [str]
-    "graph_traverse_mode": "bfs-layers",  # Graph traversing strategy [str]
-    # "gravity": 7,  # Pull paths towards graph centre [int]
+    "graph_traverse_mode": "tfs",  # Graph traversing strategy [str]
+    "gravity": 7,  # Pull paths towards graph centre [int]
     "post_process": True,
-    # "z_stretch": 1,
+    "z_stretch": 3,
+    "twins": False,
 }
 
 #######
@@ -47,26 +48,40 @@ if __name__ == "__main__":
         bgraph_manager.stretch_msc_cubes()
         bgraph_manager.draw_blockgraph()
 
-    # Add micro-factories where possible
-    if kwargs["post_process"]:
+        # Add micro-factories where possible
         bgraph_manager.distributed_msc_factory()
         bgraph_manager.draw_blockgraph()
 
-    # Example of how to exchange a MSC for a factory
-    # Note. Assumes the existence of a control system that
-    # would flag a factory success near a MSC that hasn't succeeded
-    if kwargs["post_process"]:
-        bgraph_manager.msc_exchange(connect_id=50, remove_id=26)
+        # Need to wait for very first MSC that didn't have backups
+        bgraph_manager.slice_stretch(slice_at_z=4, shift_z=5)
         bgraph_manager.draw_blockgraph()
 
-    # Example of how to stretch the computation to wait for an MSC
-    if kwargs["post_process"]:
-        bgraph_manager.slice_stretch(slice_at_z=3, shift_z=5)
+        # MSC succeeds; conditional to Y
+        bgraph_manager.switch_conditional(17, True)  # Switch conditional -> Y
         bgraph_manager.draw_blockgraph()
 
-    # Example of how to stretch the computation to wait for a conditional
-    if kwargs["post_process"]:
-        bgraph_manager.slice_stretch(slice_at_z=11, shift_z=1)
+        # MSC 44 (factory) fails, 18 (scheduled) succeeds; conditional -> Y
+        bgraph_manager.msc_discard(discard_id=44)  # Discard backup factory MSC
+        bgraph_manager.switch_conditional(19, True)  # Switch conditional to Y
+        bgraph_manager.draw_blockgraph()
+
+        # MSC 45 (factory) succeeds, 20 (scheduled) undetermined, conditional -> X
+        bgraph_manager.msc_exchange(include_id=45, discard_id=20)  # Exchange MSCs
+        bgraph_manager.switch_conditional(21, False)  # Switch conditional to X
+        bgraph_manager.draw_blockgraph()
+
+        # MSCs 46 (factory) fails, 23 (scheduled) succeeds, conditional -> X
+        bgraph_manager.msc_discard(discard_id=46)
+        bgraph_manager.switch_conditional(23, False)  # Switch conditional to X
+        bgraph_manager.draw_blockgraph()
+
+        # MSCs 47 (factory) fails, 25 (scheduled) succeeds, not time to determine conditional switch
+        bgraph_manager.msc_discard(discard_id=47)  # Discard failed MSC
+        bgraph_manager.slice_stretch(slice_at_z=26, shift_z=3)  # Wait a few beats
+        bgraph_manager.draw_blockgraph()
+
+        # Conditional -> Y
+        bgraph_manager.switch_conditional(25, True)  # Switch conditional to Y
         bgraph_manager.draw_blockgraph()
 
     # Animate and clean up

@@ -126,7 +126,7 @@ class ZXBlock:
     @cached_property
     def get_face_colors(self) -> tuple[str, tuple[str, str, str]]:
         """Retrieve the ZXBlock's colours."""
-        if self.zx_type in ["Y", "T"]:
+        if self.zx_type in ["Y", "T", "XZ"]:
             return tuple([ZXColors.lookup(self.zx_type)]) * 6
         return tuple([ZXColors.lookup(c) for c in self.kind[:3]]) * 2
 
