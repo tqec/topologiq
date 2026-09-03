@@ -1934,10 +1934,10 @@ def _calculate_z_nudges(
         z_push = -100 * abs(last_coords[2])
 
     # Push down for inputs and up for outputs
-    if curr_tgt_id in inputs:
-        z_push = last_coords[2] * 100 * -1
-    elif curr_tgt_id in outputs:
-        z_push = last_coords[2] * 100
+    #if curr_tgt_id in inputs:
+        #z_push = last_coords[2] * 100 * -1
+    #elif curr_tgt_id in outputs:
+        #z_push = last_coords[2] * 100
 
     # Discount move UP for Z-bases of T- and S-gate patterns
     if curr_tgt_id in t_gates:

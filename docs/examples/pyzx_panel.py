@@ -18,10 +18,7 @@ from topologiq.input.zx_manager import ZXGraphManager
 # Contributinos geared to create fallbacks for when specialised strategies fail are welcome.
 kwargs = {
     "debug": 0,  # Verbosity. Change to `3` for step by step visuals.
-    "first_id_strategy": "first-spider",  # Strategy for choosing the first spider/cube ID.
-    "graph_traverse_mode": "bfs-cross",  # Graph traversing strategy
     "gravity": 7,  # Integer weight that pulls paths towards graph centre
-    "twins": True,  # Boolean flag to enable "twins", which safeguards completion at the expense of volume
 }
 # Available `first_id_strategy` values:
 # - [first-spider, "random", "centrality-random", "centrality-majority", "central-qubit", "central-in-first-cycle"]
@@ -72,8 +69,15 @@ if __name__ == "__main__":
         # Adjust tree search mode if needed
         if graph_name in ["ht"]:
             kwargs["graph_traverse_mode"] = "tfs"
-            kwargs["z_stretch"] = 3
+            kwargs["z_stretch"] = 3 if graph_name != "t" else 0
             kwargs["twins"] = False
+        elif graph_name in ["steane", "steane_obfuscated", "hadamard_mess"]:
+            kwargs["graph_traverse_mode"] = "bfs-cycles"
+            kwargs["twins"] = False
+        else:
+            kwargs["first_id_strategy"] = "first-spider"
+            kwargs["graph_traverse_mode"] = "bfs-cross"
+            kwargs["twins"] = True
 
         # PyZX -> AugmentedZXGraph
         zx_graph_manager = ZXGraphManager(debug=kwargs["debug"])
