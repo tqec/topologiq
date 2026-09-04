@@ -201,7 +201,7 @@ class BlockGraphManager:
 
         # Reject if graph is not connected
         if not is_connected:
-            raise ValueError("Build request rejected. Graph has disconnected regions.")
+            raise ValueError("Initialisation failure. Input graph has disconnected regions.")
 
     def handle_s_t_spiders(self):
         """Convert spiders with phases to Y- and T-cube patterns."""
