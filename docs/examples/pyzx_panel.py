@@ -55,6 +55,10 @@ if __name__ == "__main__":
         "msc",
         "t",
         "ht",
+
+        # Additional graph to test rejection of graphs with disconnected subgraphs
+        # Do not uncomment unless you are specifically checking it graph is rejected.
+        #"disconnected_graph",
     ]
 
     # Loop over available encoding functions
