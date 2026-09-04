@@ -940,6 +940,7 @@ def disconnected_graph(draw_graph: bool = False) -> BaseGraph | GraphS:
 
     return pyzx_graph
 
+
 ##############
 # PUBLIC DEF #
 ##############
@@ -960,9 +961,8 @@ __all__ = [  # noqa: RUF022  (do not sort: circuits organised in increasing orde
     "msc",
     "t",
     "split_loops",
-    "disconnected_graph"
+    "disconnected_graph",
 ]
-
 
 if __name__ == "__main__":
     pyzx_graph, _ = ht(draw_graph=True)
