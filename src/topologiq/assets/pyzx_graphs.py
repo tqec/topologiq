@@ -869,6 +869,78 @@ def ht(draw_graph: bool = False, num_t: int = 5) -> BaseGraph | GraphS:
     return pyzx_graph
 
 
+def disconnected_graph(draw_graph: bool = False) -> BaseGraph | GraphS:
+    """Return a PyZX graph with disconnected subgraphs.
+
+    Args:
+        draw_graph: Whether to pop-up PyZX graph visualisation or not.
+
+    Returns:
+        pyzx_graph: The requested PyZX graph.
+
+    """
+
+    spiders = {0: [14, 15, 16], 1: [1, 3, 5, 7, 9, 11, 13], 2: [2, 4, 6, 8, 10, 12]}
+    edges = {
+        1: [
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 1),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+            (10, 11),
+            (11, 12),
+            (12, 8),
+            (7, 13),
+            (5, 14),
+            (13, 15),
+            (10, 16),
+        ]
+    }
+
+    # Foundational graph
+    pyzx_graph = zx.Graph()
+
+    # Add spiders
+    for k, spider_ids in spiders.items():
+        for spider_id in spider_ids:
+            qubit = (
+                1
+                if spider_id in [1, 2, 3, 12]
+                else 3
+                if spider_id in [13, 14, 16]
+                else 2
+                if spider_id != 15
+                else 4
+            )
+            row = (
+                1
+                if spider_id in [5, 14]
+                else 7
+                if spider_id in [13, 15]
+                else 9
+                if spider_id in [12, 16]
+                else spider_id
+            )
+            pyzx_graph.add_vertex(ty=k, index=spider_id, qubit=qubit, row=row)
+
+    for k, edge_pairs in edges.items():
+        for u, v in edge_pairs:
+            pyzx_graph.add_edge((u, v), edgetype=k)
+
+    pyzx_graph.set_outputs(spiders[0])
+
+    # Draw if needed
+    if draw_graph:
+        zx.draw(pyzx_graph, labels=True)
+
+    return pyzx_graph
+
+
 ##############
 # PUBLIC DEF #
 ##############
@@ -889,8 +961,8 @@ __all__ = [  # noqa: RUF022  (do not sort: circuits organised in increasing orde
     "msc",
     "t",
     "split_loops",
+    "disconnected_graph",
 ]
-
 
 if __name__ == "__main__":
     pyzx_graph, _ = ht(draw_graph=True)

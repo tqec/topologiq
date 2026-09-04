@@ -176,6 +176,9 @@ class BlockGraphManager:
             for (u, v), zx_e_type in self.edge_types.items()
         ]
 
+        # Check that graph does not have disconnected subgraphs
+        self.check_connected_components()
+
         # Reactive re-writes
         # Re-writes needed to ensure the ZX graph does not have
         # any spider with more than four edges are reflected in the
@@ -189,6 +192,16 @@ class BlockGraphManager:
 
         # Calculate boundaries of theoretical chip surface
         self.get_bounds()
+
+    def check_connected_components(self):
+        """Check that the foundational input graph is fully connected."""
+
+        # Get connected boolean from NX
+        is_connected = nx.is_connected(self.bgraph)
+
+        # Reject if graph is not connected
+        if not is_connected:
+            raise ValueError("Initialisation failure. Input graph has disconnected regions.")
 
     def handle_s_t_spiders(self):
         """Convert spiders with phases to Y- and T-cube patterns."""
