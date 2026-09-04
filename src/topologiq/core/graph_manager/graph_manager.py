@@ -488,7 +488,6 @@ class BlockGraphManager:
             f"\n  - Volume: {self.get_volume()}.",
             f"\n  - Duration: {duration_total:.2f}s.\n",
         )
-        self._kwargs["animate"] = "MP4"
 
     def add_path(self):
         """Add a winner path to the main blockgraph."""
