@@ -50,7 +50,7 @@ def rm_unnecessary_phases(pyzx_graph: zx.Graph):
     [
         pyzx_graph.set_phase(i, 0)
         for i in pyzx_graph.vertices()
-        if pyzx_graph.phase(i) == Fraction(1, 1)
+        if not isinstance(pyzx_graph.phase(i), Fraction) or pyzx_graph.phase(i) == Fraction(1, 1)
     ]
 
 

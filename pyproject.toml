@@ -46,7 +46,7 @@ dependencies = [
     "pip>=25.3",
     "pyside6>=6.10.2",
     "pywin32==311 ; sys_platform == 'win32'",
-    "pyzx>=0.10.0",
+    "pyzx>=0.10.5",
     "qbraid>=0.11.1",
     "qiskit==2.1.2",
     "scipy>=1.15,<1.17",
@@ -63,6 +63,7 @@ Issues = "https://github.com/jbolns/topologiq/issues"
 [dependency-groups]
 dev = [
     "deptry>=0.24.0",
+    "integration>=1",
     "notebook>=7.5.0",
     "pyinstrument>=5.1.2",
     "ruff==0.14.7", # Ensures all contributors adhere to exact same rules.

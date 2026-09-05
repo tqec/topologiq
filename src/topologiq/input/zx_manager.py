@@ -104,7 +104,7 @@ class ZXGraphManager:
         """
         key = self.primary_key if use_primary else graph_key
         aug_zx_graph = AugmentedZXGraph.from_qasm(
-            qasm_str=qasm_str, path_to_qasm_file=path_to_qasm_file, debug=self.debug
+            qasm_str=qasm_str, path_to_qasm_file=path_to_qasm_file
         )
         self.add_graph(aug_zx_graph, graph_key=key)
         return self._collection[key]
@@ -157,19 +157,12 @@ class AugmentedZXGraph:
         cls,
         qasm_str: str | None = None,
         path_to_qasm_file: Path | None = None,
-        remove_lonely_resets: bool = True,
-        debug: int = 0,
     ) -> AugmentedZXGraph:
         """Create ZX graph from a QASM string or QASM file.
 
         Args:
             qasm_str: A quantum circuit encoded as a QASM string.
             path_to_qasm_file: A path to a QASM file.
-            remove_lonely_resets: Flag to trigger removal of any resets tied exclusively to an input.
-                * Lonely resets happen when QASM uses reset for initialisation and create isolated island graphs.
-                * Lonely resets are always followed by a gap and, immediately after, an initialisation spider.
-                * Lonely resets are therefore irrelevant for computation.
-            debug: Debug mode to use.
 
         """
 
@@ -186,10 +179,8 @@ class AugmentedZXGraph:
         # Convert to graph
         zx_graph = zx_circuit.to_graph()
 
-        # Remove lonely spiders
-        if remove_lonely_resets:
-            zx_graph = cls._rm_lonely_resets(zx_graph)
-            zx_graph = cls._rm_post_measurement_spiders(zx_graph)
+        # Remove spiders not needed for LS
+        zx_graph = cls._rm_superfluous(zx_graph)
 
         for ph in zx_graph.phases().values():
             if ph == Fraction(1, 4):
@@ -326,18 +317,19 @@ class AugmentedZXGraph:
         return zx_graph_as_nx
 
     @staticmethod
-    def _rm_lonely_resets(zx_graph: zx.Graph) -> zx.Graph:
-        """Remove reset-initialisation spiders from a ZX graph.
+    def _rm_superfluous(zx_graph: zx.Graph) -> zx.Graph:
+        """Remove spiders not needed for lattice surgery.
 
         Args:
-            zx_graph: A PyZX graph with lonely spiders in the first "row"
-                (happens when loading QASM files using reset for initialisation).
+            zx_graph: A PyZX graph with superflous spiders
+                - examples of such spiders:
+                    * lonely initialisation resets (from loading QASM files with init resets)
+                    * measurement ancillas
 
         Returns:
             zx_graph: The updated ZX graph.
 
         """
-
         lonely_spider_ids = []
         inputs = zx_graph.inputs()
         for in_id in inputs:
@@ -345,39 +337,9 @@ class AugmentedZXGraph:
             if len(neigh_ids) == 1:
                 neigh_neigh_ids = list(zx_graph.neighbors(neigh_ids[0]))
                 if len(neigh_neigh_ids) == 1:
+                    # Remove measurement ancillas and disconnected spider pairs
                     if neigh_neigh_ids[0] == in_id:
                         lonely_spider_ids.extend([in_id, neigh_ids[0]])
         zx_graph.remove_vertices(lonely_spider_ids)
-        return zx_graph
-
-    @staticmethod
-    def _rm_post_measurement_spiders(zx_graph: zx.Graph) -> zx.Graph:
-        """Remove spiders that come immediately after a measured spider.
-
-        Args:
-            zx_graph: A PyZX graph with spiders after measured spiders.
-                (happens when loading QASM files).
-
-        Returns:
-            zx_graph: The updated ZX graph.
-
-        """
-        measure_spiders_id = [
-            spider_id
-            for spider_id in zx_graph.vertices()
-            if isinstance(zx_graph.phase(spider_id), zx.symbolic.Poly)
-        ]
-
-        post_measurement_spiders = []
-        for spider_id in measure_spiders_id:
-            post_measurement_spiders.extend(
-                [
-                    neigh_id
-                    for neigh_id in zx_graph.neighbors(spider_id)
-                    if zx_graph.row(neigh_id) > zx_graph.row(spider_id)
-                ]
-            )
-
-        zx_graph.remove_vertices(post_measurement_spiders)
-
+        zx.drop_orphan_reset_discards(zx_graph)
         return zx_graph

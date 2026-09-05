@@ -830,20 +830,6 @@ wheels = [
 ]
 
 [[package]]
-name = "galois"
-version = "0.4.10"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numba" },
-    { name = "numpy" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/13/54/ede3562049f1bb7f9546cbd86af8794b49733a835b0d1c40fedfbbcdbcc5/galois-0.4.10.tar.gz", hash = "sha256:94a371c995193a66798fceb079320dff154c21a0e3e0de388c06ba26f8eb574a", size = 7401288, upload-time = "2026-01-02T02:59:04.569Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/16/91e376aa4cad58203448510c907c267cce524d1fd2dd7f9f875f75b8584e/galois-0.4.10-py3-none-any.whl", hash = "sha256:9badf669915c92d9f298c7799cadad112baa21f53d816f427f55c4ec6ee9a2dc", size = 4196886, upload-time = "2026-01-02T02:59:02.332Z" },
-]
-
-[[package]]
 name = "graphviz"
 version = "0.21"
 source = { registry = "https://pypi.org/simple" }
@@ -942,6 +928,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/6c/e6/7bf14eeb8f8b72511
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5f/53/fb7122b71361a0d121b669dcf3d31244ef75badbbb724af388948de543e2/imagesize-2.0.0-py2.py3-none-any.whl", hash = "sha256:5667c5bbb57ab3f1fa4bc366f4fbc971db3d5ed011fd2715fd8001f782718d96", size = 9441, upload-time = "2026-03-03T14:18:27.892Z" },
 ]
+
+[[package]]
+name = "integration"
+version = "1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/06/2d4d74ac16c9af40fd3c7bb695a7fbe54e047e8d9abf4e6b0b175cd775ff/Integration_1.tar.gz", hash = "sha256:1632215e44fd68baefb4969141265f6bf75871641ff8e0c0adb939b24b8f1771", size = 1728, upload-time = "2016-07-10T13:39:16.37Z" }
 
 [[package]]
 name = "ipykernel"
@@ -3060,10 +3052,9 @@ wheels = [
 
 [[package]]
 name = "pyzx"
-version = "0.10.0"
+version = "0.10.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "galois" },
     { name = "ipywidgets" },
     { name = "lark" },
     { name = "numpy" },
@@ -3071,9 +3062,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dc/46/413f9d406656172f57680aa2b6eb854f9878f6726cc023942e69b1fbca0e/pyzx-0.10.0.tar.gz", hash = "sha256:54beddf2299da53533325dc3c501c05412a10e30ee84315c8bd025e232254aa9", size = 415826, upload-time = "2026-03-12T14:33:01.657Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/79/eb5d252a73408b894fc7a34c88cd403baeaf91f5957ee8d27eefa3fd718e/pyzx-0.10.6.tar.gz", hash = "sha256:ba770fb71ba84f8a9d8604246b21f87bf4dfafdcc4c01d480424e566fc1f4c6a", size = 548797, upload-time = "2026-09-01T13:50:46.17Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/63/5b0bbca31337b0eb806eb316bc7e21a16be83097a671206e97d4dd30038f/pyzx-0.10.0-py3-none-any.whl", hash = "sha256:b941ed8490618dcbe68dc3194f1930e01b4968de75551b70c40c78f8ad6b58d9", size = 455055, upload-time = "2026-03-12T14:33:00.156Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/c8/1284142d46cd8f1ae9418aae5494050d74eadc2891b0b81e73cca4b214ed/pyzx-0.10.6-py3-none-any.whl", hash = "sha256:3e98a54b5da2385e5dea5754c0d1b57c4a5dc1c9bc5eb1a1eaee4115deb324d9", size = 576349, upload-time = "2026-09-01T13:50:44.171Z" },
 ]
 
 [[package]]
@@ -4046,6 +4037,7 @@ dependencies = [
 all = [
     { name = "asteval" },
     { name = "deptry" },
+    { name = "integration" },
     { name = "notebook" },
     { name = "pygments" },
     { name = "pyinstrument" },
@@ -4059,6 +4051,7 @@ all = [
 ]
 dev = [
     { name = "deptry" },
+    { name = "integration" },
     { name = "notebook" },
     { name = "pyinstrument" },
     { name = "ruff" },
@@ -4090,7 +4083,7 @@ requires-dist = [
     { name = "pip", specifier = ">=25.3" },
     { name = "pyside6", specifier = ">=6.10.2" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
-    { name = "pyzx", specifier = ">=0.10.0" },
+    { name = "pyzx", specifier = ">=0.10.5" },
     { name = "qbraid", specifier = ">=0.11.1" },
     { name = "qiskit", specifier = "==2.1.2" },
     { name = "scipy", specifier = ">=1.15,<1.17" },
@@ -4100,6 +4093,7 @@ requires-dist = [
 all = [
     { name = "asteval", specifier = ">=1.0.8" },
     { name = "deptry", specifier = ">=0.24.0" },
+    { name = "integration", specifier = ">=1" },
     { name = "notebook", specifier = ">=7.5.0" },
     { name = "pygments", specifier = ">=2.19.2" },
     { name = "pyinstrument", specifier = ">=5.1.2" },
@@ -4112,6 +4106,7 @@ all = [
 ]
 dev = [
     { name = "deptry", specifier = ">=0.24.0" },
+    { name = "integration", specifier = ">=1" },
     { name = "notebook", specifier = ">=7.5.0" },
     { name = "pyinstrument", specifier = ">=5.1.2" },
     { name = "ruff", specifier = "==0.14.7" },

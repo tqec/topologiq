@@ -265,8 +265,8 @@ class BlockGraphManager:
         if order and zwebs and xwebs:
             # Build ANTE dependencies
             _prep_ante(self.ante, self.t_zx_tracker, order, zwebs, xwebs)
-            # Build inverse AFTER dependencies
 
+            # Build inverse AFTER dependencies
             self.build_rebuild_post_deps()
 
     def build_rebuild_post_deps(self):
@@ -1173,6 +1173,10 @@ class BlockGraphManager:
                                 )
                                 self.msc_stretch[new_id] = 3
                                 self.msc_factory[new_id] = (x, y, z)
+                                for j in range(1, 4):
+                                    self.taken.add((x, y, z - j))
+                                    self.pruned_taken.add((x, y, z - j))
+
                                 msc_added = True
 
     def msc_discard(self, discard_id: int):
@@ -1231,7 +1235,6 @@ class BlockGraphManager:
         # Check that both include_id and discard_id are MSC blocks
         include_zx_type = self.bgraph.nodes[include_id]["zx_block"].zx_type
         remove_zx_type = self.bgraph.nodes[discard_id]["zx_block"].zx_type
-        print(include_zx_type, remove_zx_type)
         if include_zx_type != "T" or remove_zx_type != "T":
             print("Skipping exchange because one of the requested IDs is not an MSC.")
             return

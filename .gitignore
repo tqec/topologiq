@@ -4,6 +4,7 @@
 .admin/
 **/stats_checks.py
 **/data/*.csv
+**pending_**.py
 
 # Outputs
 /output/

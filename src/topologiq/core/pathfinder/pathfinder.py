@@ -187,10 +187,10 @@ class PathFinderManager:
                         continue
 
                     # Log to visited and update path lengths if all conditions met
-                    self._to_visit_or_not_to_visit(nxt_block, move)
+                    visiting = self._to_visit_or_not_to_visit(nxt_block, move)
 
                     # Check for success
-                    if nxt_coords in self.s.tent_coords:
+                    if visiting and nxt_coords in self.s.tent_coords:
                         if self._check_for_success(nxt_block):
                             break_for_success = True
                             break
@@ -351,7 +351,9 @@ class PathFinderManager:
                     return True
         return False
 
-    def _to_visit_or_not_to_visit(self, nxt_block: PositionedZXBlock, move: tuple[int, int, int]):
+    def _to_visit_or_not_to_visit(
+        self, nxt_block: PositionedZXBlock, move: tuple[int, int, int]
+    ) -> bool:
         """Visit site if conditions are met.
 
         Args:
@@ -374,6 +376,10 @@ class PathFinderManager:
 
             # Add path
             self.path[nxt_block] = self.all_search_paths[nxt_block]
+
+            return True
+
+        return False
 
     def _check_for_success(self, nxt_block_positioned: PositionedZXBlock) -> bool:
         """Check if iteration achieved success.
@@ -398,7 +404,14 @@ class PathFinderManager:
             fail_time_constraints = self.s.z_bounds["min"] >= nxt_coords[2]
 
         if not fail_time_constraints and self.s.z_bounds.get("max"):
-            fail_time_constraints = self.s.z_bounds["max"] <= nxt_coords[2]
+            if nxt_block_positioned in self.path:
+                path_to_check = self.path[nxt_block_positioned]
+            else:
+                path_to_check = [nxt_block_positioned]
+            all_coords_to_check = [c for c, _ in path_to_check]
+            fail_time_constraints = any(
+                [self.s.z_bounds["max"] <= c[2] for c in all_coords_to_check]
+            )
 
         if fail_time_constraints:
             return False
@@ -573,10 +586,10 @@ class PathFinderManager:
                         continue
 
                     # Evaluate score and add to priority queue if valid
-                    self._to_visit_or_not_to_visit_a_star(nxt_block, move, curr_g)
+                    visiting = self._to_visit_or_not_to_visit_a_star(nxt_block, move, curr_g)
 
                     # Check for success
-                    if nxt_coords in self.s.tent_coords:
+                    if visiting and nxt_coords in self.s.tent_coords:
                         if self._check_for_success(nxt_block):
                             break_for_success = True
                             break
@@ -656,7 +669,7 @@ class PathFinderManager:
         nxt_block: PositionedZXBlock,
         move: tuple[int, int, int],
         curr_g: int,
-    ):
+    ) -> bool:
         """Evaluate next block state and push to heap if lower g_score found."""
         self.visit_attempts += 1
 
@@ -683,6 +696,10 @@ class PathFinderManager:
                 self.heap,
                 (f_score, nxt_g, next(self.heap_counter), nxt_block),
             )
+
+            return True
+
+        return False
 
     def pathfinder_a_star_multi_target(
         self,

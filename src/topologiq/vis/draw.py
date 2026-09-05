@@ -1452,10 +1452,14 @@ class View2D:
             # Evaluate phase representation string configurations
             phase = graph_data.get("phases", {}).get(n_id, 0)
             if phase != 0 and phase != Fraction(1, 1):
-                if hasattr(phase, "numerator"):
-                    num, den = phase.numerator, phase.denominator
-                    phase_str = f"π/{den}" if num == 1 else f"{num}π/{den}" if den != 1 else "π"
-                else:
+                # Some PyZX graphs will have annotations without numerators and denominators
+                try:
+                    if hasattr(phase, "numerator"):
+                        num, den = phase.numerator, phase.denominator
+                        phase_str = f"π/{den}" if num == 1 else f"{num}π/{den}" if den != 1 else "π"
+                    else:
+                        phase_str = f"{phase}"
+                except Exception as _:
                     phase_str = f"{phase}"
 
                 # Offset phase labels lower if twin halos occupy immediate outer bounds
