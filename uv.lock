@@ -1609,6 +1609,18 @@ wheels = [
 ]
 
 [[package]]
+name = "lassynth"
+version = "0.1.0"
+source = { git = "https://github.com/quantumlib/Stim.git?subdirectory=glue%2Flattice_surgery#6f15adb47f54fbec6c5f68a673f453f3d5c0a9fd" }
+dependencies = [
+    { name = "ipykernel" },
+    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "networkx", version = "3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "stim" },
+    { name = "z3-solver" },
+]
+
+[[package]]
 name = "llvmlite"
 version = "0.46.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3618,11 +3630,11 @@ wheels = [
 
 [[package]]
 name = "setuptools"
-version = "82.0.1"
+version = "80.10.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4f/db/cfac1baf10650ab4d1c111714410d2fbb77ac5a616db26775db562c8fab2/setuptools-82.0.1.tar.gz", hash = "sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9", size = 1152316, upload-time = "2026-03-09T12:47:17.221Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/95/faf61eb8363f26aa7e1d762267a8d602a1b26d4f3a1e758e92cb3cb8b054/setuptools-80.10.2.tar.gz", hash = "sha256:8b0e9d10c784bf7d262c4e5ec5d4ec94127ce206e8738f29a437945fbc219b70", size = 1200343, upload-time = "2026-01-25T22:38:17.252Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl", hash = "sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", size = 1006223, upload-time = "2026-03-09T12:47:15.026Z" },
+    { url = "https://files.pythonhosted.org/packages/94/b8/f1f62a5e3c0ad2ff1d189590bfa4c46b4f3b6e49cef6f26c6ee4e575394d/setuptools-80.10.2-py3-none-any.whl", hash = "sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173", size = 1064234, upload-time = "2026-01-25T22:38:15.216Z" },
 ]
 
 [[package]]
@@ -4046,6 +4058,7 @@ dependencies = [
 all = [
     { name = "asteval" },
     { name = "deptry" },
+    { name = "lassynth" },
     { name = "notebook" },
     { name = "pygments" },
     { name = "pyinstrument" },
@@ -4054,6 +4067,7 @@ all = [
     { name = "qrisp", version = "0.7.17", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "qrisp", version = "0.8.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "ruff" },
+    { name = "setuptools" },
     { name = "tqec" },
     { name = "vispy" },
 ]
@@ -4065,11 +4079,13 @@ dev = [
 ]
 integration = [
     { name = "asteval" },
+    { name = "lassynth" },
     { name = "pygments" },
     { name = "pyopengl" },
     { name = "pytket" },
     { name = "qrisp", version = "0.7.17", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "qrisp", version = "0.8.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "setuptools" },
     { name = "tqec" },
     { name = "vispy" },
 ]
@@ -4100,6 +4116,7 @@ requires-dist = [
 all = [
     { name = "asteval", specifier = ">=1.0.8" },
     { name = "deptry", specifier = ">=0.24.0" },
+    { name = "lassynth", git = "https://github.com/quantumlib/Stim.git?subdirectory=glue%2Flattice_surgery" },
     { name = "notebook", specifier = ">=7.5.0" },
     { name = "pygments", specifier = ">=2.19.2" },
     { name = "pyinstrument", specifier = ">=5.1.2" },
@@ -4107,6 +4124,7 @@ all = [
     { name = "pytket", specifier = ">=2.16.0" },
     { name = "qrisp", specifier = ">=0.7.17" },
     { name = "ruff", specifier = "==0.14.7" },
+    { name = "setuptools", specifier = "<81" },
     { name = "tqec", specifier = ">=0.1.0" },
     { name = "vispy", specifier = ">=0.16.1" },
 ]
@@ -4118,10 +4136,12 @@ dev = [
 ]
 integration = [
     { name = "asteval", specifier = ">=1.0.8" },
+    { name = "lassynth", git = "https://github.com/quantumlib/Stim.git?subdirectory=glue%2Flattice_surgery" },
     { name = "pygments", specifier = ">=2.19.2" },
     { name = "pyopengl", specifier = ">=3.1.10" },
     { name = "pytket", specifier = ">=2.16.0" },
     { name = "qrisp", specifier = ">=0.7.17" },
+    { name = "setuptools", specifier = "<81" },
     { name = "tqec", specifier = ">=0.1.0" },
     { name = "vispy", specifier = ">=0.16.1" },
 ]
@@ -4367,4 +4387,17 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bd/f4/c67440c7fb409a71b7404b7aefcd7569a9c0d6bd071299bf4198ae7a5d95/widgetsnbextension-4.0.15.tar.gz", hash = "sha256:de8610639996f1567952d763a5a41af8af37f2575a41f9852a38f947eb82a3b9", size = 1097402, upload-time = "2025-11-01T21:15:55.178Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/0e/fa3b193432cfc60c93b42f3be03365f5f909d2b3ea410295cf36df739e31/widgetsnbextension-4.0.15-py3-none-any.whl", hash = "sha256:8156704e4346a571d9ce73b84bee86a29906c9abfd7223b7228a28899ccf3366", size = 2196503, upload-time = "2025-11-01T21:15:53.565Z" },
+]
+
+[[package]]
+name = "z3-solver"
+version = "4.12.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/76/f16bfcfd3c7e8f929a4f26dc554bc8a086823c9225975b7b67b21ccb4d69/z3-solver-4.12.1.0.tar.gz", hash = "sha256:c6b7c0f1c595ba47609d0e02b0cc263dc755def9f8d6f51c1943aec040a1eb2d", size = 4783491, upload-time = "2023-01-18T03:51:51.439Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/bb/ee5de50e182972d02f61589b17a79c5647698cfb7500cd9bc8d1be7d0e75/z3_solver-4.12.1.0-py2.py3-none-macosx_10_16_x86_64.whl", hash = "sha256:c4f1a53bce12b45698e8e49bd980cd3d3f0298c1ba4cf8c40525af86797565c8", size = 29662470, upload-time = "2023-01-18T03:51:33.159Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/bf/6b2c0835f3a46e1330f677ddb072bac026cd1f452a54841100043038a385/z3_solver-4.12.1.0-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:553ec3cd0188420bc5f007dd873fb0d87075d1b93808eca8c02324eb3a5f6f68", size = 26654383, upload-time = "2023-01-18T03:51:36.405Z" },
+    { url = "https://files.pythonhosted.org/packages/03/53/265b4b11a3699f5ec23a87609a60fd10bb465221690daf271b07367cce87/z3_solver-4.12.1.0-py2.py3-none-manylinux1_x86_64.whl", hash = "sha256:41cb9ac460af30b193811eebf919d61cf51a8856bbd74b200cbe6b21e3e955e4", size = 56029449, upload-time = "2023-01-18T03:51:39.858Z" },
+    { url = "https://files.pythonhosted.org/packages/87/f6/20e1fcd26f793fb16efeecfe2d71ff9526e93a803d56ae7df33982d39405/z3_solver-4.12.1.0-py2.py3-none-win32.whl", hash = "sha256:85ff9f59b0f87df4dc0cd52baebb247b8049f2df6aad623151f4c4a21d3d01ac", size = 55306921, upload-time = "2023-01-18T03:51:44.007Z" },
+    { url = "https://files.pythonhosted.org/packages/74/d6/c9bb5625ad33255d63475cf1d9a240da5db67ae5eec9ee9d08beaba906a3/z3_solver-4.12.1.0-py2.py3-none-win_amd64.whl", hash = "sha256:aa0e06d42070774a2f89818c412514d41fc84578f32d617de618b214e5ed8154", size = 58153011, upload-time = "2023-01-18T03:51:48.251Z" },
 ]

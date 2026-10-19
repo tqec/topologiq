@@ -70,10 +70,12 @@ dev = [
 
 integration = [
     "asteval>=1.0.8",
+    "lassynth",
     "pygments>=2.19.2",
     "pyopengl>=3.1.10",
     "pytket>=2.16.0",
     "qrisp>=0.7.17",
+    "setuptools<81",
     "tqec>=0.1.0",
     "vispy>=0.16.1",
 ]
@@ -134,3 +136,6 @@ ignore = [
 
 [tool.ruff.format]
 docstring-code-format = true  # Format dosctrings
+
+[tool.uv.sources]
+lassynth = { git = "https://github.com/quantumlib/Stim.git", subdirectory = "glue/lattice_surgery" }
